@@ -84,17 +84,27 @@
 
   body {
     @apply bg-background text-foreground;
+    overflow: hidden;
+    width: 100%;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
   }
 
   .mindmap-container {
-    touch-action: none; /* Disable browser touch gestures */
+    touch-action: pinch-zoom; /* Only allow pinch-zoom gestures */
     -webkit-user-select: none; /* Safari */
     -ms-user-select: none; /* IE 10 and IE 11 */
     user-select: none; /* Standard syntax */
     -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
     cursor: grab;
-    overflow: hidden;
-    position: relative;
+    overflow: auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overscroll-behavior: none; /* Prevent pull-to-refresh and other overscroll behaviors */
   }
 
   .mindmap-container:active {
