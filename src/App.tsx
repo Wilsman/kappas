@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
-import { RotateCcw, Filter, Settings } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';import { RotateCcw, Filter, Settings } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Task } from './types';
 import { MindMap } from './components/MindMap';
@@ -33,29 +32,23 @@ function App() {
   const [showKappa, setShowKappa] = useState(false);
   const [showLightkeeper, setShowLightkeeper] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('mindmap');
+  const [viewMode, setViewMode] = useState<'mindmap'|'checklist'>('mindmap');
 
   const requirementFilterActive = showKappa || showLightkeeper;
 
   // Calculate trader progress for the QuestProgressPanel
   const traderProgress = useMemo(() => {
-    const traderMap: Record<string, { completed: number; total: number }> = {};
+    type TP = { completed: number; total: number };
+    const traderMap = Object.fromEntries(
+      Object.keys(TRADER_COLORS).map(name => [name, { completed: 0, total: 0 } as TP])
+    ) as Record<keyof typeof TRADER_COLORS, TP>;
 
-    // Initialize all traders with 0/0
-    (Object.keys(TRADER_COLORS) as Array<keyof typeof TRADER_COLORS>).forEach(traderName => {
-      traderMap[traderName] = { completed: 0, total: 0 };
-    });
-
-    // Count completed and total tasks per trader
-    tasks.forEach(task => {
-      const trader = task.trader.name as keyof typeof TRADER_COLORS;
-      if (trader in traderMap) {
-        traderMap[trader].total += 1;
-        if (completedTasks.has(task.id)) {
-          traderMap[trader].completed += 1;
-        }
+    for (const { trader: { name }, id } of tasks) {
+      if (name in traderMap) {
+        traderMap[name].total++;
+        if (completedTasks.has(id)) traderMap[name].completed++;
       }
-    });
+    }
 
     // Convert to array of TraderProgress objects
     return Object.entries(traderMap).map(([name, { completed, total }]) => ({
@@ -68,13 +61,8 @@ function App() {
   }, [tasks, completedTasks]);
 
   // Calculate total quest stats
-  const totalQuests = useMemo(() => {
-    return tasks.length;
-  }, [tasks]);
-
-  const completedQuests = useMemo(() => {
-    return completedTasks.size;
-  }, [completedTasks]);
+  const totalQuests = tasks.length;
+  const completedQuests = completedTasks.size;
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -95,7 +83,7 @@ function App() {
     initializeApp();
   }, []);
 
-  const handleToggleComplete = async (taskId: string) => {
+  const handleToggleComplete = useCallback(async (taskId: string) => {
     const newCompletedTasks = new Set(completedTasks);
 
     if (newCompletedTasks.has(taskId)) {
@@ -111,9 +99,9 @@ function App() {
     } catch (error) {
       console.error('Failed to save completed tasks:', error);
     }
-  };
+  }, [completedTasks]);
 
-  const handleToggleTraderVisibility = (trader: string) => {
+  const handleToggleTraderVisibility = useCallback((trader: string) => {
     const newHiddenTraders = new Set(hiddenTraders);
 
     if (newHiddenTraders.has(trader)) {
@@ -123,19 +111,19 @@ function App() {
     }
 
     setHiddenTraders(newHiddenTraders);
-  };
+  }, [hiddenTraders]);
 
-  const handleToggleKappa = () => setShowKappa((prev) => !prev);
-  const handleToggleLightkeeper = () => setShowLightkeeper((prev) => !prev);
+  const handleToggleKappa = useCallback(() => setShowKappa(v => !v), []);
+  const handleToggleLightkeeper = useCallback(() => setShowLightkeeper(v => !v), []);
 
-  const handleResetProgress = async () => {
+  const handleResetProgress = useCallback(async () => {
     setCompletedTasks(new Set());
     try {
       await taskStorage.saveCompletedTasks(new Set());
     } catch (error) {
       console.error('Failed to reset progress:', error);
     }
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -157,9 +145,9 @@ function App() {
               <div className="flex items-center space-x-2">
                 <BrainCircuit className={`h-5 w-5 ${viewMode === 'mindmap' ? 'text-primary' : 'text-muted-foreground'}`} />
                 <Switch
-                  id="view-mode-switch"
+                  id="view-mode"
                   checked={viewMode === 'checklist'}
-                  onCheckedChange={(checked) => setViewMode(checked ? 'checklist' : 'mindmap')}
+                  onCheckedChange={c => setViewMode(c ? 'checklist' : 'mindmap')}
                 />
                 <ListChecks className={`h-5 w-5 ${viewMode === 'checklist' ? 'text-primary' : 'text-muted-foreground'}`} />
               </div>
