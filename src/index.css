@@ -83,9 +83,35 @@
   }
 
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground;
+  }
+
+  .mindmap-container {
+    touch-action: none; /* Disable browser touch gestures */
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10 and IE 11 */
+    user-select: none; /* Standard syntax */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+    cursor: grab;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .mindmap-container:active {
+    cursor: grabbing;
+  }
+  
+  /* Improve touch feedback */
+  .mindmap-container * {
+    touch-action: none; /* Disable touch actions on all children */
+  }
+  
+  /* Smooth transitions for transform properties */
+  .mindmap-container > div {
+    will-change: transform;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+    transform-origin: 0 0;
   }
 
   html {

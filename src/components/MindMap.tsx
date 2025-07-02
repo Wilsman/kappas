@@ -102,43 +102,70 @@ export const MindMap: React.FC<MindMapProps> = ({
 
 
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start panning with left mouse button and not on a task node
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Only start panning with primary button (left mouse) and not on a task node
     if (e.button === 0 && !(e.target as HTMLElement).closest('.task-node')) {
+      const container = containerRef.current;
+      if (!container) return;
+      
+      container.setPointerCapture(e.pointerId);
       setIsPanning(true);
       setStartPos({
         x: e.clientX - positionRef.current.x,
         y: e.clientY - positionRef.current.y,
       });
-      document.body.style.cursor = 'grabbing';
+    }
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isPanningRef.current) return;
+    
+    const newX = e.clientX - startPosRef.current.x;
+    const newY = e.clientY - startPosRef.current.y;
+    setPosition({ x: newX, y: newY });
+  }, []);
+  
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (isPanningRef.current) {
+      const container = containerRef.current;
+      if (container) {
+        container.releasePointerCapture(e.pointerId);
+      }
+      setIsPanning(false);
     }
   }, []);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     
-    const zoomFactor = 0.1;
-    const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
-    const newZoom = Math.max(0.3, Math.min(3, zoomRef.current + delta));
+    // Determine zoom direction and calculate new zoom level
+    const zoomSensitivity = 0.001;
+    const delta = -e.deltaY * zoomSensitivity;
+    const currentZoom = zoomRef.current;
+    const newZoom = Math.max(0.3, Math.min(3, currentZoom * (1 + delta)));
     
-    if (newZoom !== zoomRef.current) {
+    // Only proceed if zoom level actually changed
+    if (Math.abs(newZoom - currentZoom) > 0.001) {
+      const container = containerRef.current;
+      if (!container) return;
+      
       // Get mouse position relative to the container
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        
-        // Calculate zoom center point
-        const zoomCenterX = (mouseX - positionRef.current.x) / zoomRef.current;
-        const zoomCenterY = (mouseY - positionRef.current.y) / zoomRef.current;
-        
-        // Update position to zoom around mouse cursor
-        const newX = mouseX - zoomCenterX * newZoom;
-        const newY = mouseY - zoomCenterY * newZoom;
-        
-        setPosition({ x: newX, y: newY });
-        setZoom(newZoom);
-      }
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Calculate the mouse position in the scaled coordinate space
+      const currentPos = positionRef.current;
+      const mouseInContentX = (mouseX - currentPos.x) / currentZoom;
+      const mouseInContentY = (mouseY - currentPos.y) / currentZoom;
+      
+      // Calculate new position to zoom toward the mouse
+      const newX = mouseX - mouseInContentX * newZoom;
+      const newY = mouseY - mouseInContentY * newZoom;
+      
+      // Apply the new zoom and position
+      setPosition({ x: newX, y: newY });
+      setZoom(newZoom);
     }
   }, []);
 
@@ -222,47 +249,21 @@ export const MindMap: React.FC<MindMapProps> = ({
     return connections;
   }, [visibleTasks, taskPositions, completedTasks, highlightedTaskIds]);
 
-  // Set up and clean up event listeners
+  // Clean up any pointer captures when component unmounts
   useEffect(() => {
-    let mouseMoveHandler: (e: MouseEvent) => void;
-    let mouseUpHandler: () => void;
-
-    if (isPanning) {
-      mouseMoveHandler = (e: MouseEvent) => {
-        if (!isPanningRef.current) return;
-        
-        const newX = e.clientX - startPosRef.current.x;
-        const newY = e.clientY - startPosRef.current.y;
-        setPosition({ x: newX, y: newY });
-      };
-      
-      mouseUpHandler = () => {
-        if (isPanningRef.current) {
-          setIsPanning(false);
-          document.body.style.cursor = '';
-        }
-      };
-      
-      document.addEventListener('mousemove', mouseMoveHandler);
-      document.addEventListener('mouseup', mouseUpHandler);
-    }
+    const container = containerRef.current;
     
     return () => {
-      if (mouseMoveHandler) {
-        document.removeEventListener('mousemove', mouseMoveHandler);
-      }
-      if (mouseUpHandler) {
-        document.removeEventListener('mouseup', mouseUpHandler);
+      if (container) {
+        // Release any active pointer captures
+        try {
+          container.releasePointerCapture(0);
+        } catch {
+          // Ignore errors if no pointer is captured
+        }
       }
     };
-  }, [isPanning]); // Only depend on isPanning since we're using refs for other values
-
-  // Reset cursor when component unmounts
-  useEffect(() => {
-    return () => {
-      document.body.style.cursor = '';
-    };
-  }, []);
+  }, []); // No dependencies - this effect only runs on mount/unmount
 
   if (visibleTasks.length === 0) {
     return (
@@ -281,19 +282,22 @@ export const MindMap: React.FC<MindMapProps> = ({
 
   return (
     <div 
-      className="relative w-full h-screen overflow-hidden bg-slate-900 rounded-lg"
-      onMouseDown={handleMouseDown}
+      className="mindmap-container relative w-full h-screen overflow-hidden bg-slate-900 rounded-lg"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onWheel={handleWheel}
       ref={containerRef}
     >
       <div
-        className="relative transition-transform duration-100 ease-out will-change-transform"
+        className="relative will-change-transform"
         style={{
           width: "100%",
           height: "100%",
           minWidth: "1400px",
           minHeight: "900px",
-          transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+          transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${zoom})`,
           cursor: isPanning ? 'grabbing' : 'grab',
         }}
       >
