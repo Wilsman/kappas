@@ -8,7 +8,6 @@ import { Button } from "./ui/button";
 interface TaskNodeProps {
   task: Task;
   isCompleted: boolean;
-  canComplete: boolean;
   onToggleComplete: (taskId: string) => void;
   position: { x: number; y: number };
   completedTasks: Set<string>;
@@ -18,7 +17,6 @@ interface TaskNodeProps {
 export const TaskNode: React.FC<TaskNodeProps> = ({
   task,
   isCompleted,
-  canComplete,
   onToggleComplete,
   position,
   completedTasks,
@@ -43,26 +41,22 @@ export const TaskNode: React.FC<TaskNodeProps> = ({
             : ''}
           ${isCompleted 
             ? "border-green-500 bg-card/90" 
-            : canComplete 
-            ? "border-primary bg-card/90" 
-            : "border-muted bg-card/50"}
+            : "border-primary bg-card/90"}
         `}
       >
         {/* Completion checkbox */}
         <Button
           onClick={() => onToggleComplete(task.id)}
-          disabled={!canComplete && !isCompleted}
+          disabled={false}
           size="sm"
-          variant={isCompleted ? "default" : canComplete ? "secondary" : "ghost"}
+          variant={isCompleted ? "default" : "secondary"}
           className={`
             absolute -top-2 -right-2 w-6 h-6 rounded-full p-0 z-10
             transition-all duration-200 hover:scale-110
             ${
               isCompleted
                 ? "bg-green-500 hover:bg-green-600 border-green-500 text-white"
-                : canComplete
-                ? "border-primary hover:bg-primary hover:text-primary-foreground"
-                : "cursor-not-allowed opacity-50"
+                : "border-primary hover:bg-primary hover:text-primary-foreground"
             }
           `}
         >
@@ -154,7 +148,7 @@ export const TaskNode: React.FC<TaskNodeProps> = ({
                         className={`text-xs pl-2 border-l-2 ${
                           completedTasks.has(req.task.id)
                             ? 'text-green-400 border-green-500/50'
-                            : 'text-muted-foreground/80 border-border/50'
+                            : 'text-foreground/90 border-border/50'
                         }`}
                       >
                         {req.task.name}

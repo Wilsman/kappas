@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';import { RotateCcw, Filter, Settings } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { RotateCcw, Filter, Settings } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Task } from './types';
 import { MindMap } from './components/MindMap';
 import { QuestProgressPanel } from './components/QuestProgressPanel';
 import { taskStorage } from './utils/indexedDB';
+import { buildTaskDependencyMap, getAllDependencies } from './utils/taskUtils';
 import { sampleData } from './data/sample-data';
 import { cn } from '@/lib/utils';
 import { Button } from './components/ui/button';
@@ -21,37 +23,42 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from './components/ui/alert-dialog';
-import { ChecklistView } from './components/ChecklistView';
-import { Switch } from '@/components/ui/switch';
+import { GroupedView } from './components/GroupedView';
 import { BrainCircuit, ListChecks } from 'lucide-react';
 
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
-  const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(new Set(['Ref', 'Fence', 'BTR Driver', 'Lightkeeper']));
+  const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(
+    new Set(['Ref', 'Fence', 'BTR Driver', 'Lightkeeper'])
+  );
   const [showKappa, setShowKappa] = useState(false);
   const [showLightkeeper, setShowLightkeeper] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'mindmap'|'checklist'>('mindmap');
+  const [viewMode, setViewMode] = useState<'mindmap' | 'grouped'>('grouped');
+  const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
 
   const requirementFilterActive = showKappa || showLightkeeper;
+  const totalQuests = tasks.length;
+  const completedQuests = completedTasks.size;
 
-  // Calculate trader progress for the QuestProgressPanel
+  // Build progress data for QuestProgressPanel
   const traderProgress = useMemo(() => {
     type TP = { completed: number; total: number };
-    const traderMap = Object.fromEntries(
+    const map = Object.fromEntries(
       Object.keys(TRADER_COLORS).map(name => [name, { completed: 0, total: 0 } as TP])
     ) as Record<keyof typeof TRADER_COLORS, TP>;
 
-    for (const { trader: { name }, id } of tasks) {
-      if (name in traderMap) {
-        traderMap[name].total++;
-        if (completedTasks.has(id)) traderMap[name].completed++;
+    tasks.forEach(({ trader: { name }, id }) => {
+      if (map[name]) {
+        map[name].total++;
+        if (completedTasks.has(id)) {
+          map[name].completed++;
+        }
       }
-    }
+    });
 
-    // Convert to array of TraderProgress objects
-    return Object.entries(traderMap).map(([name, { completed, total }]) => ({
+    return Object.entries(map).map(([name, { completed, total }]) => ({
       id: name.toLowerCase().replace(/\s+/g, '-'),
       name,
       completed,
@@ -60,58 +67,55 @@ function App() {
     }));
   }, [tasks, completedTasks]);
 
-  // Calculate total quest stats
-  const totalQuests = tasks.length;
-  const completedQuests = completedTasks.size;
-
   useEffect(() => {
-    const initializeApp = async () => {
+    const init = async () => {
       try {
         await taskStorage.init();
-        const savedCompletedTasks = await taskStorage.loadCompletedTasks();
-        setCompletedTasks(savedCompletedTasks);
-
-        // Load sample data initially
+        const saved = await taskStorage.loadCompletedTasks();
+        setCompletedTasks(saved);
         setTasks(sampleData.data.tasks);
-      } catch (error) {
-        console.error('Failed to initialize app:', error);
+      } catch (err) {
+        console.error('Init error', err);
       } finally {
         setIsLoading(false);
       }
     };
-
-    initializeApp();
+    init();
   }, []);
 
-  const handleToggleComplete = useCallback(async (taskId: string) => {
-    const newCompletedTasks = new Set(completedTasks);
+  const handleToggleComplete = useCallback(
+    async (taskId: string) => {
+      const next = new Set(completedTasks);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        const depMap = buildTaskDependencyMap(tasks);
+        const deps = getAllDependencies(taskId, depMap);
+        next.add(taskId);
+        deps.forEach(id => next.add(id));
+      }
+      setCompletedTasks(next);
+      try {
+        await taskStorage.saveCompletedTasks(next);
+      } catch (err) {
+        console.error('Save error', err);
+      }
+    },
+    [completedTasks, tasks]
+  );
 
-    if (newCompletedTasks.has(taskId)) {
-      newCompletedTasks.delete(taskId);
-    } else {
-      newCompletedTasks.add(taskId);
-    }
-
-    setCompletedTasks(newCompletedTasks);
-
-    try {
-      await taskStorage.saveCompletedTasks(newCompletedTasks);
-    } catch (error) {
-      console.error('Failed to save completed tasks:', error);
-    }
-  }, [completedTasks]);
-
-  const handleToggleTraderVisibility = useCallback((trader: string) => {
-    const newHiddenTraders = new Set(hiddenTraders);
-
-    if (newHiddenTraders.has(trader)) {
-      newHiddenTraders.delete(trader);
-    } else {
-      newHiddenTraders.add(trader);
-    }
-
-    setHiddenTraders(newHiddenTraders);
-  }, [hiddenTraders]);
+  const handleToggleTraderVisibility = useCallback(
+    (trader: string) => {
+      const next = new Set(hiddenTraders);
+      if (next.has(trader)) {
+        next.delete(trader);
+      } else {
+        next.add(trader);
+      }
+      setHiddenTraders(next);
+    },
+    [hiddenTraders]
+  );
 
   const handleToggleKappa = useCallback(() => setShowKappa(v => !v), []);
   const handleToggleLightkeeper = useCallback(() => setShowLightkeeper(v => !v), []);
@@ -120,16 +124,28 @@ function App() {
     setCompletedTasks(new Set());
     try {
       await taskStorage.saveCompletedTasks(new Set());
-    } catch (error) {
-      console.error('Failed to reset progress:', error);
+    } catch (err) {
+      console.error('Reset error', err);
     }
   }, []);
 
+  const handleTaskClick = useCallback(
+    (taskId: string) => {
+      setHighlightedTask(taskId);
+      setTimeout(() => setHighlightedTask(null), 2000);
+      if (viewMode === 'grouped') {
+        document
+          .getElementById(`task-${taskId}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    },
+    [viewMode]
+  );
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <Progress value={66} className="w-[200px] h-2" />
-        <span className="text-foreground/80 text-sm">Loading tasks...</span>
       </div>
     );
   }
@@ -143,15 +159,25 @@ function App() {
             <h1 className="text-xl font-bold">Escape from Tarkov Task Tracker</h1>
             <div className="flex items-center gap-2">
               <div className="flex items-center space-x-2">
-                <BrainCircuit className={`h-5 w-5 ${viewMode === 'mindmap' ? 'text-primary' : 'text-muted-foreground'}`} />
-                <Switch
-                  id="view-mode"
-                  checked={viewMode === 'checklist'}
-                  onCheckedChange={c => setViewMode(c ? 'checklist' : 'mindmap')}
-                />
-                <ListChecks className={`h-5 w-5 ${viewMode === 'checklist' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Button
+                  variant={viewMode === 'mindmap' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('mindmap')}
+                  className="gap-2"
+                >
+                  <BrainCircuit size={16} />
+                  Mind Map
+                </Button>
+                <Button
+                  variant={viewMode === 'grouped' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grouped')}
+                  className="gap-2"
+                >
+                  <ListChecks size={16} />
+                  Checklist View
+                </Button>
               </div>
-
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -163,13 +189,13 @@ function App() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will reset all your completed tasks. This action cannot be undone.
+                      This will reset all completed tasks and cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={handleResetProgress}>
-                      Reset Progress
+                      Reset
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -179,15 +205,20 @@ function App() {
         </div>
       </header>
 
-      {/* Main content with sidebars */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar - Filters */}
-        <Sidebar 
-          position="left" 
+      {/* Sidebars + Main */}
+      <div
+        className={cn(
+          'flex flex-1',
+          viewMode === 'mindmap' ? 'overflow-auto' : 'overflow-hidden'
+        )}
+      >
+        {/* Left Filters */}
+        <Sidebar
+          position="left"
           header={
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4" />
-              <span>Filters</span>
+              Filters
             </div>
           }
           defaultCollapsed={false}
@@ -210,27 +241,27 @@ function App() {
                           disabled={requirementFilterActive}
                           className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50"
                         />
-                        <label 
+                        <label
                           htmlFor={`trader-${trader}`}
                           className={cn(
-                            "flex items-center gap-2 text-sm",
-                            requirementFilterActive && "cursor-not-allowed opacity-50"
+                            'flex items-center gap-2 text-sm',
+                            requirementFilterActive && 'opacity-50 cursor-not-allowed'
                           )}
                         >
-                          <span 
-                            className="inline-block h-3 w-3 rounded-full flex-shrink-0"
+                          <span
+                            className="inline-block h-3 w-3 rounded-full"
                             style={{ backgroundColor: color }}
                           />
-                          <span className="truncate">{trader}</span>
+                          {trader}
                         </label>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <h3 className="mb-2 text-sm font-medium">Trader/Kappa </h3>
+                  <h3 className="mb-2 text-sm font-medium">Kappa / Lightkeeper</h3>
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         id="kappa-required"
@@ -238,14 +269,11 @@ function App() {
                         onChange={handleToggleKappa}
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
-                      <label 
-                        htmlFor="kappa-required"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
+                      <label htmlFor="kappa-required" className="text-sm font-medium">
                         Kappa Required
                       </label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         id="lightkeeper-required"
@@ -253,10 +281,7 @@ function App() {
                         onChange={handleToggleLightkeeper}
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
-                      <label 
-                        htmlFor="lightkeeper-required"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
+                      <label htmlFor="lightkeeper-required" className="text-sm font-medium">
                         Lightkeeper Required
                       </label>
                     </div>
@@ -268,35 +293,37 @@ function App() {
         </Sidebar>
 
         {/* Main Content */}
-        <main className="flex-1 bg-background relative overflow-hidden">
-          {viewMode === 'mindmap' ? (
-            <MindMap 
+        <main className="flex-1 bg-background relative">
+          {viewMode === 'grouped' ? (
+            <GroupedView
               tasks={tasks}
               completedTasks={completedTasks}
               hiddenTraders={hiddenTraders}
-              onToggleComplete={handleToggleComplete}
               showKappa={showKappa}
               showLightkeeper={showLightkeeper}
+              onToggleComplete={handleToggleComplete}
+              onTaskClick={handleTaskClick}
             />
           ) : (
-            <ChecklistView
+            <MindMap
               tasks={tasks}
               completedTasks={completedTasks}
               hiddenTraders={hiddenTraders}
-              onToggleComplete={handleToggleComplete}
               showKappa={showKappa}
               showLightkeeper={showLightkeeper}
+              onToggleComplete={handleToggleComplete}
+              highlightedTaskId={highlightedTask}
             />
           )}
         </main>
 
-        {/* Right Sidebar - Quest Progress */}
-        <Sidebar 
-          position="right" 
+        {/* Right Progress */}
+        <Sidebar
+          position="right"
           header={
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
-              <span>Progress</span>
+              Progress
             </div>
           }
           defaultCollapsed={false}
@@ -304,7 +331,7 @@ function App() {
           collapsedWidth="3rem"
         >
           <div className="p-2">
-            <QuestProgressPanel 
+            <QuestProgressPanel
               totalQuests={totalQuests}
               completedQuests={completedQuests}
               traders={traderProgress}

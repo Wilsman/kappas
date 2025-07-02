@@ -10,6 +10,33 @@ An interactive task management application featuring a dynamic mind map visualiz
 - Clean, modern UI built with React and TypeScript
 - Responsive design for various screen sizes
 
+## Tarkov.dev query
+
+```graphql
+{
+  tasks(lang: en) {
+    id
+    minPlayerLevel
+    kappaRequired
+    lightkeeperRequired
+    map {
+      name
+    }
+    taskRequirements {
+      task {
+        id
+        name
+      }
+    }
+    trader {
+      name
+    }
+    wikiLink
+    name
+  }
+}
+```
+
 ## Tech Stack
 
 - React 18
@@ -22,13 +49,17 @@ An interactive task management application featuring a dynamic mind map visualiz
 
 1. Clone the repository
 2. Install dependencies:
+
    ```bash
    npm install
    ```
+
 3. Start the development server:
+
    ```bash
    npm run dev
    ```
+
 4. Open [http://localhost:5173](http://localhost:5173) to view it in your browser.
 
 ## Project Structure

@@ -1,5 +1,21 @@
 import { Task } from '../types';
 
+export function getAllDependencies(taskId: string, dependencyMap: Record<string, string[]>): Set<string> {
+  const result = new Set<string>();
+  const stack = [...(dependencyMap[taskId] || [])];
+  
+  while (stack.length) {
+    const dep = stack.pop()!;
+    if (!result.has(dep)) {
+      result.add(dep);
+      stack.push(...(dependencyMap[dep] || []));
+    }
+  }
+  
+  return result;
+}
+
+
 export function groupTasksByTrader(tasks: Task[]): Record<string, Task[]> {
   return tasks.reduce((groups, task) => {
     const trader = task.trader.name;

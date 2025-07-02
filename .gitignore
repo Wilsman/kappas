@@ -25,3 +25,7 @@ dist-ssr
 .env
 .bolt/prompt
 .bolt/config.json
+
+# Local Netlify folder
+.netlify
+repomix-output.xml
