@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from './components/ui/alert-dialog';
-import { GroupedView } from './components/GroupedView';
+import { CheckListView } from './components/CheckListView';
 import { BrainCircuit, ListChecks } from 'lucide-react';
 
 function App() {
@@ -270,7 +270,7 @@ function App() {
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
                       <label htmlFor="kappa-required" className="text-sm font-medium">
-                        Kappa Required
+                        Kappa Required ONLY
                       </label>
                     </div>
                     <div className="flex items-center gap-2">
@@ -282,7 +282,7 @@ function App() {
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
                       <label htmlFor="lightkeeper-required" className="text-sm font-medium">
-                        Lightkeeper Required
+                        Lightkeeper Required ONLY
                       </label>
                     </div>
                   </div>
@@ -295,7 +295,7 @@ function App() {
         {/* Main Content */}
         <main className="flex-1 bg-background relative">
           {viewMode === 'grouped' ? (
-            <GroupedView
+            <CheckListView
               tasks={tasks}
               completedTasks={completedTasks}
               hiddenTraders={hiddenTraders}

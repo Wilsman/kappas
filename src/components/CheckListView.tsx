@@ -9,7 +9,7 @@ import { ListChecks, MapPin, Link2, ChevronDown, ChevronUp } from 'lucide-react'
 import { groupTasksByTrader, buildTaskDependencyMap, canComplete } from '../utils/taskUtils';
 import { cn } from '@/lib/utils';
 
-interface GroupedViewProps {
+interface CheckListViewProps {
   tasks: Task[];
   completedTasks: Set<string>;
   hiddenTraders: Set<string>;
@@ -21,7 +21,7 @@ interface GroupedViewProps {
 
 type GroupBy = 'trader' | 'map';
 
-export const GroupedView: React.FC<GroupedViewProps> = ({
+export const CheckListView: React.FC<CheckListViewProps> = ({
   tasks,
   completedTasks,
   hiddenTraders,
@@ -183,11 +183,23 @@ export const GroupedView: React.FC<GroupedViewProps> = ({
                           htmlFor={task.id}
                           className={cn(
                             "flex-1 text-sm flex items-center gap-3",
-                            isCompleted && "line-through text-muted-foreground",
+                            isCompleted && "text-muted-foreground",
                             !isCompletable && !isCompleted ? "cursor-not-allowed opacity-50" : "cursor-pointer"
                           )}
                         >
-                          {task.name}
+                          <div className="flex flex-col">
+                            <span className={cn(isCompleted && "line-through")}>{task.name}</span>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                              <span>{task.trader.name}</span>
+                              {task.map && <span>• {task.map.name}</span>}
+                              {task.kappaRequired && (
+                                <span className="text-red-500">• Kappa Required</span>
+                              )}
+                              {task.lightkeeperRequired && (
+                                <span className="text-green-500">• Lightkeeper Required</span>
+                              )}
+                            </div>
+                          </div>
                         </label>
                         {task.wikiLink && (
                           <a
