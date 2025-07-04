@@ -235,6 +235,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           );
         })}
       </Accordion>
+
+
     </div>
   );
 };

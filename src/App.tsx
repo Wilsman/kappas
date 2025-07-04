@@ -8,6 +8,7 @@ import { QuestProgressPanel } from './components/QuestProgressPanel';
 import { taskStorage } from './utils/indexedDB';
 import { buildTaskDependencyMap, getAllDependencies } from './utils/taskUtils';
 import { sampleData } from './data/sample-data';
+import collectorItems from './data/collectorItems.json';
 import { cn } from '@/lib/utils';
 import { Button } from './components/ui/button';
 import { Card, CardContent } from './components/ui/card';
@@ -25,18 +26,20 @@ import {
   AlertDialogTrigger,
 } from './components/ui/alert-dialog';
 import { CheckListView } from './components/CheckListView';
-import { BrainCircuit, ListChecks } from 'lucide-react';
+import { CollectorView } from './components/CollectorView';
+import { BrainCircuit, ListChecks, Package } from 'lucide-react';
 
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
+  const [completedCollectorItems, setCompletedCollectorItems] = useState<Set<string>>(new Set());
   const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(
     new Set(['Ref', 'Fence', 'BTR Driver', 'Lightkeeper'])
   );
   const [showKappa, setShowKappa] = useState(false);
   const [showLightkeeper, setShowLightkeeper] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'mindmap' | 'grouped'>('grouped');
+  const [viewMode, setViewMode] = useState<'mindmap' | 'grouped' | 'collector'>('grouped');
   const isMobile = useIsMobile();
 
   // Always use checklist on mobile
@@ -80,8 +83,10 @@ function App() {
     const init = async () => {
       try {
         await taskStorage.init();
-        const saved = await taskStorage.loadCompletedTasks();
-        setCompletedTasks(saved);
+        const savedTasks = await taskStorage.loadCompletedTasks();
+        const savedCollectorItems = await taskStorage.loadCompletedCollectorItems();
+        setCompletedTasks(savedTasks);
+        setCompletedCollectorItems(savedCollectorItems);
         setTasks(sampleData.data.tasks);
       } catch (err) {
         console.error('Init error', err);
@@ -129,10 +134,30 @@ function App() {
   const handleToggleKappa = useCallback(() => setShowKappa(v => !v), []);
   const handleToggleLightkeeper = useCallback(() => setShowLightkeeper(v => !v), []);
 
+  const handleToggleCollectorItem = useCallback(
+    async (itemName: string) => {
+      const next = new Set(completedCollectorItems);
+      if (next.has(itemName)) {
+        next.delete(itemName);
+      } else {
+        next.add(itemName);
+      }
+      setCompletedCollectorItems(next);
+      try {
+        await taskStorage.saveCompletedCollectorItems(next);
+      } catch (err) {
+        console.error('Save collector items error', err);
+      }
+    },
+    [completedCollectorItems]
+  );
+
   const handleResetProgress = useCallback(async () => {
     setCompletedTasks(new Set());
+    setCompletedCollectorItems(new Set());
     try {
       await taskStorage.saveCompletedTasks(new Set());
+      await taskStorage.saveCompletedCollectorItems(new Set());
     } catch (err) {
       console.error('Reset error', err);
     }
@@ -183,9 +208,18 @@ function App() {
                   size="sm"
                   onClick={() => setViewMode('grouped')}
                   className="gap-2 hidden md:flex"
-        >
+                >
                   <ListChecks size={16} />
                   Checklist View
+                </Button>
+                <Button
+                  variant={viewMode === 'collector' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('collector')}
+                  className="gap-2 hidden md:flex"
+                >
+                  <Package size={16} />
+                  Item Tracker
                 </Button>
               </div>
               <AlertDialog>
@@ -302,7 +336,7 @@ function App() {
         <main
           className={cn(
             'flex-1 bg-background relative',
-            viewMode === 'grouped' ? 'overflow-y-auto' : 'overflow-hidden'
+            viewMode === 'grouped' || viewMode === 'collector' ? 'overflow-y-auto' : 'overflow-hidden'
           )}
         >
           {viewMode === 'grouped' ? (
@@ -314,6 +348,12 @@ function App() {
               showLightkeeper={showLightkeeper}
               onToggleComplete={handleToggleComplete}
               onTaskClick={handleTaskClick}
+            />
+          ) : viewMode === 'collector' ? (
+            <CollectorView
+              collectorItems={collectorItems}
+              completedCollectorItems={completedCollectorItems}
+              onToggleCollectorItem={handleToggleCollectorItem}
             />
           ) : (
             <MindMap
@@ -347,6 +387,8 @@ function App() {
               totalQuests={totalQuests}
               completedQuests={completedQuests}
               traders={traderProgress}
+              totalCollectorItems={collectorItems.length}
+              completedCollectorItems={completedCollectorItems.size}
             />
           </div>
         </Sidebar>

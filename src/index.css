@@ -1,7 +1,70 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import "tailwindcss";
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender-Light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender-Black.woff') format('woff');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender-Italic.woff') format('woff');
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender-BoldItalic.woff') format('woff');
+  font-weight: bold;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender-LightItalic.woff') format('woff');
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bender';
+  src: url('/fonts/Jovanny Lemonad - Bender-BlackItalic.woff') format('woff');
+  font-weight: 900;
+  font-style: italic;
+  font-display: swap;
+}
 
 @layer base {
   :root {
@@ -84,6 +147,7 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Bender', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
     width: 100%;
     margin: 0;
     padding: 0;
