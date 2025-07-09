@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useIsMobile } from './hooks/use-mobile';
-import { RotateCcw, Filter, Settings } from 'lucide-react';
+import { RotateCcw, Filter, Settings, Database, Globe } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { Task } from './types';
+import { Task, CollectorItemsData } from './types';
 import { MindMap } from './components/MindMap';
 import { QuestProgressPanel } from './components/QuestProgressPanel';
 import { taskStorage } from './utils/indexedDB';
 import { buildTaskDependencyMap, getAllDependencies } from './utils/taskUtils';
 import { sampleData, collectorItemsData } from './data/sample-data';
+import { fetchCombinedData } from './services/tarkovApi';
 import { cn } from '@/lib/utils';
 import { Button } from './components/ui/button';
 import { Card, CardContent } from './components/ui/card';
@@ -37,10 +38,16 @@ function App() {
   );
   const [showKappa, setShowKappa] = useState(false);
   const [showLightkeeper, setShowLightkeeper] = useState(false);
+  const [useApiData, setUseApiData] = useState(() => {
+    const saved = localStorage.getItem('taskTracker_useApiData');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [apiCollectorItems, setApiCollectorItems] = useState<CollectorItemsData | null>(null);
 
   // Transform collector items data to match the expected structure
-  const collectorItems = useMemo(() => 
-    collectorItemsData.data.task.objectives.flatMap(
+  const collectorItems = useMemo(() => {
+    const sourceData = useApiData && apiCollectorItems ? apiCollectorItems : collectorItemsData;
+    return sourceData.data.task.objectives.flatMap(
       (objective) => 
         objective.items.map(item => ({
           name: item.name,
@@ -48,7 +55,8 @@ function App() {
           img: item.iconLink,
           id: item.id // Keep the id for reference if needed
         }))
-    ), []);
+    );
+  }, [useApiData, apiCollectorItems]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'tree' | 'grouped' | 'collector'>('tree');
   const isMobile = useIsMobile();
@@ -98,15 +106,27 @@ function App() {
         const savedCollectorItems = await taskStorage.loadCompletedCollectorItems();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
-        setTasks(sampleData.data.tasks);
+        
+        if (useApiData) {
+          const { tasks: tasksData, collectorItems: collectorData } = await fetchCombinedData();
+          setTasks(tasksData.data.tasks);
+          setApiCollectorItems(collectorData);
+        } else {
+          setTasks(sampleData.data.tasks);
+        }
       } catch (err) {
         console.error('Init error', err);
+        // Fallback to static data on API error
+        if (useApiData) {
+          setTasks(sampleData.data.tasks);
+          setApiCollectorItems(null);
+        }
       } finally {
         setIsLoading(false);
       }
     };
     init();
-  }, []);
+  }, [useApiData]);
 
   const handleToggleComplete = useCallback(
     async (taskId: string) => {
@@ -210,6 +230,33 @@ function App() {
           <div className="flex h-16 items-center justify-between">
             <h1 className="text-xl font-bold">{isMobile ? 'EFT Tracker' : 'Escape from Tarkov Task Tracker'}</h1>
             <div className="flex items-center gap-2">
+              {/* Data Source Toggle */}
+              <div className="flex items-center gap-2 mr-4">
+                <Button
+                  variant={useApiData ? 'ghost' : 'default'}
+                  size="sm"
+                  onClick={() => {
+                    setUseApiData(false);
+                    localStorage.setItem('taskTracker_useApiData', 'false');
+                  }}
+                  className="gap-2"
+                >
+                  <Database size={16} />
+                  Static
+                </Button>
+                <Button
+                  variant={useApiData ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => {
+                    setUseApiData(true);
+                    localStorage.setItem('taskTracker_useApiData', 'true');
+                  }}
+                  className="gap-2"
+                >
+                  <Globe size={16} />
+                  Live API
+                </Button>
+              </div>
               <div className="flex items-center space-x-2">
                 <Button
                   variant={viewMode === 'tree' ? 'default' : 'ghost'}

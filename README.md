@@ -10,7 +10,9 @@ An interactive task management application featuring a dynamic mind map visualiz
 - Clean, modern UI built with React and TypeScript
 - Responsive design for various screen sizes
 
-## Tarkov.dev query
+## Tarkov.dev queries
+
+Tasks fetch
 
 ```graphql
 {
@@ -33,6 +35,26 @@ An interactive task management application featuring a dynamic mind map visualiz
     }
     wikiLink
     name
+  }
+}
+```
+
+&
+
+Collector items fetch
+
+```graphql
+{
+  task(id: "5c51aac186f77432ea65c552") {
+    objectives {
+      ... on TaskObjectiveItem {
+        items {
+          id
+          name
+          iconLink
+        }
+      }
+    }
   }
 }
 ```
