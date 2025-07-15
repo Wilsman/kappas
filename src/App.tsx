@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { NuqsAdapter } from 'nuqs/adapters/react';
 import { useIsMobile } from './hooks/use-mobile';
 import { RotateCcw, Filter, Settings, Database, Globe } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
@@ -223,243 +224,246 @@ function App() {
   }
 
   return (
-    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
-            <h1 className="text-xl font-bold">{isMobile ? 'EFT Tracker' : 'Escape from Tarkov Task Tracker'}</h1>
-            <div className="flex items-center gap-2">
-              {/* Data Source Toggle */}
-              <div className="flex items-center gap-2 mr-4">
-                <Button
-                  variant={useApiData ? 'ghost' : 'default'}
-                  size="sm"
-                  onClick={() => {
-                    setUseApiData(false);
-                    localStorage.setItem('taskTracker_useApiData', 'false');
-                  }}
-                  className="gap-2"
-                >
-                  <Database size={16} />
-                  Static
-                </Button>
-                <Button
-                  variant={useApiData ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => {
-                    setUseApiData(true);
-                    localStorage.setItem('taskTracker_useApiData', 'true');
-                  }}
-                  className="gap-2"
-                >
-                  <Globe size={16} />
-                  Live API
-                </Button>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant={viewMode === 'tree' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('tree')}
-                  disabled={isMobile}
-                  className="gap-2 hidden md:flex"
-                >
-                  <BrainCircuit size={16} />
-                  Quest Tree
-                </Button>
-                <Button
-                  variant={viewMode === 'grouped' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('grouped')}
-                  className="gap-2 hidden md:flex"
-                >
-                  <ListChecks size={16} />
-                  Checklist View
-                </Button>
-                <Button
-                  variant={viewMode === 'collector' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('collector')}
-                  className="gap-2 hidden md:flex"
-                >
-                  <Package size={16} />
-                  Item Tracker
-                </Button>
-              </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Reset Progress
+    <NuqsAdapter>
+      <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="border-b bg-card">
+          <div className="container mx-auto px-4">
+            <div className="flex h-16 items-center justify-between">
+              <h1 className="text-xl font-bold">{isMobile ? 'EFT Tracker' : 'Escape from Tarkov Task Tracker'}</h1>
+              <div className="flex items-center gap-2">
+                {/* Data Source Toggle */}
+                <div className="flex items-center gap-2 mr-4">
+                  <Button
+                    variant={useApiData ? 'ghost' : 'default'}
+                    size="sm"
+                    onClick={() => {
+                      setUseApiData(false);
+                      localStorage.setItem('taskTracker_useApiData', 'false');
+                    }}
+                    className="gap-2"
+                  >
+                    <Database size={16} />
+                    Static
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will reset all completed tasks and cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleResetProgress}>
-                      Reset
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                  <Button
+                    variant={useApiData ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => {
+                      setUseApiData(true);
+                      localStorage.setItem('taskTracker_useApiData', 'true');
+                    }}
+                    className="gap-2"
+                  >
+                    <Globe size={16} />
+                    Live API
+                  </Button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant={viewMode === 'tree' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('tree')}
+                    disabled={isMobile}
+                    className="gap-2 hidden md:flex"
+                  >
+                    <BrainCircuit size={16} />
+                    Quest Tree
+                  </Button>
+                  <Button
+                    variant={viewMode === 'grouped' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('grouped')}
+                    className="gap-2 hidden md:flex"
+                  >
+                    <ListChecks size={16} />
+                    Checklist View
+                  </Button>
+                  <Button
+                    variant={viewMode === 'collector' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('collector')}
+                    className="gap-2 hidden md:flex"
+                  >
+                    <Package size={16} />
+                    Item Tracker
+                  </Button>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Reset Progress
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will reset all completed tasks and cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleResetProgress}>
+                        Reset
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Sidebars + Main */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Filters */}
-        <Sidebar
-          position="left"
-          header={
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Filters
-            </div>
-          }
-          defaultCollapsed={false}
-          width="16rem"
-          collapsedWidth="3rem"
-          className="hidden md:flex"
-        >
-          <Card className="border-0 shadow-none">
-            <CardContent className="p-4">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">Traders</h3>
-                  <div className="space-y-2">
-                    {Object.entries(TRADER_COLORS).map(([trader, color]) => (
-                      <div key={trader} className="flex items-center space-x-2">
+        {/* Sidebars + Main */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Filters */}
+          <Sidebar
+            position="left"
+            header={
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                Filters
+              </div>
+            }
+            defaultCollapsed={false}
+            width="16rem"
+            collapsedWidth="3rem"
+            className="hidden md:flex"
+          >
+            <Card className="border-0 shadow-none">
+              <CardContent className="p-4">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium">Traders</h3>
+                    <div className="space-y-2">
+                      {Object.entries(TRADER_COLORS).map(([trader, color]) => (
+                        <div key={trader} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`trader-${trader}`}
+                            checked={!hiddenTraders.has(trader) && !requirementFilterActive}
+                            onChange={() => handleToggleTraderVisibility(trader)}
+                            disabled={requirementFilterActive}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50"
+                          />
+                          <label
+                            htmlFor={`trader-${trader}`}
+                            className={cn(
+                              'hidden md:flex items-center gap-2 text-sm',
+                              requirementFilterActive && 'opacity-50 cursor-not-allowed'
+                            )}
+                          >
+                            <span
+                              className="inline-block h-3 w-3 rounded-full"
+                              style={{ backgroundColor: color }}
+                            />
+                            {trader}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium">Kappa / Lightkeeper</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
-                          id={`trader-${trader}`}
-                          checked={!hiddenTraders.has(trader) && !requirementFilterActive}
-                          onChange={() => handleToggleTraderVisibility(trader)}
-                          disabled={requirementFilterActive}
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50"
+                          id="kappa-required"
+                          checked={showKappa}
+                          onChange={handleToggleKappa}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                         />
-                        <label
-                          htmlFor={`trader-${trader}`}
-                          className={cn(
-                            'hidden md:flex items-center gap-2 text-sm',
-                            requirementFilterActive && 'opacity-50 cursor-not-allowed'
-                          )}
-        >
-                          <span
-                            className="inline-block h-3 w-3 rounded-full"
-                            style={{ backgroundColor: color }}
-                          />
-                          {trader}
+                        <label htmlFor="kappa-required" className="text-sm font-medium">
+                          Kappa Required ONLY
                         </label>
                       </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">Kappa / Lightkeeper</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="kappa-required"
-                        checked={showKappa}
-                        onChange={handleToggleKappa}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <label htmlFor="kappa-required" className="text-sm font-medium">
-                        Kappa Required ONLY
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="lightkeeper-required"
-                        checked={showLightkeeper}
-                        onChange={handleToggleLightkeeper}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <label htmlFor="lightkeeper-required" className="text-sm font-medium">
-                        Lightkeeper Required ONLY
-                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="lightkeeper-required"
+                          checked={showLightkeeper}
+                          onChange={handleToggleLightkeeper}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor="lightkeeper-required" className="text-sm font-medium">
+                          Lightkeeper Required ONLY
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </Sidebar>
+
+          {/* Main Content */}
+          <main
+            className={cn(
+              'flex-1 bg-background relative',
+              viewMode === 'grouped' || viewMode === 'collector' ? 'overflow-y-auto' : 'overflow-hidden'
+            )}
+          >
+            {viewMode === 'grouped' ? (
+              <CheckListView
+                tasks={tasks}
+                completedTasks={completedTasks}
+                hiddenTraders={hiddenTraders}
+                showKappa={showKappa}
+                showLightkeeper={showLightkeeper}
+                onToggleComplete={handleToggleComplete}
+                onTaskClick={handleTaskClick}
+              />
+            ) : viewMode === 'collector' ? (
+              <CollectorView
+                collectorItems={collectorItems}
+                completedCollectorItems={completedCollectorItems}
+                onToggleCollectorItem={handleToggleCollectorItem}
+              />
+            ) : (
+              <MindMap
+                tasks={tasks}
+                completedTasks={completedTasks}
+                hiddenTraders={hiddenTraders}
+                showKappa={showKappa}
+                showLightkeeper={showLightkeeper}
+                onToggleComplete={handleToggleComplete}
+                highlightedTaskId={highlightedTask}
+              />
+            )}
+          </main>
+
+          {/* Right Progress */}
+          <Sidebar
+            position="right"
+            header={
+              <div className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Progress
               </div>
-            </CardContent>
-          </Card>
-        </Sidebar>
-
-        {/* Main Content */}
-        <main
-          className={cn(
-            'flex-1 bg-background relative',
-            viewMode === 'grouped' || viewMode === 'collector' ? 'overflow-y-auto' : 'overflow-hidden'
-          )}
-        >
-          {viewMode === 'grouped' ? (
-            <CheckListView
-              tasks={tasks}
-              completedTasks={completedTasks}
-              hiddenTraders={hiddenTraders}
-              showKappa={showKappa}
-              showLightkeeper={showLightkeeper}
-              onToggleComplete={handleToggleComplete}
-              onTaskClick={handleTaskClick}
-            />
-          ) : viewMode === 'collector' ? (
-            <CollectorView
-              collectorItems={collectorItems}
-              completedCollectorItems={completedCollectorItems}
-              onToggleCollectorItem={handleToggleCollectorItem}
-            />
-          ) : (
-            <MindMap
-              tasks={tasks}
-              completedTasks={completedTasks}
-              hiddenTraders={hiddenTraders}
-              showKappa={showKappa}
-              showLightkeeper={showLightkeeper}
-              onToggleComplete={handleToggleComplete}
-              highlightedTaskId={highlightedTask}
-            />
-          )}
-        </main>
-
-        {/* Right Progress */}
-        <Sidebar
-          position="right"
-          header={
-            <div className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Progress
+            }
+            defaultCollapsed={false}
+            width="20rem"
+            collapsedWidth="3rem"
+            className="hidden md:flex"
+          >
+            <div className="p-2">
+              <QuestProgressPanel
+                totalQuests={totalQuests}
+                completedQuests={completedQuests}
+                traders={traderProgress}
+                totalCollectorItems={collectorItems.length}
+                completedCollectorItems={completedCollectorItems.size}
+              />
             </div>
-          }
-          defaultCollapsed={false}
-          width="20rem"
-          collapsedWidth="3rem"
-          className="hidden md:flex"
-        >
-          <div className="p-2">
-            <QuestProgressPanel
-              totalQuests={totalQuests}
-              completedQuests={completedQuests}
-              traders={traderProgress}
-              totalCollectorItems={collectorItems.length}
-              completedCollectorItems={completedCollectorItems.size}
-            />
-          </div>
-        </Sidebar>
+          </Sidebar>
+        </div>
       </div>
-    </div>
+    </NuqsAdapter>
   );
+
 }
 
 export default App;

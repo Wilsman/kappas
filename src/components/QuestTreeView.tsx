@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useQueryState } from 'nuqs';
 import { Task } from '../types';
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
@@ -35,7 +36,7 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
   onToggleComplete,
   highlightedTaskId,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useQueryState('search', { defaultValue: '' });
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedTrader, setSelectedTrader] = useState<string>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
