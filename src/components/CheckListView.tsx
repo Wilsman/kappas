@@ -5,7 +5,8 @@ import { Checkbox } from './ui/checkbox';
 import { Progress } from './ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Button } from './ui/button';
-import { ListChecks, MapPin, Link2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ListChecks, MapPin, Link2, ChevronDown, ChevronUp, Award } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { groupTasksByTrader, buildTaskDependencyMap, canComplete } from '../utils/taskUtils';
 import { cn } from '@/lib/utils';
 
@@ -203,14 +204,87 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                         >
                           <div className="flex flex-col">
                             <span className={cn(isCompleted && "line-through")}>{task.name}</span>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                               <span>{task.trader.name}</span>
                               {task.map && <span>• {task.map.name}</span>}
                               {task.kappaRequired && (
-                                <span className="text-red-500">• Kappa Required</span>
+                                <span className="text-red-500">• Kappa</span>
                               )}
                               {task.lightkeeperRequired && (
-                                <span className="text-green-500">• Lightkeeper Required</span>
+                                <span className="text-green-500">• Lightkeeper</span>
+                              )}
+                              
+                              {/* Objectives and Rewards */}
+                              {task.objectives && task.objectives.length > 0 && (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <span className="text-yellow-300 cursor-help hover:underline">
+                                      • {task.objectives.length} obj{task.objectives.length !== 1 ? 's' : ''}
+                                    </span>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80 p-3" side="top">
+                                    <div className="space-y-3">
+                                      <h4 className="font-medium text-sm flex items-center gap-2">
+                                        <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                        Objectives
+                                      </h4>
+                                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {task.objectives.map((objective, index) => (
+                                          <div key={index} className="text-sm text-muted-foreground">
+                                            {index + 1}. {'playerLevel' in objective 
+                                              ? `Reach level ${objective.playerLevel}` 
+                                              : objective.description}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
+                              
+                              {((task.startRewards?.items && task.startRewards.items.length > 0) || 
+                                (task.finishRewards?.items && task.finishRewards.items.length > 0)) && (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <span className="text-blue-600 cursor-help hover:underline">
+                                      • {((task.startRewards?.items?.length ?? 0) + (task.finishRewards?.items?.length ?? 0)) || 0} rew
+                                    </span>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80 p-3" side="top">
+                                    <div className="space-y-3">
+                                      <h4 className="font-medium text-sm flex items-center gap-2">
+                                        <Award className="w-4 h-4 text-blue-500" />
+                                        Rewards
+                                      </h4>
+                                      <div className="space-y-3">
+                                        {task.startRewards?.items && task.startRewards.items.length > 0 && (
+                                          <div>
+                                            <div className="text-green-600 font-medium text-sm mb-1">Start Rewards:</div>
+                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                              {task.startRewards.items.map((reward, index) => (
+                                                <div key={index} className="text-sm text-muted-foreground">
+                                                  • {reward.item.name}{reward.count > 1 ? ` (${reward.count})` : ''}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {task.finishRewards?.items && task.finishRewards.items.length > 0 && (
+                                          <div>
+                                            <div className="text-green-600 font-medium text-sm mb-1">Finish Rewards:</div>
+                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                              {task.finishRewards.items.map((reward, index) => (
+                                                <div key={index} className="text-sm text-muted-foreground">
+                                                  • {reward.item.name}{reward.count > 1 ? ` (${reward.count})` : ''}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
                               )}
                             </div>
                           </div>

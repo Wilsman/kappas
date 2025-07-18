@@ -9,6 +9,7 @@ export interface TraderProgress {
   total: number;
   color: string;
   icon?: React.ReactNode;
+  imageLink?: string;
 }
 
 interface QuestProgressPanelProps {
@@ -78,6 +79,13 @@ export function QuestProgressPanel({
                     className="w-2 h-2 rounded-full flex-shrink-0" 
                     style={{ backgroundColor: trader.color }}
                   />
+                  {trader.imageLink && (
+                    <img 
+                      src={trader.imageLink} 
+                      alt={trader.name}
+                      className="w-4 h-4 rounded-full flex-shrink-0"
+                    />
+                  )}
                   <span className="text-sm text-foreground truncate">
                     {trader.name}
                   </span>

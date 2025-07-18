@@ -11,9 +11,34 @@ export interface Task {
   } | null;
   trader: {
     name: TraderName;
+    imageLink?: string;
   };
   kappaRequired?: boolean;
   lightkeeperRequired?: boolean;
+  objectives?: TaskObjective[];
+  startRewards?: {
+    items: RewardItem[];
+  };
+  finishRewards?: {
+    items: RewardItem[];
+  };
+}
+
+export interface TaskObjective {
+  description: string;
+  playerLevel?: number;
+  items?: {
+    id: string;
+    name: string;
+  }[];
+  count?: number;
+}
+
+export interface RewardItem {
+  item: {
+    name: string;
+  };
+  count: number;
 }
 
 export interface TaskRequirement {
@@ -64,4 +89,44 @@ export interface TaskPosition {
 
 export interface TaskPositions {
   [taskId: string]: TaskPosition;
+}
+
+export interface HideoutStationSkillRequirement {
+  name: string;
+  skill: {
+    name: string;
+  };
+  level: number;
+}
+
+export interface HideoutStationLevelRequirement {
+  station: {
+    name: string;
+  };
+  level: number;
+}
+
+export interface HideoutStationItemRequirement {
+  count: number;
+  item: {
+    name: string;
+    iconLink?: string;
+  };
+}
+
+export interface HideoutStationLevel {
+  level: number;
+  skillRequirements: HideoutStationSkillRequirement[];
+  stationLevelRequirements: HideoutStationLevelRequirement[];
+  itemRequirements: HideoutStationItemRequirement[];
+}
+
+export interface HideoutStation {
+  name: string;
+  imageLink?: string;
+  levels: HideoutStationLevel[];
+}
+
+export interface HideoutStationsData {
+  hideoutStations: HideoutStation[];
 }

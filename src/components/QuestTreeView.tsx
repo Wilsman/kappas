@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { ChevronRight, ChevronDown, ExternalLink, Search, Filter, ArrowRight, Target } from 'lucide-react';
 import { buildTaskDependencyMap, canComplete } from '../utils/taskUtils';
 import { TRADER_COLORS } from '../data/traders';
@@ -152,6 +153,19 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
 
   // Build tree structure
   const treeData = useMemo(() => {
+    // Define late-game tasks that should be separated
+    const LATE_GAME_TASKS = [
+      "Only Business",  // Level 15
+      "Grenadier",      // Level 20
+      "Profitable Venture"  // Level 61
+    ];
+    
+    // Find the minimum level among late-game tasks
+    const lateGameTasks = filteredTasks.filter(task => LATE_GAME_TASKS.includes(task.name));
+    const minLateGameLevel = lateGameTasks.length > 0 
+      ? Math.min(...lateGameTasks.map(task => task.minPlayerLevel))
+      : 15; // Default to 15 if no tasks found (shouldn't happen)
+
     const nodeMap = new Map<string, TreeNode>();
     const rootNodes: TreeNode[] = [];
 
@@ -183,19 +197,59 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
       }
     });
 
-    // Sort nodes by trader and name
-    const sortNodes = (nodes: TreeNode[]) => {
+    // Sort nodes by trader and name, and separate late-game tasks
+    const sortAndSeparateNodes = (nodes: TreeNode[]) => {
       nodes.sort((a, b) => {
         if (a.task.trader.name !== b.task.trader.name) {
           return a.task.trader.name.localeCompare(b.task.trader.name);
         }
         return a.task.name.localeCompare(b.task.name);
       });
-      nodes.forEach(node => sortNodes(node.children));
+      
+      // Separate late-game tasks
+      const regularNodes: TreeNode[] = [];
+      const lateNodes: TreeNode[] = [];
+      
+      nodes.forEach(node => {
+        if (LATE_GAME_TASKS.includes(node.task.name)) {
+          lateNodes.push(node);
+        } else {
+          regularNodes.push(node);
+          sortAndSeparateNodes(node.children);
+        }
+      });
+      
+      return { regularNodes, lateNodes };
     };
 
-    sortNodes(rootNodes);
-    return rootNodes;
+    // Process root nodes
+    const { regularNodes, lateNodes } = sortAndSeparateNodes(rootNodes);
+    
+    // Add late-game separator and nodes if there are any late-game tasks
+    if (lateNodes.length > 0) {
+      // Add a special node for the separator
+      const separatorNode: TreeNode = {
+        task: {
+          id: 'late-game-separator',
+          name: '',
+          trader: { name: 'Fence' },
+          minPlayerLevel: minLateGameLevel,
+          taskRequirements: [],
+          kappaRequired: false,
+          lightkeeperRequired: false,
+          wikiLink: '',
+          map: { name: 'Any' }
+        },
+        children: lateNodes,
+        level: 0,
+        isRoot: true
+      };
+      
+      // Add the separator and late-game nodes to the regular nodes
+      return [...regularNodes, separatorNode];
+    }
+    
+    return regularNodes;
   }, [filteredTasks]);
 
   // Get unique traders for filter dropdown
@@ -227,13 +281,14 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
 
   const renderTreeNode = useCallback((node: TreeNode, depth: number = 0): React.ReactNode => {
     const { task } = node;
+    const isSeparator = task.id === 'late-game-separator';
     const isCompleted = completedTasks.has(task.id);
     const isCompletable = canComplete(task.id, completedTasks, dependencyMap);
-    const isExpanded = expandedNodes.has(task.id);
+    const isExpanded = isSeparator ? true : expandedNodes.has(task.id);
     const hasChildren = node.children.length > 0;
     const isHighlighted = highlightedTaskId === task.id;
     const isSelected = selectedTaskId === task.id;
-    const traderColor = TRADER_COLORS[task.trader.name] || '#6b7280';
+    const traderColor = TRADER_COLORS[task.trader.name] || (isSeparator ? '#6b7280' : '#6b7280');
     
     // Check if this task is in a search result path
     const isInSearchPath = searchResults?.some(result => 
@@ -246,6 +301,28 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
       task.trader.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       task.map?.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Special rendering for the separator
+    if (isSeparator) {
+      return (
+        <div key={task.id} className="mt-8 mb-4">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-gray-300 dark:border-gray-600" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="px-4 bg-card text-sm font-medium text-muted-foreground">
+                {task.name} (Level {task.minPlayerLevel}+)
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-center text-muted-foreground mt-1">
+            These quests unlock at higher levels and are not part of the main progression
+          </p>
+          {node.children.map(childNode => renderTreeNode(childNode, depth))}
+        </div>
+      );
+    }
 
     return (
       <div key={task.id} className="select-none">
@@ -326,6 +403,83 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
                   )}
                   {task.taskRequirements.length > 0 && (
                     <span>• Requires {task.taskRequirements.length} task{task.taskRequirements.length > 1 ? 's' : ''}</span>
+                  )}
+                  
+                  {/* Objectives - Inline with Popover */}
+                  {task.objectives && task.objectives.length > 0 && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <span className="text-yellow-300 cursor-help hover:underline">
+                          • {task.objectives.length} objective{task.objectives.length > 1 ? 's' : ''}
+                        </span>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-3" side="top">
+                        <div className="space-y-2">
+                          <h4 className="font-medium text-sm flex items-center gap-2">
+                            <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                            Objectives ({task.objectives.length})
+                          </h4>
+                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                            {task.objectives.map((objective, index) => (
+                              <div key={index} className="text-sm text-muted-foreground">
+                                <span className="text-yellow-600 mr-1">{index + 1}.</span>
+                                {'playerLevel' in objective ? (
+                                  `Reach level ${objective.playerLevel}`
+                                ) : (
+                                  objective.description
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                  
+                  {/* Rewards - Inline with Popover */}
+                  {((task.startRewards?.items && task.startRewards.items.length > 0) || 
+                    (task.finishRewards?.items && task.finishRewards.items.length > 0)) && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <span className="text-blue-600 cursor-help hover:underline">
+                          • {((task.startRewards?.items?.length ?? 0) + (task.finishRewards?.items?.length ?? 0)) || 0} reward{((task.startRewards?.items?.length ?? 0) + (task.finishRewards?.items?.length ?? 0)) !== 1 ? 's' : ''}
+                        </span>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-3" side="top">
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-sm flex items-center gap-2">
+                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                            Rewards
+                          </h4>
+                          <div className="space-y-3">
+                            {task.startRewards?.items && task.startRewards.items.length > 0 && (
+                              <div>
+                                <div className="text-green-600 font-medium text-sm mb-1">Start Rewards:</div>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {task.startRewards.items.map((reward, index) => (
+                                    <div key={index} className="text-sm text-muted-foreground">
+                                      • {reward.item.name}{reward.count > 1 ? ` (${reward.count})` : ''}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {task.finishRewards?.items && task.finishRewards.items.length > 0 && (
+                              <div>
+                                <div className="text-blue-600 font-medium text-sm mb-1">Finish Rewards:</div>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {task.finishRewards.items.map((reward, index) => (
+                                    <div key={index} className="text-sm text-muted-foreground">
+                                      • {reward.item.name}{reward.count > 1 ? ` (${reward.count})` : ''}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   )}
                 </div>
               </div>

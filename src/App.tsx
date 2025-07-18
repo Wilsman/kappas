@@ -76,26 +76,31 @@ function App() {
 
   // Build progress data for QuestProgressPanel
   const traderProgress = useMemo(() => {
-    type TP = { completed: number; total: number };
+    type TP = { completed: number; total: number; imageLink?: string };
     const map = Object.fromEntries(
-      Object.keys(TRADER_COLORS).map(name => [name, { completed: 0, total: 0 } as TP])
+      Object.keys(TRADER_COLORS).map(name => [name, { completed: 0, total: 0, imageLink: undefined } as TP])
     ) as Record<keyof typeof TRADER_COLORS, TP>;
 
-    tasks.forEach(({ trader: { name }, id }) => {
+    tasks.forEach(({ trader: { name, imageLink }, id }) => {
       if (map[name]) {
         map[name].total++;
         if (completedTasks.has(id)) {
           map[name].completed++;
         }
+        // Store the imageLink from the first task we encounter for this trader
+        if (!map[name].imageLink && imageLink) {
+          map[name].imageLink = imageLink;
+        }
       }
     });
 
-    return Object.entries(map).map(([name, { completed, total }]) => ({
+    return Object.entries(map).map(([name, { completed, total, imageLink }]) => ({
       id: name.toLowerCase().replace(/\s+/g, '-'),
       name,
       completed,
       total,
       color: TRADER_COLORS[name as keyof typeof TRADER_COLORS] || '#6b7280',
+      imageLink,
     }));
   }, [tasks, completedTasks]);
 
