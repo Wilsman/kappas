@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { NuqsAdapter } from 'nuqs/adapters/react';
 import { useIsMobile } from './hooks/use-mobile';
-import { RotateCcw, Filter, Settings, Database, Globe } from 'lucide-react';
+import { RotateCcw, Filter, BarChart3 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
 import { Task, CollectorItemsData } from './types';
 import { MindMap } from './components/MindMap';
+import { FlowView } from './components/FlowView';
 import { QuestProgressPanel } from './components/QuestProgressPanel';
 import { taskStorage } from './utils/indexedDB';
 import { buildTaskDependencyMap, getAllDependencies } from './utils/taskUtils';
@@ -28,7 +31,7 @@ import {
 } from './components/ui/alert-dialog';
 import { CheckListView } from './components/CheckListView';
 import { CollectorView } from './components/ItemTrackerView';
-import { BrainCircuit, ListChecks, Package } from 'lucide-react';
+import { BrainCircuit, ListChecks, Package, GitBranch } from 'lucide-react';
 
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -39,15 +42,11 @@ function App() {
   );
   const [showKappa, setShowKappa] = useState(false);
   const [showLightkeeper, setShowLightkeeper] = useState(false);
-  const [useApiData, setUseApiData] = useState(() => {
-    const saved = localStorage.getItem('taskTracker_useApiData');
-    return saved ? JSON.parse(saved) : false;
-  });
   const [apiCollectorItems, setApiCollectorItems] = useState<CollectorItemsData | null>(null);
 
   // Transform collector items data to match the expected structure
   const collectorItems = useMemo(() => {
-    const sourceData = useApiData && apiCollectorItems ? apiCollectorItems : collectorItemsData;
+    const sourceData = apiCollectorItems ?? collectorItemsData;
     return sourceData.data.task.objectives.flatMap(
       (objective) => 
         objective.items.map(item => ({
@@ -57,16 +56,14 @@ function App() {
           id: item.id // Keep the id for reference if needed
         }))
     );
-  }, [useApiData, apiCollectorItems]);
+  }, [apiCollectorItems]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'tree' | 'grouped' | 'collector'>('tree');
+  const [viewMode, setViewMode] = useState<'tree' | 'grouped' | 'collector' | 'flow'>('tree');
   const isMobile = useIsMobile();
 
   // Always use checklist on mobile
   useEffect(() => {
-    if (isMobile) {
-      setViewMode('grouped');
-    }
+    if (isMobile) setViewMode('grouped');
   }, [isMobile]);
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
 
@@ -125,27 +122,27 @@ function App() {
         const savedCollectorItems = await taskStorage.loadCompletedCollectorItems();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
-        
-        if (useApiData) {
+
+        // Always try Live API first; fallback to static on error
+        try {
           const { tasks: tasksData, collectorItems: collectorData } = await fetchCombinedData();
           setTasks(tasksData.data.tasks);
           setApiCollectorItems(collectorData);
-        } else {
-          setTasks(sampleData.data.tasks);
-        }
-      } catch (err) {
-        console.error('Init error', err);
-        // Fallback to static data on API error
-        if (useApiData) {
+        } catch (apiErr) {
+          console.error('API error, falling back to static', apiErr);
           setTasks(sampleData.data.tasks);
           setApiCollectorItems(null);
         }
+      } catch (err) {
+        console.error('Init error', err);
+        setTasks(sampleData.data.tasks);
+        setApiCollectorItems(null);
       } finally {
         setIsLoading(false);
       }
     };
     init();
-  }, [useApiData]);
+  }, []);
 
   const handleToggleComplete = useCallback(
     async (taskId: string) => {
@@ -181,14 +178,20 @@ function App() {
     [hiddenTraders]
   );
 
-  const handleToggleKappa = useCallback(() => {
-    setShowKappa(v => !v);
-    setShowLightkeeper(false);
-  }, []);
+  // Focus mode derived state and setter for clearer UX
+  const focusMode = showKappa ? 'kappa' : showLightkeeper ? 'lightkeeper' : 'all';
 
-  const handleToggleLightkeeper = useCallback(() => {
-    setShowLightkeeper(v => !v);
-    setShowKappa(false);
+  const handleSetFocus = useCallback((mode: 'all' | 'kappa' | 'lightkeeper') => {
+    if (mode === 'kappa') {
+      setShowKappa(true);
+      setShowLightkeeper(false);
+    } else if (mode === 'lightkeeper') {
+      setShowKappa(false);
+      setShowLightkeeper(true);
+    } else {
+      setShowKappa(false);
+      setShowLightkeeper(false);
+    }
   }, []);
 
   const handleToggleCollectorItem = useCallback(
@@ -245,90 +248,90 @@ function App() {
     <NuqsAdapter>
       <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="border-b bg-card">
+        <header className="border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
           <div className="container mx-auto px-4">
-            <div className="flex h-16 items-center justify-between">
-              <h1 className="text-xl font-bold">{isMobile ? 'EFT Tracker' : 'Escape from Tarkov Task Tracker'}</h1>
-              <div className="flex items-center gap-2">
-                {/* Data Source Toggle */}
-                <div className="flex items-center gap-2 mr-4">
+            <div className="flex h-16 items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <h1 className="text-xl font-semibold truncate">
+                  {isMobile ? 'EFT Tracker' : 'Escape from Tarkov Task Tracker'}
+                </h1>
+                <span className="hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-600 border border-emerald-600/20">
+                  Live API
+                </span>
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Focus Mode Switch */}
+                <div className="hidden md:flex items-center gap-1 mr-1">
+                  <span className="text-xs text-muted-foreground mr-1">Focus</span>
                   <Button
-                    variant={useApiData ? 'ghost' : 'default'}
+                    variant={focusMode === 'all' ? 'default' : 'ghost'}
                     size="sm"
-                    onClick={() => {
-                      setUseApiData(false);
-                      localStorage.setItem('taskTracker_useApiData', 'false');
-                    }}
-                    className="gap-2"
+                    onClick={() => handleSetFocus('all')}
                   >
-                    <Database size={16} />
-                    Static
+                    All
                   </Button>
                   <Button
-                    variant={useApiData ? 'default' : 'ghost'}
+                    variant={focusMode === 'kappa' ? 'default' : 'ghost'}
                     size="sm"
-                    onClick={() => {
-                      setUseApiData(true);
-                      localStorage.setItem('taskTracker_useApiData', 'true');
-                    }}
-                    className="gap-2"
+                    onClick={() => handleSetFocus('kappa')}
                   >
-                    <Globe size={16} />
-                    Live API
+                    Kappa
+                  </Button>
+                  <Button
+                    variant={focusMode === 'lightkeeper' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => handleSetFocus('lightkeeper')}
+                  >
+                    Lightkeeper
                   </Button>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant={viewMode === 'tree' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('tree')}
-                    disabled={isMobile}
-                    className="gap-2 hidden md:flex"
-                  >
-                    <BrainCircuit size={16} />
-                    Quest Tree
-                  </Button>
-                  <Button
-                    variant={viewMode === 'grouped' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('grouped')}
-                    className="gap-2 hidden md:flex"
-                  >
-                    <ListChecks size={16} />
-                    Checklist View
-                  </Button>
+                <Separator orientation="vertical" className="hidden md:block h-6 mx-2" />
+                <div className="hidden md:flex items-center space-x-3">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="gap-2">Quests</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuRadioGroup
+                        value={viewMode === 'grouped' ? 'grouped' : viewMode === 'flow' ? 'flow' : 'tree'}
+                        onValueChange={(val) => {
+                          if (!val) return;
+                          if (val === 'tree') {
+                            if (isMobile) return; // keep Tree disabled on mobile
+                            setViewMode('tree');
+                          } else if (val === 'flow') {
+                            setViewMode('flow');
+                          } else {
+                            setViewMode('grouped');
+                          }
+                        }}
+                      >
+                        <DropdownMenuRadioItem value="tree" disabled={isMobile}>
+                          <BrainCircuit />
+                          Tree
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="flow">
+                          <GitBranch />
+                          Flow
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="grouped">
+                          <ListChecks />
+                          Checklist
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Separator orientation="vertical" className="h-6 mx-2" />
                   <Button
                     variant={viewMode === 'collector' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('collector')}
-                    className="gap-2 hidden md:flex"
+                    className="gap-2"
                   >
                     <Package size={16} />
-                    Item Tracker
+                    Items
                   </Button>
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                      Reset Progress
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will reset all completed tasks and cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleResetProgress}>
-                        Reset
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
               </div>
             </div>
           </div>
@@ -354,7 +357,7 @@ function App() {
               <CardContent className="p-4">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="mb-2 text-sm font-medium">Traders</h3>
+                    <h3 className="mb-2 text-sm font-medium">Filter by Trader</h3>
                     <div className="space-y-2">
                       {Object.entries(TRADER_COLORS).map(([trader, color]) => (
                         <div key={trader} className="flex items-center space-x-2">
@@ -383,35 +386,7 @@ function App() {
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <h3 className="mb-2 text-sm font-medium">Kappa / Lightkeeper</h3>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="kappa-required"
-                          checked={showKappa}
-                          onChange={handleToggleKappa}
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <label htmlFor="kappa-required" className="text-sm font-medium">
-                          Kappa Required ONLY
-                        </label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="lightkeeper-required"
-                          checked={showLightkeeper}
-                          onChange={handleToggleLightkeeper}
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <label htmlFor="lightkeeper-required" className="text-sm font-medium">
-                          Lightkeeper Required ONLY
-                        </label>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Focus controls moved to header for clarity */}
                 </div>
               </CardContent>
             </Card>
@@ -421,7 +396,7 @@ function App() {
           <main
             className={cn(
               'flex-1 bg-background relative',
-              viewMode === 'grouped' || viewMode === 'collector' ? 'overflow-y-auto' : 'overflow-hidden'
+              viewMode === 'grouped' || viewMode === 'collector' || viewMode === 'flow' ? 'overflow-y-auto' : 'overflow-hidden'
             )}
           >
             {viewMode === 'grouped' ? (
@@ -439,6 +414,16 @@ function App() {
                 collectorItems={collectorItems}
                 completedCollectorItems={completedCollectorItems}
                 onToggleCollectorItem={handleToggleCollectorItem}
+              />
+            ) : viewMode === 'flow' ? (
+              <FlowView
+                tasks={tasks}
+                completedTasks={completedTasks}
+                hiddenTraders={hiddenTraders}
+                showKappa={showKappa}
+                showLightkeeper={showLightkeeper}
+                onToggleComplete={handleToggleComplete}
+                highlightedTaskId={highlightedTask}
               />
             ) : (
               <MindMap
@@ -458,7 +443,7 @@ function App() {
             position="right"
             header={
               <div className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
+                <BarChart3 className="h-4 w-4" />
                 Progress
               </div>
             }
@@ -467,7 +452,7 @@ function App() {
             collapsedWidth="3rem"
             className="hidden md:flex"
           >
-            <div className="p-2">
+            <div className="p-2 space-y-3">
               <QuestProgressPanel
                 totalQuests={totalQuests}
                 completedQuests={completedQuests}
@@ -479,6 +464,28 @@ function App() {
                 totalLightkeeperTasks={totalLightkeeperTasks}
                 completedLightkeeperTasks={completedLightkeeperTasks}
               />
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full">
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset Progress
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will reset all completed tasks and cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleResetProgress}>
+                      Reset
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </Sidebar>
         </div>
