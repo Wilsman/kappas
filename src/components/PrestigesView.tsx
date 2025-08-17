@@ -4,6 +4,7 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { taskStorage } from '@/utils/indexedDB';
+import { computePrestigeRequirements, PRESTIGE_UPDATED_EVENT } from '@/utils/prestige';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
@@ -210,12 +211,14 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
   );
 
   const [state, setState] = useState<PrestigeProgress>(defaultState);
+  const hasLoadedRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       const saved = await taskStorage.loadPrestigeProgress<Partial<PrestigeProgress>>(id);
-      if (mounted && saved)
+      if (mounted && saved) {
         setState({
           ...defaultState,
           ...saved,
@@ -229,6 +232,9 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
             },
           },
         });
+      }
+      // mark initial load complete whether saved existed or not
+      hasLoadedRef.current = true;
     })();
     return () => {
       mounted = false;
@@ -236,36 +242,41 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
   }, [id, defaultState]);
 
   useEffect(() => {
-    taskStorage.savePrestigeProgress(id, state);
+    if (!hasLoadedRef.current) return; // avoid overwriting saved data on first mount
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(async () => {
+      await taskStorage.savePrestigeProgress(id, state);
+      window.dispatchEvent(new CustomEvent(PRESTIGE_UPDATED_EVENT, { detail: { id } }));
+    }, 200);
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
   }, [id, state]);
 
   const requirements = useMemo(() => {
-    const met = [
-      state.level >= levelTarget,
-      state.strength >= strengthTarget,
-      state.endurance >= enduranceTarget,
-      state.charisma >= charismaTarget,
-      state.hideout.intelligence >= 2,
-      state.hideout.security >= 3,
-      state.hideout.restSpace >= 3,
-      state.hideout.roubles >= roublesTarget,
-      state.quests.collector,
-      state.quests.newBeginning,
-      ...(extra?.scavsTarget ? [state.extras.scavs >= extra.scavsTarget] as boolean[] : []),
-      ...(extra?.pmcTarget ? [state.extras.pmc >= extra.pmcTarget] as boolean[] : []),
-      ...(extra?.raidersTarget ? [state.extras.raiders >= extra.raidersTarget] as boolean[] : []),
-      ...(extra?.requireLabsExtract ? [state.extras.labsExtracted] as boolean[] : []),
-      ...(extra?.requireLabsTransitToStreets ? [state.extras.labsTransitToStreets] as boolean[] : []),
-      ...(extra?.requireStreetsExtract ? [state.extras.streetsExtracted] as boolean[] : []),
-      ...(extra?.requireAnyLabyrinthFigurine ? [state.extras.anyLabyrinthFigurine] as boolean[] : []),
-      ...(extra?.figurines && extra.figurines.length
-        ? [extra.figurines.every((f) => state.extras.figurines[f.id])] as boolean[]
-        : []),
-    ];
-    const total = met.length;
-    const done = met.filter(Boolean).length;
+    const cfg = {
+      id,
+      levelTarget,
+      strengthTarget,
+      enduranceTarget,
+      charismaTarget,
+      roublesTarget,
+      extras: extra
+        ? {
+            scavsTarget: extra.scavsTarget,
+            pmcTarget: extra.pmcTarget,
+            raidersTarget: extra.raidersTarget,
+            requireLabsExtract: extra.requireLabsExtract,
+            requireLabsTransitToStreets: extra.requireLabsTransitToStreets,
+            requireStreetsExtract: extra.requireStreetsExtract,
+            requireAnyLabyrinthFigurine: extra.requireAnyLabyrinthFigurine,
+            figurines: extra.figurines?.map((f) => f.id),
+          }
+        : undefined,
+    } as const;
+    const { done, total } = computePrestigeRequirements(state, cfg);
     return { done, total };
-  }, [state, levelTarget, strengthTarget, enduranceTarget, charismaTarget, roublesTarget, extra]);
+  }, [id, state, levelTarget, strengthTarget, enduranceTarget, charismaTarget, roublesTarget, extra]);
 
   function setNumber(value: number, min: number, max: number): number {
     if (Number.isNaN(value)) return 0;
@@ -382,7 +393,7 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
               <Checkbox
                 id={`${id}-quest-collector`}
                 checked={state.quests.collector}
-                onCheckedChange={(c) => setState((s) => ({ ...s, quests: { ...s.quests, collector: Boolean(c) } }))}
+                onCheckedChange={(c) => setState((s) => ({ ...s, quests: { ...s.quests, collector: c === true } }))}
               />
               <label htmlFor={`${id}-quest-collector`} className="cursor-pointer select-none text-muted-foreground">
                 Complete "Collector"
@@ -392,7 +403,7 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
               <Checkbox
                 id={`${id}-quest-new-beginning`}
                 checked={state.quests.newBeginning}
-                onCheckedChange={(c) => setState((s) => ({ ...s, quests: { ...s.quests, newBeginning: Boolean(c) } }))}
+                onCheckedChange={(c) => setState((s) => ({ ...s, quests: { ...s.quests, newBeginning: c === true } }))}
               />
               <label htmlFor={`${id}-quest-new-beginning`} className="cursor-pointer select-none text-muted-foreground">
                 Complete "New Beginning"
@@ -422,25 +433,25 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
                   {extra.requireLabsExtract ? (
                     <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
                       <p className="text-sm font-medium">Survive and Extract from Labs</p>
-                      <Checkbox checked={state.extras.labsExtracted} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, labsExtracted: Boolean(c) } }))} />
+                      <Checkbox checked={state.extras.labsExtracted} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, labsExtracted: c === true } }))} />
                     </div>
                   ) : null}
                   {extra.requireLabsTransitToStreets ? (
                     <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
                       <p className="text-sm font-medium">Use Labs Transit to Streets</p>
-                      <Checkbox checked={state.extras.labsTransitToStreets} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, labsTransitToStreets: Boolean(c) } }))} />
+                      <Checkbox checked={state.extras.labsTransitToStreets} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, labsTransitToStreets: c === true } }))} />
                     </div>
                   ) : null}
                   {extra.requireStreetsExtract ? (
                     <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
                       <p className="text-sm font-medium">Survive and Extract from Streets</p>
-                      <Checkbox checked={state.extras.streetsExtracted} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, streetsExtracted: Boolean(c) } }))} />
+                      <Checkbox checked={state.extras.streetsExtracted} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, streetsExtracted: c === true } }))} />
                     </div>
                   ) : null}
                   {extra.requireAnyLabyrinthFigurine ? (
                     <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
                       <p className="text-sm font-medium">Hand over any Labyrinth figurine</p>
-                      <Checkbox checked={state.extras.anyLabyrinthFigurine} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, anyLabyrinthFigurine: Boolean(c) } }))} />
+                      <Checkbox checked={state.extras.anyLabyrinthFigurine} onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, anyLabyrinthFigurine: c === true } }))} />
                     </div>
                   ) : null}
                 </div>
@@ -455,7 +466,7 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
                         <Checkbox
                           id={`${id}-figurine-${f.id}`}
                           checked={state.extras.figurines[f.id]}
-                          onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, figurines: { ...s.extras.figurines, [f.id]: Boolean(c) } } }))}
+                          onCheckedChange={(c) => setState((s) => ({ ...s, extras: { ...s.extras, figurines: { ...s.extras.figurines, [f.id]: c === true } } }))}
                         />
                         <label htmlFor={`${id}-figurine-${f.id}`} className="cursor-pointer select-none text-muted-foreground">
                           {f.label}

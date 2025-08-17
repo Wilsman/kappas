@@ -3,11 +3,13 @@ import { NuqsAdapter } from 'nuqs/adapters/react';
 import { useIsMobile } from './hooks/use-mobile';
 import { RotateCcw, Filter, BarChart3 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 import { Task, CollectorItemsData } from './types';
 import { MindMap } from './components/MindMap';
 import { FlowView } from './components/FlowView';
 import { QuestProgressPanel } from './components/QuestProgressPanel';
 import { taskStorage } from './utils/indexedDB';
+import { loadCurrentPrestigeSummary, PRESTIGE_UPDATED_EVENT } from '@/utils/prestige';
 import { buildTaskDependencyMap, getAllDependencies } from './utils/taskUtils';
 import { sampleData, collectorItemsData } from './data/sample-data';
 import { fetchCombinedData } from './services/tarkovApi';
@@ -143,6 +145,28 @@ function App() {
     init();
   }, []);
 
+  // Compute "next" prestige progress (only one visible at a time)
+  const [prestigeProgress, setPrestigeProgress] = useState<{ completed: number; total: number } | null>(null);
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const current = await loadCurrentPrestigeSummary();
+        setPrestigeProgress(current);
+      } catch (e) {
+        console.error('Prestige progress load error', e);
+        setPrestigeProgress(null);
+      }
+    };
+
+    refresh();
+    const handler = () => { void refresh(); };
+    window.addEventListener(PRESTIGE_UPDATED_EVENT, handler as EventListener);
+    return () => {
+      window.removeEventListener(PRESTIGE_UPDATED_EVENT, handler as EventListener);
+    };
+  }, []);
+
   const handleToggleComplete = useCallback(
     async (taskId: string) => {
       const next = new Set(completedTasks);
@@ -239,7 +263,23 @@ function App() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Progress value={66} className="w-[200px] h-2" />
+        <div className="flex flex-col items-center gap-6">
+            <TextShimmerWave
+              as="h1"
+              className="text-2xl md:text-3xl font-semibold tracking-wide"
+              duration={1}
+              zDistance={120}
+              xDistance={30}
+              yDistance={-30}
+              spread={1.2}
+              scaleDistance={1.2}
+              rotateYDistance={12}
+            >
+              Loading... Making donuts
+            </TextShimmerWave>
+          <Progress value={66} className="w-[240px] h-2" />
+          <p className="text-xs text-muted-foreground">Fetching quests and items…</p>
+        </div>
       </div>
     );
   }
@@ -502,6 +542,8 @@ function App() {
                 completedKappaTasks={completedKappaTasks}
                 totalLightkeeperTasks={totalLightkeeperTasks}
                 completedLightkeeperTasks={completedLightkeeperTasks}
+                totalPrestigeSteps={prestigeProgress?.total}
+                completedPrestigeSteps={prestigeProgress?.completed}
               />
               <AlertDialog>
                 <AlertDialogTrigger asChild>
