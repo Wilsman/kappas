@@ -31,7 +31,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   onToggleCollectorItem,
   groupBy,
 }) => {
-  const [searchTerm, setSearchTerm] = useQueryState('search', { defaultValue: '' });
+  const [searchTerm, setSearchTerm] = useQueryState('itemsSearch', { defaultValue: '' });
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
 
   // Filter items based on search

@@ -35,7 +35,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   mapFilter,
   groupBy,
 }) => {
-  const [searchTerm, setSearchTerm] = useQueryState('search', { defaultValue: '' });
+  const [searchTerm, setSearchTerm] = useQueryState('tasksSearch', { defaultValue: '' });
   // Start with all groups collapsed by default
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [enableLevelFilter, setEnableLevelFilter] = useState<boolean>(() => {

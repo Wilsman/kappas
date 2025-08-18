@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
 export function PrestigesView(): JSX.Element {
-  const [searchTerm, setSearchTerm] = useQueryState('search', { defaultValue: '' });
+  const [searchTerm, setSearchTerm] = useQueryState('prestigeSearch', { defaultValue: '' });
 
   // configs for all prestige cards
   const prestiges = useMemo(

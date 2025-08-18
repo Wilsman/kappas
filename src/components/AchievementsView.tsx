@@ -13,7 +13,7 @@ interface AchievementsViewProps {
 }
 
 export function AchievementsView({ achievements, completed, onToggle }: AchievementsViewProps): JSX.Element {
-  const [searchTerm, setSearchTerm] = useQueryState('search', { defaultValue: '' });
+  const [searchTerm, setSearchTerm] = useQueryState('achSearch', { defaultValue: '' });
 
   const total = achievements.length;
   const done = completed.size;
