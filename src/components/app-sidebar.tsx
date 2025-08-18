@@ -62,9 +62,9 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1 text-sm font-medium">
+        <div className="flex items-center gap-2 px-2 py-1">
           <Database className="h-4 w-4" />
-          <span>EFT Tracker</span>
+          <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">EFT Tracker</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
