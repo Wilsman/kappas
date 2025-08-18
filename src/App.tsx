@@ -639,6 +639,9 @@ function App() {
         hiddenTraders={hiddenTraders}
         maps={mapList}
         selectedMap={selectedMap}
+        tasks={tasks}
+        achievements={achievements}
+        collectorItems={collectorItems}
         onSetViewMode={setViewMode}
         onSetGroupBy={setGroupBy}
         onSetCollectorGroupBy={setCollectorGroupBy}

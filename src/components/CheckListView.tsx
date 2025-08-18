@@ -85,6 +85,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     return () => window.removeEventListener('taskTracker:reset', handler);
   }, []);
 
+  // (moved global search listener below after allGroupNames is defined)
+
   // Apply filters
   const filteredTasks = useMemo(
     () => tasks.filter(task => {
@@ -139,6 +141,19 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   // Only use the explicitly expanded groups
   const finalExpandedGroups = expandedGroups;
   const areAllExpanded = finalExpandedGroups.length === allGroupNames.length;
+
+  // Listen for global command search and apply to local search box (tasks scope)
+  useEffect(() => {
+    type GlobalSearchDetail = { term?: string; scope?: 'tasks' | 'achievements' | 'items' };
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<GlobalSearchDetail>).detail;
+      if (!detail || detail.scope !== 'tasks' || typeof detail.term !== 'string') return;
+      setSearchTerm(detail.term);
+      setExpandedGroups(allGroupNames);
+    };
+    window.addEventListener('taskTracker:globalSearch', handler as EventListener);
+    return () => window.removeEventListener('taskTracker:globalSearch', handler as EventListener);
+  }, [allGroupNames]);
 
   const handleToggleAll = () => {
     if (areAllExpanded) {

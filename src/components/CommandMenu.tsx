@@ -8,6 +8,7 @@ import {
   CommandItem,
   CommandSeparator,
 } from "@/components/ui/command";
+import type { Task, Achievement } from "@/types";
 
 interface CommandMenuProps {
   viewMode: "tree" | "grouped" | "collector" | "flow" | "prestiges" | "achievements";
@@ -17,6 +18,9 @@ interface CommandMenuProps {
   hiddenTraders: Set<string>;
   maps: string[];
   selectedMap: string | null;
+  tasks: Task[];
+  achievements: Achievement[];
+  collectorItems: { name: string }[];
   onSetViewMode: (mode: CommandMenuProps["viewMode"]) => void;
   onSetGroupBy: (mode: "trader" | "map") => void;
   onSetCollectorGroupBy: (mode: "collector" | "hideout-stations") => void;
@@ -34,6 +38,9 @@ export function CommandMenu(props: CommandMenuProps) {
     hiddenTraders,
     maps,
     selectedMap,
+    tasks,
+    achievements,
+    collectorItems,
     onSetViewMode,
     onSetGroupBy,
     onSetCollectorGroupBy,
@@ -43,6 +50,7 @@ export function CommandMenu(props: CommandMenuProps) {
   } = props;
 
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -118,7 +126,11 @@ export function CommandMenu(props: CommandMenuProps) {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Type a command or search..." />
+      <CommandInput
+        placeholder="Type a command or search..."
+        value={query}
+        onValueChange={setQuery}
+      />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
 
@@ -159,6 +171,97 @@ export function CommandMenu(props: CommandMenuProps) {
         </CommandGroup>
 
         <CommandSeparator />
+
+        {query.trim() && (
+          <>
+            <CommandGroup heading="Search • Quests">
+              {tasks
+                .filter(t => t.name.toLowerCase().includes(query.toLowerCase()))
+                .slice(0, 10)
+                .map(t => (
+                  <CommandItem
+                    key={`task-${t.id}`}
+                    value={`task-${t.name}`}
+                    onSelect={() => {
+                      onSetViewMode("grouped");
+                      // Defer broadcast so destination view mounts and registers listener
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent("taskTracker:globalSearch", {
+                            detail: { term: t.name, scope: "tasks" },
+                          })
+                        );
+                      }, 0);
+                      setOpen(false);
+                    }}
+                  >
+                    {t.name}
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+
+            <CommandGroup heading="Search • Achievements">
+              {achievements
+                .filter(a =>
+                  [a.name, a.description ?? "", a.rarity ?? "", a.side ?? ""].some(v => v.toLowerCase().includes(query.toLowerCase()))
+                )
+                .slice(0, 10)
+                .map(a => (
+                  <CommandItem
+                    key={`ach-${a.id}`}
+                    value={`achievement-${a.name}`}
+                    onSelect={() => {
+                      onSetViewMode("achievements");
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent("taskTracker:globalSearch", {
+                            detail: { term: a.name, scope: "achievements" },
+                          })
+                        );
+                      }, 0);
+                      setOpen(false);
+                    }}
+                  >
+                    {a.name}
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+
+            <CommandGroup heading="Search • Items">
+              {collectorItems
+                .filter(i => i.name.toLowerCase().includes(query.toLowerCase()))
+                .slice(0, 10)
+                .map(i => (
+                  <CommandItem
+                    key={`item-${i.name}`}
+                    value={`item-${i.name}`}
+                    onSelect={() => {
+                      onSetCollectorGroupBy("collector");
+                      onSetViewMode("collector");
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent("taskTracker:globalSearch", {
+                            detail: { term: i.name, scope: "items" },
+                          })
+                        );
+                      }, 0);
+                      setOpen(false);
+                    }}
+                  >
+                    {i.name}
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+
+            {query.toLowerCase().includes("prestige") && (
+              <CommandGroup heading="Search • Navigate">
+                <CommandItem value="go-prestiges" onSelect={handle.navigatePrestiges}>
+                  Go to Prestiges
+                </CommandItem>
+              </CommandGroup>
+            )}
+          </>
+        )}
 
         <CommandGroup heading="Filters • Traders">
           <CommandItem value="show-all-traders" onSelect={handle.showAllTraders}>

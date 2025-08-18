@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Achievement } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 interface AchievementsViewProps {
   achievements: Achievement[];
@@ -11,13 +12,44 @@ interface AchievementsViewProps {
 }
 
 export function AchievementsView({ achievements, completed, onToggle }: AchievementsViewProps): JSX.Element {
+  const [searchTerm, setSearchTerm] = useState('');
+
   const total = achievements.length;
   const done = completed.size;
   const percent = total > 0 ? (done / total) * 100 : 0;
 
+  const filtered = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return achievements;
+    return achievements.filter(a => {
+      const name = a.name?.toLowerCase() || '';
+      const desc = a.description?.toLowerCase() || '';
+      const side = a.side?.toLowerCase() || '';
+      const rarity = a.rarity?.toLowerCase() || '';
+      return (
+        name.includes(term) ||
+        desc.includes(term) ||
+        side.includes(term) ||
+        rarity.includes(term)
+      );
+    });
+  }, [achievements, searchTerm]);
+
+  // Respond to global command search for achievements
+  useEffect(() => {
+    type GlobalSearchDetail = { term?: string; scope?: 'tasks' | 'achievements' | 'items' };
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<GlobalSearchDetail>).detail;
+      if (!detail || detail.scope !== 'achievements' || typeof detail.term !== 'string') return;
+      setSearchTerm(detail.term);
+    };
+    window.addEventListener('taskTracker:globalSearch', handler as EventListener);
+    return () => window.removeEventListener('taskTracker:globalSearch', handler as EventListener);
+  }, []);
+
   const groupedByRarity = useMemo(() => {
     const map = new Map<string, Achievement[]>();
-    for (const a of achievements) {
+    for (const a of filtered) {
       const desc = (a.description || '').toLowerCase();
       const key = desc.includes('event') ? 'Event' : (a.rarity || 'Unknown');
       if (!map.has(key)) map.set(key, []);
@@ -41,7 +73,7 @@ export function AchievementsView({ achievements, completed, onToggle }: Achievem
       if (wa !== wb) return wa - wb;
       return a[0].localeCompare(b[0]);
     });
-  }, [achievements]);
+  }, [filtered]);
 
   return (
     <div className="h-full min-h-0 overflow-y-auto p-4 space-y-6">
@@ -55,6 +87,18 @@ export function AchievementsView({ achievements, completed, onToggle }: Achievem
         </div>
         <div className="mt-3">
           <Progress value={percent} className="h-3" />
+        </div>
+      </div>
+
+      {/* Search row below header card */}
+      <div className="-mt-2 px-0">
+        <div className="w-full max-w-md">
+          <Input
+            placeholder="Search achievements..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full"
+          />
         </div>
       </div>
 

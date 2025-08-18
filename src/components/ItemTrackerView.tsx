@@ -154,6 +154,19 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     }
   };
 
+  // Listen for global command search and apply to local search (items scope)
+  useEffect(() => {
+    type GlobalSearchDetail = { term?: string; scope?: 'tasks' | 'achievements' | 'items' };
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<GlobalSearchDetail>).detail;
+      if (!detail || detail.scope !== 'items' || typeof detail.term !== 'string') return;
+      setSearchTerm(detail.term);
+      setExpandedGroups(allGroupNames);
+    };
+    window.addEventListener('taskTracker:globalSearch', handler as EventListener);
+    return () => window.removeEventListener('taskTracker:globalSearch', handler as EventListener);
+  }, [allGroupNames]);
+
   return (
     <div className="p-4 bg-background text-foreground">
       {/* Grouping toggles moved to sidebar */}
