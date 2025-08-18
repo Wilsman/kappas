@@ -18,11 +18,29 @@ export function AchievementsView({ achievements, completed, onToggle }: Achievem
   const groupedByRarity = useMemo(() => {
     const map = new Map<string, Achievement[]>();
     for (const a of achievements) {
-      const key = a.rarity || 'Unknown';
+      const desc = (a.description || '').toLowerCase();
+      const key = desc.includes('event') ? 'Event' : (a.rarity || 'Unknown');
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(a);
     }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const weight = (r: string) => {
+      switch (r.toLowerCase()) {
+        case 'common':
+          return 0;
+        case 'rare':
+          return 1;
+        case 'legendary':
+          return 2;
+        default:
+          return 99;
+      }
+    };
+    return Array.from(map.entries()).sort((a, b) => {
+      const wa = weight(a[0]);
+      const wb = weight(b[0]);
+      if (wa !== wb) return wa - wb;
+      return a[0].localeCompare(b[0]);
+    });
   }, [achievements]);
 
   return (

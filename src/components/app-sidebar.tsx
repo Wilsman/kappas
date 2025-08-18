@@ -32,7 +32,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void
   traders: string[]
   hiddenTraders: Set<string>
-  onSelectTraderOnly: (trader: string) => void
+  onToggleTraderVisibility: (trader: string) => void
   onClearTraderFilter: () => void
   maps: string[]
   onSelectMap: (map: string | null) => void
@@ -47,7 +47,7 @@ export function AppSidebar({
   onSetViewMode,
   traders,
   hiddenTraders,
-  onSelectTraderOnly,
+  onToggleTraderVisibility,
   onClearTraderFilter,
   maps,
   onSelectMap,
@@ -82,7 +82,9 @@ export function AppSidebar({
                   <span>Quests</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuSub>
+              <SidebarMenuSub className="relative pl-4">
+                {/* Submenu guide line */}
+                <div aria-hidden className="pointer-events-none absolute left-2 top-2 bottom-2 border-l border-border/30" />
                 {/* Checklist view */}
                 <li>
                   <SidebarMenuSubButton
@@ -97,16 +99,16 @@ export function AppSidebar({
                 </li>
                 {/* Grouping options under Checklist */}
                 <li>
-                  <SidebarMenuSubButton asChild isActive={groupBy === 'trader'}>
-                    <a className="pl-6" onClick={() => { onSetGroupBy('trader'); onSetViewMode('grouped'); }}>
+                  <SidebarMenuSubButton asChild isActive={viewMode === 'grouped' && groupBy === 'trader'}>
+                    <a className={`pl-6 ${viewMode === 'grouped' && groupBy === 'trader' ? 'border-l-2 border-emerald-500' : ''}`} onClick={() => { onSetGroupBy('trader'); onSetViewMode('grouped'); }}>
                       <UserCheck />
                       <span>By Trader</span>
                     </a>
                   </SidebarMenuSubButton>
                 </li>
                 <li>
-                  <SidebarMenuSubButton asChild isActive={groupBy === 'map'}>
-                    <a className="pl-6" onClick={() => { onSetGroupBy('map'); onSetViewMode('grouped'); }}>
+                  <SidebarMenuSubButton asChild isActive={viewMode === 'grouped' && groupBy === 'map'}>
+                    <a className={`pl-6 ${viewMode === 'grouped' && groupBy === 'map' ? 'border-l-2 border-emerald-500' : ''}`} onClick={() => { onSetGroupBy('map'); onSetViewMode('grouped'); }}>
                       <MapPin />
                       <span>By Map</span>
                     </a>
@@ -119,18 +121,20 @@ export function AppSidebar({
                   <Package />
                   <span>Items</span>
                 </SidebarMenuButton>
-                <SidebarMenuSub>
+                <SidebarMenuSub className="relative pl-4">
+                  {/* Submenu guide line */}
+                  <div aria-hidden className="pointer-events-none absolute left-2 top-2 bottom-2 border-l border-border/30" />
                   <li>
-                    <SidebarMenuSubButton asChild isActive={collectorGroupBy === 'collector'}>
-                      <a onClick={() => { onSetCollectorGroupBy('collector'); onSetViewMode('collector'); }}>
+                    <SidebarMenuSubButton asChild isActive={viewMode === 'collector' && collectorGroupBy === 'collector'}>
+                      <a className={`${viewMode === 'collector' && collectorGroupBy === 'collector' ? 'border-l-2 border-emerald-500 pl-6' : 'pl-6'}`} onClick={() => { onSetCollectorGroupBy('collector'); onSetViewMode('collector'); }}>
                         <Package />
                         <span>Collector Items</span>
                       </a>
                     </SidebarMenuSubButton>
                   </li>
                   <li>
-                    <SidebarMenuSubButton asChild isActive={collectorGroupBy === 'hideout-stations'}>
-                      <a onClick={() => { onSetCollectorGroupBy('hideout-stations'); onSetViewMode('collector'); }}>
+                    <SidebarMenuSubButton asChild isActive={viewMode === 'collector' && collectorGroupBy === 'hideout-stations'}>
+                      <a className={`${viewMode === 'collector' && collectorGroupBy === 'hideout-stations' ? 'border-l-2 border-emerald-500 pl-6' : 'pl-6'}`} onClick={() => { onSetCollectorGroupBy('hideout-stations'); onSetViewMode('collector'); }}>
                         <Database />
                         <span>Hideout Stations</span>
                       </a>
@@ -183,7 +187,7 @@ export function AppSidebar({
                     return (
                       <li key={t}>
                         <SidebarMenuSubButton asChild>
-                          <a onClick={() => onSelectTraderOnly(t)}>
+                          <a onClick={() => onToggleTraderVisibility(t)}>
                             <span className={`inline-block h-2 w-2 rounded-full ${visible ? "bg-green-500" : "bg-muted"}`} />
                             <span>{t}</span>
                           </a>

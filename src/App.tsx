@@ -266,15 +266,16 @@ function App() {
 
   
 
-  // Sidebar quick actions
-  const handleSelectTraderOnly = useCallback(
+  // Sidebar trader filter: multi-select toggle
+  const handleToggleTraderVisibility = useCallback(
     (trader: string) => {
-      const next = new Set(traderList.filter((t) => t !== trader));
+      const next = new Set(hiddenTraders);
+      if (next.has(trader)) next.delete(trader);
+      else next.add(trader);
       setHiddenTraders(next);
-      setSelectedMap(null);
       setViewMode("grouped");
     },
-    [traderList]
+    [hiddenTraders]
   );
   const handleClearTraderFilter = useCallback(() => {
     setHiddenTraders(new Set());
@@ -394,7 +395,7 @@ function App() {
           onSetViewMode={setViewMode}
           traders={traderList}
           hiddenTraders={hiddenTraders}
-          onSelectTraderOnly={handleSelectTraderOnly}
+          onToggleTraderVisibility={handleToggleTraderVisibility}
           onClearTraderFilter={handleClearTraderFilter}
           maps={mapList}
           onSelectMap={handleSelectMap}
