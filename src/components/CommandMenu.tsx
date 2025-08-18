@@ -200,6 +200,30 @@ export function CommandMenu(props: CommandMenuProps) {
                 ))}
             </CommandGroup>
 
+            <CommandGroup heading="Search • Prestiges">
+              {['Prestige 1', 'Prestige 2', 'Prestige 3', 'Prestige 4']
+                .filter(p => p.toLowerCase().includes(query.toLowerCase()))
+                .map(title => (
+                  <CommandItem
+                    key={`prestige-${title}`}
+                    value={`prestige-${title}`}
+                    onSelect={() => {
+                      onSetViewMode("prestiges");
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent("taskTracker:globalSearch", {
+                            detail: { term: title, scope: "prestiges" },
+                          })
+                        );
+                      }, 0);
+                      setOpen(false);
+                    }}
+                  >
+                    {title}
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+
             <CommandGroup heading="Search • Achievements">
               {achievements
                 .filter(a =>

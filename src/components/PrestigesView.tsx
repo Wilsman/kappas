@@ -9,18 +9,21 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
 export function PrestigesView(): JSX.Element {
-  return (
-    <div className="container mx-auto p-4 space-y-6">
-      <PrestigeCard
-        id="prestige-1"
-        title="Prestige 1"
-        color="emerald"
-        levelTarget={55}
-        strengthTarget={20}
-        enduranceTarget={20}
-        charismaTarget={15}
-        roublesTarget={20000000}
-        extra={{
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // configs for all prestige cards
+  const prestiges = useMemo(
+    () => [
+      {
+        id: 'prestige-1',
+        title: 'Prestige 1',
+        color: 'emerald' as const,
+        levelTarget: 55,
+        strengthTarget: 20,
+        enduranceTarget: 20,
+        charismaTarget: 15,
+        roublesTarget: 20000000,
+        extra: {
           scavsTarget: 50,
           requireLabsExtract: true,
           figurines: [
@@ -35,19 +38,18 @@ export function PrestigesView(): JSX.Element {
             { id: 'cultist', label: 'Cultist figurine' },
             { id: 'den', label: 'Den figurine' },
           ],
-        }}
-      />
-
-      <PrestigeCard
-        id="prestige-2"
-        title="Prestige 2"
-        color="sky"
-        levelTarget={55}
-        strengthTarget={20}
-        enduranceTarget={20}
-        charismaTarget={15}
-        roublesTarget={20000000}
-        extra={{
+        },
+      },
+      {
+        id: 'prestige-2',
+        title: 'Prestige 2',
+        color: 'sky' as const,
+        levelTarget: 55,
+        strengthTarget: 20,
+        enduranceTarget: 20,
+        charismaTarget: 15,
+        roublesTarget: 20000000,
+        extra: {
           pmcTarget: 15,
           requireLabsExtract: true,
           figurines: [
@@ -62,19 +64,18 @@ export function PrestigesView(): JSX.Element {
             { id: 'cultist', label: 'Cultist figurine (FIR)' },
             { id: 'den', label: 'Den figurine (FIR)' },
           ],
-        }}
-      />
-
-      <PrestigeCard
-        id="prestige-3"
-        title="Prestige 3"
-        color="violet"
-        levelTarget={55}
-        strengthTarget={20}
-        enduranceTarget={20}
-        charismaTarget={20}
-        roublesTarget={20000000}
-        extra={{
+        },
+      },
+      {
+        id: 'prestige-3',
+        title: 'Prestige 3',
+        color: 'violet' as const,
+        levelTarget: 55,
+        strengthTarget: 20,
+        enduranceTarget: 20,
+        charismaTarget: 20,
+        roublesTarget: 20000000,
+        extra: {
           pmcTarget: 25,
           raidersTarget: 50,
           requireLabsTransitToStreets: true,
@@ -92,19 +93,54 @@ export function PrestigesView(): JSX.Element {
             { id: 'den', label: 'Den figurine (FIR)' },
           ],
           requireAnyLabyrinthFigurine: true,
-        }}
-      />
+        },
+      },
+      {
+        id: 'prestige-4',
+        title: 'Prestige 4',
+        color: 'amber' as const,
+        levelTarget: 55,
+        strengthTarget: 20,
+        enduranceTarget: 20,
+        charismaTarget: 15,
+        roublesTarget: 20000000,
+      },
+    ],
+    []
+  );
 
-      <PrestigeCard
-        id="prestige-4"
-        title="Prestige 4"
-        color="amber"
-        levelTarget={55}
-        strengthTarget={20}
-        enduranceTarget={20}
-        charismaTarget={15}
-        roublesTarget={20000000}
-      />
+  const filtered = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return prestiges;
+    return prestiges.filter((p) => p.title.toLowerCase().includes(term));
+  }, [prestiges, searchTerm]);
+
+  // Respond to global command search for prestiges
+  useEffect(() => {
+    type GlobalSearchDetail = { term?: string; scope?: 'tasks' | 'achievements' | 'items' | 'prestiges' };
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<GlobalSearchDetail>).detail;
+      if (!detail || detail.scope !== 'prestiges' || typeof detail.term !== 'string') return;
+      setSearchTerm(detail.term);
+    };
+    window.addEventListener('taskTracker:globalSearch', handler as EventListener);
+    return () => window.removeEventListener('taskTracker:globalSearch', handler as EventListener);
+  }, []);
+
+  return (
+    <div className="container mx-auto p-4 space-y-6">
+      {/* Search */}
+      <div className="max-w-md">
+        <Input
+          placeholder="Search prestiges..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {filtered.map((p) => (
+        <PrestigeCard key={p.id} {...p} />
+      ))}
     </div>
   );
 }
