@@ -32,10 +32,12 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   showKappa,
   showLightkeeper,
   onToggleComplete,
-  onTaskClick,
+  onTaskClick: _onTaskClick,
   mapFilter,
   groupBy,
 }) => {
+  // Mark intentionally unused while preserving external API
+  void _onTaskClick;
   const [searchTerm, setSearchTerm] = useQueryState('tasksSearch', { defaultValue: '' });
   // Start with all groups collapsed by default
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
@@ -265,7 +267,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                               "hover:bg-muted"
                             )
                           }
-                          onClick={() => onTaskClick(task.id)}
                         >
                           <Checkbox
                             id={task.id}
@@ -274,16 +275,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                             disabled={false}
                             onClick={e => e.stopPropagation()}
                           />
-                          <CollapsibleTrigger asChild>
-                            <button
-                              aria-label="Toggle details"
-                              className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground data-[state=open]:rotate-180 transition-transform"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </button>
-                          </CollapsibleTrigger>
-
                           {task.wikiLink && (
                             <a
                               href={task.wikiLink}
@@ -297,34 +288,41 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                             </a>
                           )}
 
-                          <label
-                            htmlFor={task.id}
-                            className={cn(
-                              "flex-1 min-w-0 text-[15px] leading-tight flex items-center gap-2",
-                              "cursor-pointer"
-                            )}
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <span className={cn("truncate", isCompleted && "line-through")}>{task.name}</span>
-                          </label>
+                          {/* Trigger wraps most of the row (except checkbox & wiki link) */}
+                          <CollapsibleTrigger asChild>
+                            <div
+                              className="flex flex-1 min-w-0 items-center gap-2 cursor-pointer select-none"
+                              role="button"
+                              aria-label="Toggle details"
+                            >
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
+                              <span
+                                className={cn(
+                                  "flex-1 min-w-0 text-[15px] leading-tight flex items-center gap-2",
+                                )}
+                              >
+                                <span className={cn("truncate", isCompleted && "line-through")}>{task.name}</span>
+                              </span>
 
-                          {/* Right-side compact info */}
-                          <div className="ml-auto flex items-center gap-2">
-                            {task.trader?.imageLink && (
-                              <img
-                                src={task.trader.imageLink}
-                                alt={task.trader.name}
-                                loading="lazy"
-                                className="h-5 w-5 rounded-full object-cover"
-                              />
-                            )}
-                            {task.kappaRequired && (
-                              <span title="Kappa" className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">K</span>
-                            )}
-                            {task.lightkeeperRequired && (
-                              <span title="Lightkeeper" className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500">LK</span>
-                            )}
-                          </div>
+                              {/* Right-side compact info */}
+                              <div className="ml-auto flex items-center gap-2">
+                                {task.trader?.imageLink && (
+                                  <img
+                                    src={task.trader.imageLink}
+                                    alt={task.trader.name}
+                                    loading="lazy"
+                                    className="h-5 w-5 rounded-full object-cover"
+                                  />
+                                )}
+                                {task.kappaRequired && (
+                                  <span title="Kappa" className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">K</span>
+                                )}
+                                {task.lightkeeperRequired && (
+                                  <span title="Lightkeeper" className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500">LK</span>
+                                )}
+                              </div>
+                            </div>
+                          </CollapsibleTrigger>
                         </div>
 
                         {/* Compact dropdown details */}
