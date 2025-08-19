@@ -30,6 +30,8 @@ import {
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   viewMode: "tree" | "grouped" | "collector" | "flow" | "prestiges" | "achievements"
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void
+  focusMode: 'all' | 'kappa' | 'lightkeeper'
+  onSetFocus: (mode: 'all' | 'kappa' | 'lightkeeper') => void
   traders: string[]
   hiddenTraders: Set<string>
   onToggleTraderVisibility: (trader: string) => void
@@ -46,6 +48,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({
   viewMode,
   onSetViewMode,
+  focusMode,
+  onSetFocus,
   traders,
   hiddenTraders,
   onToggleTraderVisibility,
@@ -113,6 +117,23 @@ export function AppSidebar({
                     <a className={`pl-6 ${viewMode === 'grouped' && groupBy === 'map' ? 'border-l-2 border-emerald-500' : ''}`} onClick={() => { onSetGroupBy('map'); onSetViewMode('grouped'); }}>
                       <MapPin />
                       <span>By Map</span>
+                    </a>
+                  </SidebarMenuSubButton>
+                </li>
+                {/* Focused pages */}
+                <li>
+                  <SidebarMenuSubButton asChild isActive={viewMode === 'grouped' && focusMode === 'kappa'}>
+                    <a className={`pl-6 ${viewMode === 'grouped' && focusMode === 'kappa' ? 'border-l-2 border-emerald-500' : ''}`} onClick={() => { onSetFocus('kappa'); onSetViewMode('grouped'); }}>
+                      <ListTodo />
+                      <span>Kappa</span>
+                    </a>
+                  </SidebarMenuSubButton>
+                </li>
+                <li>
+                  <SidebarMenuSubButton asChild isActive={viewMode === 'grouped' && focusMode === 'lightkeeper'}>
+                    <a className={`pl-6 ${viewMode === 'grouped' && focusMode === 'lightkeeper' ? 'border-l-2 border-emerald-500' : ''}`} onClick={() => { onSetFocus('lightkeeper'); onSetViewMode('grouped'); }}>
+                      <ListTodo />
+                      <span>Light Keeper</span>
                     </a>
                   </SidebarMenuSubButton>
                 </li>

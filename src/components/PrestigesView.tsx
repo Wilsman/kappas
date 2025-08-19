@@ -248,6 +248,7 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
   );
 
   const [state, setState] = useState<PrestigeProgress>(defaultState);
+  const [collapsed, setCollapsed] = useState<boolean>(true);
   const hasLoadedRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const lastPersistedRef = useRef<string | null>(null);
@@ -354,17 +355,71 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
     return () => cancelAnimationFrame(raf);
   }, [percent]);
 
+  function pendingSummaries(): string[] {
+    const items: string[] = [];
+    if (state.level < levelTarget) items.push(`Level ${state.level}/${levelTarget}`);
+    if (state.strength < strengthTarget) items.push(`Strength ${state.strength}/${strengthTarget}`);
+    if (state.endurance < enduranceTarget) items.push(`Endurance ${state.endurance}/${enduranceTarget}`);
+    if (state.charisma < charismaTarget) items.push(`Charisma ${state.charisma}/${charismaTarget}`);
+    // hideout pieces
+    if (state.hideout.intelligence < 2) items.push(`IC ${state.hideout.intelligence}/2`);
+    if (state.hideout.security < 3) items.push(`Security ${state.hideout.security}/3`);
+    if (state.hideout.restSpace < 3) items.push(`Rest ${state.hideout.restSpace}/3`);
+    if (state.hideout.roubles < roublesTarget) items.push(`₽ ${state.hideout.roubles.toLocaleString()}/${roublesTarget.toLocaleString()}`);
+    // quests
+    if (!state.quests.collector) items.push('Quest: Collector');
+    if (!state.quests.newBeginning) items.push('Quest: New Beginning');
+    // extras
+    if (extra) {
+      if (extra.scavsTarget && state.extras.scavs < extra.scavsTarget) items.push(`Scavs ${state.extras.scavs}/${extra.scavsTarget}`);
+      if (extra.pmcTarget && state.extras.pmc < extra.pmcTarget) items.push(`PMC ${state.extras.pmc}/${extra.pmcTarget}`);
+      if (extra.raidersTarget && state.extras.raiders < extra.raidersTarget) items.push(`Raiders ${state.extras.raiders}/${extra.raidersTarget}`);
+      if (extra.requireLabsExtract && !state.extras.labsExtracted) items.push('Survive & extract Labs');
+      if (extra.requireLabsTransitToStreets && !state.extras.labsTransitToStreets) items.push('Labs Transit → Streets');
+      if (extra.requireStreetsExtract && !state.extras.streetsExtracted) items.push('Survive & extract Streets');
+      if (extra.requireAnyLabyrinthFigurine && !state.extras.anyLabyrinthFigurine) items.push('Any Labyrinth figurine');
+      if (extra.figurines && extra.figurines.length) {
+        const total = extra.figurines.length;
+        const done = extra.figurines.reduce((acc, f) => acc + (state.extras.figurines[f.id] ? 1 : 0), 0);
+        if (done < total) items.push(`Figurines ${done}/${total}`);
+      }
+    }
+    return items;
+  }
+
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between">
-          <span>Prestige Progress</span>
-          <Badge
-            variant="outline"
-            className={`rounded-full px-3 py-1 text-xs md:text-sm ${theme.badge}`}
-          >
-            {title}
-          </Badge>
+        <CardTitle className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label={collapsed ? 'Expand' : 'Collapse'}
+              onClick={() => setCollapsed((v) => !v)}
+              className="flex items-center justify-center rounded border size-6 hover:bg-muted/50 transition-colors"
+              title={collapsed ? 'Expand' : 'Collapse'}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`size-4 transition-transform ${!collapsed ? 'rotate-90' : ''}`}
+                aria-hidden="true"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+            <Badge
+              variant="outline"
+              className={`rounded-full px-3 py-1 text-xs md:text-sm ${theme.badge}`}
+            >
+              {title}
+            </Badge>
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -388,155 +443,180 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
               indicatorClassName={`bg-gradient-to-r ${theme.gradient} transition-all duration-500`}
             />
           </div>
+          {collapsed ? (
+            <div className="mt-4">
+              <p className="text-sm font-medium">Pending</p>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {pendingSummaries().map((txt, i) => (
+                  <li key={i} className="text-xs rounded border px-2 py-1 text-muted-foreground">
+                    {txt}
+                  </li>
+                ))}
+                {pendingSummaries().length === 0 ? (
+                  <li className="text-xs text-emerald-600">All requirements complete</li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
         </div>
 
-        <Separator />
+        {collapsed ? null : <Separator />}
 
-        <Section title="Level">
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              value={state.level}
-              onChange={(e) => setState((s) => ({ ...s, level: setNumber(Number(e.target.value), 0, levelTarget) }))}
-              className="w-28"
-              min={0}
-              max={levelTarget}
-            />
-            <span className="text-sm text-muted-foreground">/ {levelTarget}</span>
+        {collapsed ? null : (
+          <Section title="Level">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={state.level}
+                onChange={(e) => setState((s) => ({ ...s, level: setNumber(Number(e.target.value), 0, levelTarget) }))}
+                className="w-28"
+                min={0}
+                max={levelTarget}
+              />
+              <span className="text-sm text-muted-foreground">/ {levelTarget}</span>
+            </div>
+          </Section>
+        )}
+
+        {collapsed ? null : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+            <StatNumber label="Strength" value={state.strength} target={strengthTarget} onChange={(n) => setState((s) => ({ ...s, strength: setNumber(n, 0, strengthTarget) }))} />
+            <StatNumber label="Endurance" value={state.endurance} target={enduranceTarget} onChange={(n) => setState((s) => ({ ...s, endurance: setNumber(n, 0, enduranceTarget) }))} />
+            <StatNumber label="Charisma" value={state.charisma} target={charismaTarget} onChange={(n) => setState((s) => ({ ...s, charisma: setNumber(n, 0, charismaTarget) }))} />
           </div>
-        </Section>
+        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-          <StatNumber label="Strength" value={state.strength} target={strengthTarget} onChange={(n) => setState((s) => ({ ...s, strength: setNumber(n, 0, strengthTarget) }))} />
-          <StatNumber label="Endurance" value={state.endurance} target={enduranceTarget} onChange={(n) => setState((s) => ({ ...s, endurance: setNumber(n, 0, enduranceTarget) }))} />
-          <StatNumber label="Charisma" value={state.charisma} target={charismaTarget} onChange={(n) => setState((s) => ({ ...s, charisma: setNumber(n, 0, charismaTarget) }))} />
-        </div>
+        {collapsed ? null : <Separator />}
 
-        <Separator />
-
-        <Section title="Hideout Requirements">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <StatNumber label="Intelligence Center" value={state.hideout.intelligence} target={2} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, intelligence: setNumber(n, 0, 2) } }))} />
-            <StatNumber label="Security" value={state.hideout.security} target={3} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, security: setNumber(n, 0, 3) } }))} />
-            <StatNumber label="Rest Space" value={state.hideout.restSpace} target={3} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, restSpace: setNumber(n, 0, 3) } }))} />
-            <div className="rounded-md border p-3 hover:bg-muted/30 transition-colors">
-              <p className="text-sm text-muted-foreground">Roubles</p>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={state.hideout.roubles}
-                  onChange={(e) => setState((s) => ({ ...s, hideout: { ...s.hideout, roubles: setNumber(Number(e.target.value), 0, roublesTarget) } }))}
-                  className="w-40"
-                  min={0}
-                  max={roublesTarget}
-                />
-                <span className="text-sm font-medium tabular-nums">/ {roublesTarget.toLocaleString()}</span>
+        {collapsed ? null : (
+          <Section title="Hideout Requirements">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              <StatNumber label="Intelligence Center" value={state.hideout.intelligence} target={2} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, intelligence: setNumber(n, 0, 2) } }))} />
+              <StatNumber label="Security" value={state.hideout.security} target={3} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, security: setNumber(n, 0, 3) } }))} />
+              <StatNumber label="Rest Space" value={state.hideout.restSpace} target={3} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, restSpace: setNumber(n, 0, 3) } }))} />
+              <div className="rounded-md border p-3 hover:bg-muted/30 transition-colors">
+                <p className="text-sm text-muted-foreground">Roubles</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={state.hideout.roubles}
+                    onChange={(e) => setState((s) => ({ ...s, hideout: { ...s.hideout, roubles: setNumber(Number(e.target.value), 0, roublesTarget) } }))}
+                    className="w-40"
+                    min={0}
+                    max={roublesTarget}
+                  />
+                  <span className="text-sm font-medium tabular-nums">/ {roublesTarget.toLocaleString()}</span>
+                </div>
               </div>
             </div>
-          </div>
-        </Section>
+          </Section>
+        )}
 
-        <Separator />
+        {collapsed ? null : <Separator />}
 
-        <Section title="Quest Requirements">
-          <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-            <li className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
-              <Checkbox
-                id={`${id}-quest-collector`}
-                checked={state.quests.collector}
-                onCheckedChange={(c) => {
-                  console.debug('[Prestige] toggle quest', { id, field: 'collector', value: c });
-                  setState((s) => ({ ...s, quests: { ...s.quests, collector: c === true } }));
-                }}
-              />
-              <label htmlFor={`${id}-quest-collector`} className="cursor-pointer select-none text-muted-foreground">
-                Complete "Collector"
-              </label>
-            </li>
-            <li className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
-              <Checkbox
-                id={`${id}-quest-new-beginning`}
-                checked={state.quests.newBeginning}
-                onCheckedChange={(c) => {
-                  console.debug('[Prestige] toggle quest', { id, field: 'newBeginning', value: c });
-                  setState((s) => ({ ...s, quests: { ...s.quests, newBeginning: c === true } }));
-                }}
-              />
-              <label htmlFor={`${id}-quest-new-beginning`} className="cursor-pointer select-none text-muted-foreground">
-                Complete "New Beginning"
-              </label>
-            </li>
-          </ul>
-        </Section>
+        {collapsed ? null : (
+          <Section title="Quest Requirements">
+            <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+              <li className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
+                <Checkbox
+                  id={`${id}-quest-collector`}
+                  checked={state.quests.collector}
+                  onCheckedChange={(c) => {
+                    console.debug('[Prestige] toggle quest', { id, field: 'collector', value: c });
+                    setState((s) => ({ ...s, quests: { ...s.quests, collector: c === true } }));
+                  }}
+                />
+                <label htmlFor={`${id}-quest-collector`} className="cursor-pointer select-none text-muted-foreground">
+                  Complete "Collector"
+                </label>
+              </li>
+              <li className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
+                <Checkbox
+                  id={`${id}-quest-new-beginning`}
+                  checked={state.quests.newBeginning}
+                  onCheckedChange={(c) => {
+                    console.debug('[Prestige] toggle quest', { id, field: 'newBeginning', value: c });
+                    setState((s) => ({ ...s, quests: { ...s.quests, newBeginning: c === true } }));
+                  }}
+                />
+                <label htmlFor={`${id}-quest-new-beginning`} className="cursor-pointer select-none text-muted-foreground">
+                  Complete "New Beginning"
+                </label>
+              </li>
+            </ul>
+          </Section>
+        )}
 
         {extra ? (
           <>
-            <Separator />
-            <Section title="Additional Objectives">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                {extra.scavsTarget ? (
-                  <StatNumber label={`Scav Kills`} value={state.extras.scavs} target={extra.scavsTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, scavs: setNumber(n, 0, extra.scavsTarget!) } }))} />
-                ) : null}
-                {extra.pmcTarget ? (
-                  <StatNumber label={`PMC Kills`} value={state.extras.pmc} target={extra.pmcTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, pmc: setNumber(n, 0, extra.pmcTarget!) } }))} />
-                ) : null}
-                {extra.raidersTarget ? (
-                  <StatNumber label={`Raider Kills`} value={state.extras.raiders} target={extra.raidersTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, raiders: setNumber(n, 0, extra.raidersTarget!) } }))} />
-                ) : null}
-              </div>
-
-              {(extra.requireLabsExtract || extra.requireLabsTransitToStreets || extra.requireStreetsExtract || extra.requireAnyLabyrinthFigurine) ? (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {extra.requireLabsExtract ? (
-                    <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                      <p className="text-sm font-medium">Survive and Extract from Labs</p>
-                      <Checkbox checked={state.extras.labsExtracted} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'labsExtracted', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, labsExtracted: c === true } })); }} />
-                    </div>
+            {collapsed ? null : <Separator />}
+            {collapsed ? null : (
+              <Section title="Additional Objectives">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                  {extra.scavsTarget ? (
+                    <StatNumber label={`Scav Kills`} value={state.extras.scavs} target={extra.scavsTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, scavs: setNumber(n, 0, extra.scavsTarget!) } }))} />
                   ) : null}
-                  {extra.requireLabsTransitToStreets ? (
-                    <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                      <p className="text-sm font-medium">Use Labs Transit to Streets</p>
-                      <Checkbox checked={state.extras.labsTransitToStreets} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'labsTransitToStreets', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, labsTransitToStreets: c === true } })); }} />
-                    </div>
+                  {extra.pmcTarget ? (
+                    <StatNumber label={`PMC Kills`} value={state.extras.pmc} target={extra.pmcTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, pmc: setNumber(n, 0, extra.pmcTarget!) } }))} />
                   ) : null}
-                  {extra.requireStreetsExtract ? (
-                    <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                      <p className="text-sm font-medium">Survive and Extract from Streets</p>
-                      <Checkbox checked={state.extras.streetsExtracted} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'streetsExtracted', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, streetsExtracted: c === true } })); }} />
-                    </div>
-                  ) : null}
-                  {extra.requireAnyLabyrinthFigurine ? (
-                    <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                      <p className="text-sm font-medium">Hand over any Labyrinth figurine</p>
-                      <Checkbox checked={state.extras.anyLabyrinthFigurine} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'anyLabyrinthFigurine', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, anyLabyrinthFigurine: c === true } })); }} />
-                    </div>
+                  {extra.raidersTarget ? (
+                    <StatNumber label={`Raider Kills`} value={state.extras.raiders} target={extra.raidersTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, raiders: setNumber(n, 0, extra.raidersTarget!) } }))} />
                   ) : null}
                 </div>
-              ) : null}
 
-              {extra.figurines && extra.figurines.length ? (
-                <div className="mt-3">
-                  <p className="text-sm font-medium">Figurines</p>
-                  <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
-                    {extra.figurines.map((f) => (
-                      <li key={f.id} className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
-                        <Checkbox
-                          id={`${id}-figurine-${f.id}`}
-                          checked={state.extras.figurines[f.id]}
-                          onCheckedChange={(c) => {
-                            console.debug('[Prestige] toggle figurine', { id, figurine: f.id, value: c });
-                            setState((s) => ({ ...s, extras: { ...s.extras, figurines: { ...s.extras.figurines, [f.id]: c === true } } }));
-                          }}
-                        />
-                        <label htmlFor={`${id}-figurine-${f.id}`} className="cursor-pointer select-none text-muted-foreground">
-                          {f.label}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </Section>
+                {(extra.requireLabsExtract || extra.requireLabsTransitToStreets || extra.requireStreetsExtract || extra.requireAnyLabyrinthFigurine) ? (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {extra.requireLabsExtract ? (
+                      <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                        <p className="text-sm font-medium">Survive and Extract from Labs</p>
+                        <Checkbox checked={state.extras.labsExtracted} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'labsExtracted', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, labsExtracted: c === true } })); }} />
+                      </div>
+                    ) : null}
+                    {extra.requireLabsTransitToStreets ? (
+                      <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                        <p className="text-sm font-medium">Use Labs Transit to Streets</p>
+                        <Checkbox checked={state.extras.labsTransitToStreets} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'labsTransitToStreets', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, labsTransitToStreets: c === true } })); }} />
+                      </div>
+                    ) : null}
+                    {extra.requireStreetsExtract ? (
+                      <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                        <p className="text-sm font-medium">Survive and Extract from Streets</p>
+                        <Checkbox checked={state.extras.streetsExtracted} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'streetsExtracted', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, streetsExtracted: c === true } })); }} />
+                      </div>
+                    ) : null}
+                    {extra.requireAnyLabyrinthFigurine ? (
+                      <div className="rounded-md border p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                        <p className="text-sm font-medium">Hand over any Labyrinth figurine</p>
+                        <Checkbox checked={state.extras.anyLabyrinthFigurine} onCheckedChange={(c) => { console.debug('[Prestige] toggle extra', { id, field: 'anyLabyrinthFigurine', value: c }); setState((s) => ({ ...s, extras: { ...s.extras, anyLabyrinthFigurine: c === true } })); }} />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {extra.figurines && extra.figurines.length ? (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium">Figurines</p>
+                    <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+                      {extra.figurines.map((f) => (
+                        <li key={f.id} className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
+                          <Checkbox
+                            id={`${id}-figurine-${f.id}`}
+                            checked={state.extras.figurines[f.id]}
+                            onCheckedChange={(c) => {
+                              console.debug('[Prestige] toggle figurine', { id, figurine: f.id, value: c });
+                              setState((s) => ({ ...s, extras: { ...s.extras, figurines: { ...s.extras.figurines, [f.id]: c === true } } }));
+                            }}
+                          />
+                          <label htmlFor={`${id}-figurine-${f.id}`} className="cursor-pointer select-none text-muted-foreground">
+                            {f.label}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </Section>
+            )}
           </>
         ) : null}
       </CardContent>

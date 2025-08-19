@@ -82,6 +82,7 @@ function App() {
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [completedAchievements, setCompletedAchievements] = useState<Set<string>>(new Set());
+  const [bootstrapped, setBootstrapped] = useState(false);
 
   // Lightweight client-side routing for deep links like /Items/CollectorItems?search=...
   function normalizePath(pathname: string) {
@@ -93,6 +94,7 @@ function App() {
     let nextView: typeof viewMode = "grouped";
     let nextGroupBy: typeof groupBy | undefined;
     let nextCollectorGroupBy: typeof collectorGroupBy | undefined;
+    let nextFocus: "all" | "kappa" | "lightkeeper" | undefined;
 
     if (parts.length === 0) {
       // root -> Quests Checklist ByTrader
@@ -104,6 +106,10 @@ function App() {
       if (parts[1] === "checklist") {
         if (parts[2] === "bytrader") nextGroupBy = "trader";
         else if (parts[2] === "bymap") nextGroupBy = "map";
+      } else if (parts[1] === "kappa") {
+        nextFocus = "kappa";
+      } else if (parts[1] === "lightkeeper") {
+        nextFocus = "lightkeeper";
       }
     } else if (parts[0] === "items") {
       nextView = "collector";
@@ -115,7 +121,7 @@ function App() {
       nextView = "achievements";
     }
 
-    return { nextView, nextGroupBy, nextCollectorGroupBy };
+    return { nextView, nextGroupBy, nextCollectorGroupBy, nextFocus };
   }
   // buildPath removed in favor of inlined computation inside effect
 
@@ -123,10 +129,13 @@ function App() {
   useEffect(() => {
     const applyFromLocation = () => {
       const { pathname } = window.location;
-      const { nextView, nextGroupBy, nextCollectorGroupBy } = parsePath(pathname);
+      const { nextView, nextGroupBy, nextCollectorGroupBy, nextFocus } = parsePath(pathname);
       setViewMode(nextView);
       if (nextGroupBy) setGroupBy(nextGroupBy);
       if (nextCollectorGroupBy) setCollectorGroupBy(nextCollectorGroupBy);
+      if (nextFocus) handleSetFocus(nextFocus);
+      else handleSetFocus("all");
+      setBootstrapped(true);
     };
     applyFromLocation();
     const onPop = () => applyFromLocation();
@@ -135,11 +144,14 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When state changes via UI, update the path (preserving existing query string like ?search=...)
+  // When state changes via UI, update the path (preserve ?search=... on grouped views)
   useEffect(() => {
+    if (!bootstrapped) return; // avoid overriding initial URL before we parse it
     let nextPath = "/Quests/Checklist/ByTrader";
     if (viewMode === "grouped") {
-      nextPath = groupBy === "map" ? "/Quests/Checklist/ByMap" : "/Quests/Checklist/ByTrader";
+      if (showKappa) nextPath = "/Quests/Kappa";
+      else if (showLightkeeper) nextPath = "/Quests/Lightkeeper";
+      else nextPath = groupBy === "map" ? "/Quests/Checklist/ByMap" : "/Quests/Checklist/ByTrader";
     } else if (viewMode === "collector") {
       nextPath = collectorGroupBy === "hideout-stations" ? "/Items/HideoutStations" : "/Items/CollectorItems";
     } else if (viewMode === "prestiges") {
@@ -152,18 +164,21 @@ function App() {
       nextPath = "/Quests/Tree";
     }
     const current = normalizePath(window.location.pathname);
-    if (normalizePath(nextPath) !== current) {
-      // Clear query string (e.g., ?search=...) when navigating to a new view/tab
-      window.history.pushState(null, "", nextPath);
+    const currentSearch = window.location.search;
+    const nextUrl = viewMode === 'grouped' && currentSearch
+      ? `${nextPath}${currentSearch}`
+      : nextPath;
+    if (normalizePath(nextPath) !== current || (viewMode === 'grouped' && currentSearch)) {
+      window.history.pushState(null, "", nextUrl);
     }
-  }, [viewMode, groupBy, collectorGroupBy]);
+  }, [bootstrapped, viewMode, groupBy, collectorGroupBy, showKappa, showLightkeeper]);
 
-  // Extra guard: if any view/group change occurs, strip lingering ?search from current URL
+  // Extra guard: strip ?search only when leaving grouped views
   useEffect(() => {
-    if (window.location.search) {
+    if (viewMode !== 'grouped' && window.location.search) {
       window.history.replaceState(null, "", window.location.pathname);
     }
-  }, [viewMode, groupBy, collectorGroupBy]);
+  }, [viewMode]);
 
   const handleToggleAchievement = useCallback(
     async (id: string) => {
@@ -510,6 +525,8 @@ function App() {
         <AppSidebar
           viewMode={viewMode}
           onSetViewMode={setViewMode}
+          focusMode={focusMode}
+          onSetFocus={handleSetFocus}
           traders={traderList}
           hiddenTraders={hiddenTraders}
           onToggleTraderVisibility={handleToggleTraderVisibility}
