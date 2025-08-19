@@ -97,61 +97,13 @@ export function QuestProgressPanel({
         </div>
       </div>
 
-      {/* Overall section label */}
-      <div className="mt-2 mb-2">
-        <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80 border-t pt-2">
-          Overall
-        </div>
-      </div>
+      {/* Focused section (TOP) */}
+      {(totalKappaTasks > 0 || totalLightkeeperTasks > 0 || totalCollectorItems > 0 || totalAchievements > 0 || totalPrestigeSteps > 0) && (
+        <div className="rounded-lg border bg-muted/5 p-3 mb-4">
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">Focused Tasks</h3>
 
-      {totalCollectorItems > 0 && (
-        <div className="space-y-2 mb-6">
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{completedCollectorItems}/{totalCollectorItems} Items</span>
-            <span>{itemProgress.toFixed(1)}%</span>
-          </div>
-          <Progress 
-            value={itemProgress} 
-            className="h-2"
-            indicatorClassName="bg-green-500"
-          />
-        </div>
-      )}
-
-      {totalAchievements > 0 && (
-        <div className="space-y-2 mb-6">
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{completedAchievements}/{totalAchievements} Achievements</span>
-            <span>{achievementsProgress.toFixed(1)}%</span>
-          </div>
-          <Progress
-            value={achievementsProgress}
-            className="h-2"
-            indicatorClassName="bg-blue-500"
-          />
-        </div>
-      )}
-
-      {totalPrestigeSteps > 0 && (
-        <div className="space-y-2 mb-6">
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{completedPrestigeSteps}/{totalPrestigeSteps} {prestigeLabel}</span>
-            <span>{prestigeProgress.toFixed(1)}%</span>
-          </div>
-          <Progress 
-            value={prestigeProgress} 
-            className="h-2"
-            indicatorClassName="bg-violet-500"
-          />
-        </div>
-      )}
-
-      {(totalKappaTasks > 0 || totalLightkeeperTasks > 0) && (
-        <div className="space-y-3 mb-6">
-          <h3 className="text-sm font-medium text-muted-foreground">Focused Tasks</h3>
-          
           {totalKappaTasks > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 mb-3">
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>🎯 Kappa Required</span>
                 <span>{completedKappaTasks}/{totalKappaTasks}</span>
@@ -163,9 +115,23 @@ export function QuestProgressPanel({
               />
             </div>
           )}
-          
+
+          {totalCollectorItems > 0 && (
+            <div className="space-y-2 mb-3">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>🧩 Collector Items</span>
+                <span>{completedCollectorItems}/{totalCollectorItems}</span>
+              </div>
+              <Progress 
+                value={itemProgress} 
+                className="h-2"
+                indicatorClassName="bg-green-500"
+              />
+            </div>
+          )}
+
           {totalLightkeeperTasks > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 mb-3">
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>💡 Lightkeeper Required</span>
                 <span>{completedLightkeeperTasks}/{totalLightkeeperTasks}</span>
@@ -177,50 +143,83 @@ export function QuestProgressPanel({
               />
             </div>
           )}
+
+          {totalAchievements > 0 && (
+            <div className="space-y-2 mb-3">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>🏆 Achievements</span>
+                <span>{completedAchievements}/{totalAchievements}</span>
+              </div>
+              <Progress
+                value={achievementsProgress}
+                className="h-2"
+                indicatorClassName="bg-blue-500"
+              />
+            </div>
+          )}
+
+          {totalPrestigeSteps > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>🜲 {prestigeLabel}</span>
+                <span>{completedPrestigeSteps}/{totalPrestigeSteps}</span>
+              </div>
+              <Progress 
+                value={prestigeProgress} 
+                className="h-2"
+                indicatorClassName="bg-violet-500"
+              />
+            </div>
+          )}
         </div>
       )}
+      {/* Overall section (BOTTOM) */}
+      <div className="rounded-lg border bg-muted/10 p-3 space-y-4">
+        <div className="mt-0">
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">All Tasks</h3>
+        </div>
 
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Traders</h3>
-        <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-          {traders.map((trader) => {
-            const traderProgress = trader.total > 0 
-              ? (trader.completed / trader.total) * 100 
-              : 0;
-            
-            return (
-              <div key={trader.id} className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="w-2 h-2 rounded-full flex-shrink-0" 
-                    style={{ backgroundColor: trader.color }}
-                  />
-                  {trader.imageLink && (
-                    <img 
-                      src={trader.imageLink} 
-                      alt={trader.name}
-                      className="w-4 h-4 rounded-full flex-shrink-0"
+        <div className="space-y-3">
+          <div className="space-y-2 max-h-100 overflow-y-auto pr-2">
+            {traders.map((trader) => {
+              const traderProgress = trader.total > 0 
+                ? (trader.completed / trader.total) * 100 
+                : 0;
+              
+              return (
+                <div key={trader.id} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-2 h-2 rounded-full flex-shrink-0" 
+                      style={{ backgroundColor: trader.color }}
                     />
-                  )}
-                  <span className="text-sm text-foreground truncate">
-                    {trader.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground ml-auto whitespace-nowrap">
-                    {trader.completed}/{trader.total}
-                  </span>
+                    {trader.imageLink && (
+                      <img 
+                        src={trader.imageLink} 
+                        alt={trader.name}
+                        className="w-4 h-4 rounded-full flex-shrink-0"
+                      />
+                    )}
+                    <span className="text-sm text-foreground truncate">
+                      {trader.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-auto whitespace-nowrap">
+                      {trader.completed}/{trader.total}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={traderProgress}
+                    className="h-1.5"
+                    indicatorClassName="h-full"
+                    style={{
+                      '--progress-color': trader.color,
+                      '--progress-bg': `${trader.color}20`,
+                    } as React.CSSProperties}
+                  />
                 </div>
-                <Progress 
-                  value={traderProgress}
-                  className="h-1.5"
-                  indicatorClassName="h-full"
-                  style={{
-                    '--progress-color': trader.color,
-                    '--progress-bg': `${trader.color}20`,
-                  } as React.CSSProperties}
-                />
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
