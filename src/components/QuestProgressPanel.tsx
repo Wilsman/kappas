@@ -131,7 +131,9 @@ export function QuestProgressPanel({
           )}
 
           {totalLightkeeperTasks > 0 && (
+            // divider line
             <div className="space-y-2 mb-3">
+              <div className="h-px bg-muted/50 my-4" />
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>💡 Lightkeeper Required</span>
                 <span>{completedLightkeeperTasks}/{totalLightkeeperTasks}</span>
@@ -146,6 +148,7 @@ export function QuestProgressPanel({
 
           {totalAchievements > 0 && (
             <div className="space-y-2 mb-3">
+              <div className="h-px bg-muted/50 my-4" />
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>🏆 Achievements</span>
                 <span>{completedAchievements}/{totalAchievements}</span>
