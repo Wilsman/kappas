@@ -4,7 +4,7 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { RotateCcw, BarChart3, Search } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { TextShimmerWave } from "@/components/ui/text-shimmer-wave";
-import { Task, CollectorItemsData, Achievement } from "./types";
+import { Task, CollectorItemsData, Achievement, HideoutStation } from "./types";
 import { MindMap } from "./components/MindMap";
 import { FlowView } from "./components/FlowView";
 import { QuestProgressPanel } from "./components/QuestProgressPanel";
@@ -15,7 +15,7 @@ import {
   PRESTIGE_CONFIGS,
 } from "@/utils/prestige";
 import { buildTaskDependencyMap, getAllDependencies } from "./utils/taskUtils";
-import { fetchCombinedData, fetchAchievements } from "./services/tarkovApi";
+import { fetchCombinedData } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
 import { Button } from "./components/ui/button";
 import { TRADER_COLORS } from "./data/traders";
@@ -81,6 +81,7 @@ function App() {
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [completedAchievements, setCompletedAchievements] = useState<Set<string>>(new Set());
+  const [hideoutStations, setHideoutStations] = useState<HideoutStation[]>([]);
 
   // Lightweight client-side routing for deep links like /Items/CollectorItems?search=...
   function normalizePath(pathname: string) {
@@ -262,16 +263,11 @@ function App() {
         setCompletedAchievements(savedAchievements);
 
         // Live API only
-        const { tasks: tasksData, collectorItems: collectorData } = await fetchCombinedData();
+        const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
         setTasks(tasksData.data.tasks);
         setApiCollectorItems(collectorData);
-        try {
-          const achievementsData = await fetchAchievements();
-          setAchievements(achievementsData.data.achievements);
-        } catch (e) {
-          console.error("Achievements API error", e);
-          setAchievements([]);
-        }
+        setAchievements(achievementsData.data.achievements);
+        setHideoutStations(hideoutStations.data.hideoutStations);
       } catch (err) {
         console.error("Init/API error", err);
         // Live API only path: show empty state on error
@@ -614,6 +610,7 @@ function App() {
                     completedCollectorItems={completedCollectorItems}
                     onToggleCollectorItem={handleToggleCollectorItem}
                     groupBy={collectorGroupBy}
+                    hideoutStations={hideoutStations}
                   />
                 ) : viewMode === "prestiges" ? (
                   <PrestigesView />

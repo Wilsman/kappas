@@ -7,7 +7,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './
 import { Button } from './ui/button';
 import { ChevronDown, ChevronUp, Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { fetchHideoutStations } from '@/services/tarkovApi';
 import { HideoutStation } from '@/types';
 
 interface CollectorItem {
@@ -21,6 +20,7 @@ interface CollectorViewProps {
   completedCollectorItems: Set<string>;
   onToggleCollectorItem: (itemName: string) => void;
   groupBy: GroupBy;
+  hideoutStations: HideoutStation[];
 }
 
 type GroupBy = 'collector' | 'hideout-stations';
@@ -30,6 +30,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   completedCollectorItems,
   onToggleCollectorItem,
   groupBy,
+  hideoutStations,
 }) => {
   const [searchTerm, setSearchTerm] = useQueryState('itemsSearch', { defaultValue: '' });
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
@@ -42,8 +43,6 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       item.name.toLowerCase().includes(term)
     );
   }, [collectorItems, searchTerm]);
-
-  const [hideoutStations, setHideoutStations] = useState<HideoutStation[]>([]);
 
   // Filter hideout stations based on search
   const filteredHideoutStations = useMemo(() => {
@@ -77,8 +76,6 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       return null;
     }).filter(Boolean) as HideoutStation[];
   }, [hideoutStations, searchTerm]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
 
   // Handle quantity changes for items
@@ -94,26 +91,6 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     return /(Roubles|Euros|Dollars)$/i.test(itemName);
   };
 
-  // Fetch hideout stations data
-  useEffect(() => {
-    if (groupBy === 'hideout-stations') {
-      const fetchData = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-          const result = await fetchHideoutStations();
-          setHideoutStations(result.data.hideoutStations);
-        } catch (err) {
-          console.error('Failed to fetch hideout stations:', err);
-          setError('Failed to load hideout stations. Please try again later.');
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      fetchData();
-    }
-  }, [groupBy]);
 
   // Group items based on the current view mode
   const itemsByGroup = useMemo(() => {
@@ -203,20 +180,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       </div>
 
       {/* Loading and Error States */}
-      {isLoading && groupBy === 'hideout-stations' && (
-        <div className="flex justify-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      )}
-
-      {error && groupBy === 'hideout-stations' && (
-        <div className="text-red-500 p-4 text-center bg-red-50 rounded-lg">
-          {error}
-        </div>
-      )}
-
       {/* Hideout Stations View */}
-      {groupBy === 'hideout-stations' && !isLoading && !error && (
+      {groupBy === 'hideout-stations' && (
         <div className="space-y-6">
           {filteredHideoutStations.length === 0 && searchTerm.trim() && (
             <div className="text-center py-8 text-muted-foreground">

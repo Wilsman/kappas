@@ -6,6 +6,8 @@ interface CombinedApiData {
   data: {
     tasks: TaskData['data']['tasks'];
     task: CollectorItemsData['data']['task'];
+    achievements: AchievementsData['data']['achievements'];
+    hideoutStations: HideoutStationsData['hideoutStations'];
   };
   errors?: { message: string }[];
 }
@@ -78,53 +80,52 @@ const COMBINED_QUERY = `
     minPlayerLevel
     kappaRequired
     lightkeeperRequired
-    map {
-      name
-    }
-    taskRequirements {
-      task {
-        id
-        name
-      }
-    }
-    trader {
-      name
-      imageLink
-    }
+    map { name }
+    taskRequirements { task { id name } }
+    trader { name imageLink }
     wikiLink
     name
-    startRewards {
-      items { item { name iconLink } count }
-    }
-    finishRewards {
-      items { item { name iconLink } count }
-    }
+    startRewards { items { item { name iconLink } count } }
+    finishRewards { items { item { name iconLink } count } }
     objectives {
       description
-      ... on TaskObjectiveItem {
-        items { id name iconLink }
-        count
-      }
-      ... on TaskObjectivePlayerLevel {
-        playerLevel
-      }
+      ... on TaskObjectiveItem { items { id name iconLink } count }
+      ... on TaskObjectivePlayerLevel { playerLevel }
     }
   }
   task(id: "5c51aac186f77432ea65c552") {
-    objectives {
-      ... on TaskObjectiveItem {
-        items {
-          id
-          name
-          iconLink
-        }
-      }
+    objectives { ... on TaskObjectiveItem { items { id name iconLink } } }
+  }
+  achievements {
+    id
+    imageLink
+    name
+    description
+    hidden
+    playersCompletedPercent
+    adjustedPlayersCompletedPercent
+    side
+    rarity
+  }
+  hideoutStations {
+    name
+    imageLink
+    levels {
+      level
+      skillRequirements { name skill { name } level }
+      stationLevelRequirements { station { name } level }
+      itemRequirements { count item { name iconLink } }
     }
   }
 }
 `;
 
-export async function fetchCombinedData(): Promise<{ tasks: TaskData; collectorItems: CollectorItemsData }> {
+export async function fetchCombinedData(): Promise<{
+  tasks: TaskData;
+  collectorItems: CollectorItemsData;
+  achievements: AchievementsData;
+  hideoutStations: { data: HideoutStationsData };
+}> {
   const response = await fetch(TARKOV_API_URL, {
     method: 'POST',
     headers: {
@@ -158,7 +159,19 @@ export async function fetchCombinedData(): Promise<{ tasks: TaskData; collectorI
     }
   };
 
-  return { tasks, collectorItems };
+  const achievements: AchievementsData = {
+    data: {
+      achievements: result.data.achievements ?? []
+    }
+  };
+
+  const hideoutStations: { data: HideoutStationsData } = {
+    data: {
+      hideoutStations: result.data.hideoutStations || []
+    }
+  };
+
+  return { tasks, collectorItems, achievements, hideoutStations };
 }
 
 export async function fetchHideoutStations(): Promise<{ data: HideoutStationsData }> {
