@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQueryState } from 'nuqs';
 import { Task } from '../types';
 import { Input } from './ui/input';
@@ -7,7 +7,7 @@ import { Progress } from './ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Button } from './ui/button';
-import { Link2, ChevronDown, ChevronUp, Award } from 'lucide-react';
+import { Link2, ChevronDown, ChevronUp, Award, ArrowRight } from 'lucide-react';
 import { groupTasksByTrader } from '../utils/taskUtils';
 import { cn } from '@/lib/utils';
 import { Switch } from './ui/switch';
@@ -41,6 +41,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const [searchTerm, setSearchTerm] = useQueryState('tasksSearch', { defaultValue: '' });
   // Start with all groups collapsed by default
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [enableLevelFilter, setEnableLevelFilter] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('taskTracker_enableLevelFilter');
@@ -159,6 +160,23 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     return () => window.removeEventListener('taskTracker:globalSearch', handler as EventListener);
   }, [allGroupNames, setSearchTerm]);
 
+  // Build the dependency chain (from root to the selected task)
+  const getTaskDependencyChain = useCallback((taskId: string, allTasks: Task[]): string[] => {
+    const taskMap = new Map(allTasks.map(task => [task.id, task]));
+    const visited = new Set<string>();
+    const chain: string[] = [];
+    const build = (currentId: string) => {
+      if (visited.has(currentId)) return;
+      visited.add(currentId);
+      const t = taskMap.get(currentId);
+      if (!t) return;
+      t.taskRequirements.forEach(req => build(req.task.id));
+      chain.push(currentId);
+    };
+    build(taskId);
+    return chain;
+  }, []);
+
   const handleToggleAll = () => {
     if (areAllExpanded) {
       setExpandedGroups([]);
@@ -218,6 +236,40 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         </div>
       </div>
 
+      {/* Selected Task Breadcrumb */}
+      {selectedTaskId && (
+        <div className="mb-3 border rounded-md bg-card p-3">
+          <div className="text-xs text-muted-foreground mb-1">Dependency Path:</div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {(() => {
+              const chain = getTaskDependencyChain(selectedTaskId, tasks);
+              const taskMap = new Map(tasks.map(t => [t.id, t]));
+              return chain.map((tid, index) => {
+                const t = taskMap.get(tid);
+                if (!t) return null;
+                const isLast = index === chain.length - 1;
+                const isDone = completedTasks.has(tid);
+                return (
+                  <React.Fragment key={tid}>
+                    <span
+                      className={cn(
+                        'text-xs px-2 py-1 rounded cursor-pointer transition-colors',
+                        isLast ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'bg-gray-800 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-600',
+                        isDone && 'line-through opacity-60'
+                      )}
+                      onClick={() => setSelectedTaskId(tid)}
+                    >
+                      {t.name}
+                    </span>
+                    {!isLast && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+                  </React.Fragment>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Groups */}
       <Accordion
         type="multiple"
@@ -258,7 +310,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                   {groupTasks.map(task => {
                     const isCompleted = completedTasks.has(task.id);
                     return (
-                      <Collapsible key={task.id}>
+                      <Collapsible key={task.id} onOpenChange={(open) => {
+                        if (open) setSelectedTaskId(task.id); else if (selectedTaskId === task.id) setSelectedTaskId(null);
+                      }}>
                         {/* Main single-row */}
                         <div
                           className={
