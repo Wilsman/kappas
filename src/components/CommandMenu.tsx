@@ -119,7 +119,7 @@ export function CommandMenu(props: CommandMenuProps) {
       }
 
       // Name match (lower weight)
-      consider("Name match", scoreValue(t.name, 0.6));
+      consider("Name match", scoreValue(t.name, 1.2));
 
       // Objectives: item names and description
       for (const obj of t.objectives ?? []) {
