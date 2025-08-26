@@ -12,6 +12,55 @@ interface CombinedApiData {
   errors?: { message: string }[];
 }
 
+// Simple localStorage cache for combined API payload
+export const API_CACHE_KEY = 'taskTracker_api_cache_v1';
+export const API_CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
+
+export interface CombinedCachePayload {
+  tasks: TaskData;
+  collectorItems: CollectorItemsData;
+  achievements: AchievementsData;
+  hideoutStations: { data: HideoutStationsData };
+}
+
+interface StoredCache {
+  updatedAt: number;
+  payload: CombinedCachePayload;
+}
+
+export function loadCombinedCache(): CombinedCachePayload | null {
+  try {
+    const raw = localStorage.getItem(API_CACHE_KEY);
+    if (!raw) return null;
+    const parsed: StoredCache = JSON.parse(raw);
+    if (!parsed?.payload) return null;
+    return parsed.payload;
+  } catch {
+    return null;
+  }
+}
+
+export function isCombinedCacheFresh(ttlMs: number = API_CACHE_TTL_MS): boolean {
+  try {
+    const raw = localStorage.getItem(API_CACHE_KEY);
+    if (!raw) return false;
+    const parsed: StoredCache = JSON.parse(raw);
+    if (!parsed?.updatedAt) return false;
+    return Date.now() - parsed.updatedAt < ttlMs;
+  } catch {
+    return false;
+  }
+}
+
+export function saveCombinedCache(payload: CombinedCachePayload): void {
+  try {
+    const toStore: StoredCache = { updatedAt: Date.now(), payload };
+    localStorage.setItem(API_CACHE_KEY, JSON.stringify(toStore));
+  } catch {
+    // ignore quota/storage errors
+  }
+}
+
 export async function fetchAchievements(): Promise<AchievementsData> {
   const response = await fetch(TARKOV_API_URL, {
     method: 'POST',
@@ -171,7 +220,10 @@ export async function fetchCombinedData(): Promise<{
     }
   };
 
-  return { tasks, collectorItems, achievements, hideoutStations };
+  const combined = { tasks, collectorItems, achievements, hideoutStations };
+  // Save fresh data to cache for next startup
+  saveCombinedCache(combined);
+  return combined;
 }
 
 export async function fetchHideoutStations(): Promise<{ data: HideoutStationsData }> {

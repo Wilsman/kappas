@@ -15,7 +15,7 @@ import {
   PRESTIGE_CONFIGS,
 } from "@/utils/prestige";
 import { buildTaskDependencyMap, getAllDependencies } from "./utils/taskUtils";
-import { fetchCombinedData } from "./services/tarkovApi";
+import { fetchCombinedData, loadCombinedCache, isCombinedCacheFresh } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
 import { Button } from "./components/ui/button";
 import { TRADER_COLORS } from "./data/traders";
@@ -48,6 +48,22 @@ function App() {
   const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(
     new Set(["Ref", "Fence", "BTR Driver", "Lightkeeper"])
   );
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
+      setTasks(tasksData.data.tasks);
+      setApiCollectorItems(collectorData);
+      setAchievements(achievementsData.data.achievements);
+      setHideoutStations(hideoutStations.data.hideoutStations);
+    } catch (err) {
+      console.error("Manual refresh error", err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
   const [showKappa, setShowKappa] = useState(false);
   const [showLightkeeper, setShowLightkeeper] = useState(false);
   const [apiCollectorItems, setApiCollectorItems] =
@@ -262,23 +278,65 @@ function App() {
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedAchievements(savedAchievements);
 
-        // Live API only
-        const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
-        setTasks(tasksData.data.tasks);
-        setApiCollectorItems(collectorData);
-        setAchievements(achievementsData.data.achievements);
-        setHideoutStations(hideoutStations.data.hideoutStations);
+        // Load cached API data instantly if present
+        const cached = loadCombinedCache();
+        if (cached) {
+          setTasks(cached.tasks.data.tasks);
+          setApiCollectorItems(cached.collectorItems);
+          setAchievements(cached.achievements.data.achievements);
+          setHideoutStations(cached.hideoutStations.data.hideoutStations);
+          setIsLoading(false);
+        }
+
+        const needsRefresh = !isCombinedCacheFresh();
+        if (needsRefresh) {
+          // Refresh in background; if no cache, this awaits to ensure UI has data
+          try {
+            const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
+            setTasks(tasksData.data.tasks);
+            setApiCollectorItems(collectorData);
+            setAchievements(achievementsData.data.achievements);
+            setHideoutStations(hideoutStations.data.hideoutStations);
+          } catch (err) {
+            console.error("API refresh error", err);
+            if (!cached) {
+              // No cache and API failed → empty state
+              setTasks([]);
+              setApiCollectorItems(null);
+              setAchievements([]);
+            }
+          } finally {
+            if (!cached) setIsLoading(false);
+          }
+        } else if (!cached) {
+          // Fresh cache was missing but TTL says fresh (edge) → fetch to populate and render
+          try {
+            const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
+            setTasks(tasksData.data.tasks);
+            setApiCollectorItems(collectorData);
+            setAchievements(achievementsData.data.achievements);
+            setHideoutStations(hideoutStations.data.hideoutStations);
+          } catch (err) {
+            console.error("API fetch error", err);
+            setTasks([]);
+            setApiCollectorItems(null);
+            setAchievements([]);
+          } finally {
+            setIsLoading(false);
+          }
+        }
+
+        // If cache existed and was fresh, we're already rendered; nothing more to do.
+        if (cached && !needsRefresh) {
+          // noop
+        }
       } catch (err) {
-        console.error("Init/API error", err);
-        // Live API only path: show empty state on error
-        setTasks([]);
-        setApiCollectorItems(null);
-        setAchievements([]);
-      } finally {
+        console.error("Init error", err);
+        // Ensure UI doesn't get stuck loading on init errors
         setIsLoading(false);
       }
     };
-    init();
+    void init();
   }, []);
 
   // Compute "next" prestige progress (only one visible at a time)
@@ -572,6 +630,18 @@ function App() {
                         Lightkeeper
                       </Button>
                     </div>
+                    <span className="h-4 w-px bg-border/60" />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="pl-2 pr-2.5 gap-2"
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      aria-label="Refresh data"
+                    >
+                      <RotateCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                      <span className="text-xs">{isRefreshing ? "Refreshing…" : "Refresh"}</span>
+                    </Button>
                   </div>
                 </div>
               </div>

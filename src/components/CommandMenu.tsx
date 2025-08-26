@@ -46,7 +46,7 @@ export function CommandMenu(props: CommandMenuProps) {
   const [query, setQuery] = React.useState("");
 
   // Build enriched task matches including objectives and rewards
-  const taskMatches = React.useMemo<{ task: Task; context: string; score: number; icon?: string }[]>(() => {
+  const taskMatches = React.useMemo<{ task: Task; context: string; score: number; icon?: string; contextType: 'generic' | 'objective' | 'reward' }[]>(() => {
     // Normalize helper: lowercase, strip diacritics, normalize whitespace, normalize dash variants
     function norm(s: string): string {
       return s
@@ -59,7 +59,7 @@ export function CommandMenu(props: CommandMenuProps) {
     }
 
     const qRaw = query.trim();
-    if (!qRaw) return [] as { task: Task; context: string; score: number; icon?: string }[];
+    if (!qRaw) return [] as { task: Task; context: string; score: number; icon?: string; contextType: 'generic' | 'objective' | 'reward' }[];
     const q = norm(qRaw);
     const qTight = q.replace(/[^a-z0-9]/g, "");
 
@@ -110,12 +110,12 @@ export function CommandMenu(props: CommandMenuProps) {
       return score * weight;
     }
 
-    function findBestMatch(t: Task): { context: string; score: number; icon?: string } | null {
-      let best: { context: string; score: number; icon?: string } | null = null;
+    function findBestMatch(t: Task): { context: string; score: number; icon?: string; contextType: 'generic' | 'objective' | 'reward' } | null {
+      let best: { context: string; score: number; icon?: string; contextType: 'generic' | 'objective' | 'reward' } | null = null;
 
-      function consider(context: string, baseScore: number, icon?: string) {
+      function consider(context: string, baseScore: number, icon?: string, contextType: 'generic' | 'objective' | 'reward' = 'generic') {
         if (baseScore <= 0) return;
-        if (!best || baseScore > best.score) best = { context, score: baseScore, icon };
+        if (!best || baseScore > best.score) best = { context, score: baseScore, icon, contextType };
       }
 
       // Name match (lower weight)
@@ -123,24 +123,37 @@ export function CommandMenu(props: CommandMenuProps) {
 
       // Objectives: item names and description
       for (const obj of t.objectives ?? []) {
+        // Ignore generic sell-any-objectives (e.g., "Sell any items to Peacekeeper")
+        if (typeof obj.description === 'string' && /\bsell any item/i.test(obj.description)) {
+          continue;
+        }
         if (obj.description) consider(`Objective: ${obj.description}`, scoreValue(obj.description, 0.8));
         for (const it of obj.items ?? []) {
-          consider(`Objective Item: ${it.name}`, scoreValue(it.name, 1.0), it.iconLink);
+          // Skip overly-generic matches like "Any item(s)"
+          const nameNorm = norm(it.name);
+          if (nameNorm.startsWith("any item")) continue;
+
+          // Only consider sufficiently relevant matches
+          const base = scoreValue(it.name, 1.0);
+          if (base < 0.5) continue;
+
+          const qty = typeof obj.count === 'number' && obj.count > 1 ? ` ×${obj.count}` : '';
+          consider(`Objective Item: ${it.name}${qty}`, base, it.iconLink, 'objective');
         }
       }
 
-      // Rewards: start and finish items
-      const rewardNames: string[] = [
-        ...(t.startRewards?.items ?? []).map(r => r.item.name),
-        ...(t.finishRewards?.items ?? []).map(r => r.item.name),
-      ];
-      const rewardIcons: (string | undefined)[] = [
-        ...(t.startRewards?.items ?? []).map(r => r.item.iconLink),
-        ...(t.finishRewards?.items ?? []).map(r => r.item.iconLink),
-      ];
-      for (let i = 0; i < rewardNames.length; i++) {
-        const rn = rewardNames[i];
-        consider(`Reward: ${rn}`, scoreValue(rn, 0.9), rewardIcons[i]);
+      // Rewards: start and finish items (include quantities)
+      for (const r of t.startRewards?.items ?? []) {
+        const base = scoreValue(r.item.name, 0.9);
+        if (base < 0.5) continue;
+        const qty = typeof r.count === 'number' && r.count > 1 ? ` ×${r.count}` : '';
+        consider(`Reward: ${r.item.name}${qty}`, base, r.item.iconLink, 'reward');
+      }
+      for (const r of t.finishRewards?.items ?? []) {
+        const base = scoreValue(r.item.name, 0.9);
+        if (base < 0.5) continue;
+        const qty = typeof r.count === 'number' && r.count > 1 ? ` ×${r.count}` : '';
+        consider(`Reward: ${r.item.name}${qty}`, base, r.item.iconLink, 'reward');
       }
 
       // Map or trader names as a fallback context
@@ -150,10 +163,10 @@ export function CommandMenu(props: CommandMenuProps) {
       return best;
     }
 
-    const out: { task: Task; context: string; score: number; icon?: string }[] = [];
+    const out: { task: Task; context: string; score: number; icon?: string; contextType: 'generic' | 'objective' | 'reward' }[] = [];
     for (const t of tasks) {
       const m = findBestMatch(t);
-      if (m) out.push({ task: t, context: m.context, score: m.score, icon: m.icon });
+      if (m) out.push({ task: t, context: m.context, score: m.score, icon: m.icon, contextType: m.contextType });
     }
     out.sort((a, b) => b.score - a.score || a.task.name.localeCompare(b.task.name));
     return out.slice(0, 15);
@@ -267,7 +280,7 @@ export function CommandMenu(props: CommandMenuProps) {
         {query.trim() && (
           <>
             <CommandGroup heading="Search • Quests">
-              {taskMatches.map(({ task: t, context, icon }) => (
+              {taskMatches.map(({ task: t, context, icon, contextType }) => (
                 <CommandItem
                   key={`task-${t.id}`}
                   value={`${t.name} ${context}`}
@@ -295,7 +308,15 @@ export function CommandMenu(props: CommandMenuProps) {
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                       ) : null}
-                      {context}
+                      <span className={
+                        contextType === 'objective'
+                          ? 'text-sky-400'
+                          : contextType === 'reward'
+                          ? 'text-emerald-400'
+                          : ''
+                      }>
+                        {context}
+                      </span>
                     </span>
                   </div>
                 </CommandItem>
