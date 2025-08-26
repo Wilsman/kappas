@@ -784,6 +784,7 @@ function App() {
         tasks={tasks}
         achievements={achievements}
         collectorItems={collectorItems}
+        hideoutStations={hideoutStations}
         onSetViewMode={setViewMode}
         onSetGroupBy={setGroupBy}
         onSetCollectorGroupBy={setCollectorGroupBy}

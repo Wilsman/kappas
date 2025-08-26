@@ -8,7 +8,7 @@ import {
   CommandItem,
   CommandSeparator,
 } from "@/components/ui/command";
-import type { Task, Achievement } from "@/types";
+import type { Task, Achievement, HideoutStation } from "@/types";
 
 interface CommandMenuProps {
   viewMode: "tree" | "grouped" | "collector" | "flow" | "prestiges" | "achievements";
@@ -21,6 +21,7 @@ interface CommandMenuProps {
   tasks: Task[];
   achievements: Achievement[];
   collectorItems: { name: string }[];
+  hideoutStations: HideoutStation[];
   onSetViewMode: (mode: CommandMenuProps["viewMode"]) => void;
   onSetGroupBy: (mode: "trader" | "map") => void;
   onSetCollectorGroupBy: (mode: "collector" | "hideout-stations") => void;
@@ -37,6 +38,7 @@ export function CommandMenu(props: CommandMenuProps) {
     tasks,
     achievements,
     collectorItems,
+    hideoutStations,
     onSetViewMode,
     onSetGroupBy,
     onSetCollectorGroupBy,
@@ -44,6 +46,31 @@ export function CommandMenu(props: CommandMenuProps) {
 
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+
+  // Hideout station item requirement matches
+  const hideoutMatches = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as { name: string; count: number; icon?: string; station: string; level: number }[];
+    const out: { name: string; count: number; icon?: string; station: string; level: number }[] = [];
+    for (const st of hideoutStations ?? []) {
+      for (const lvl of st.levels ?? []) {
+        for (const req of lvl.itemRequirements ?? []) {
+          const itemName = req.item?.name ?? "";
+          if (!itemName || !itemName.toLowerCase().includes(q)) continue;
+          out.push({ name: itemName, count: req.count ?? 1, icon: req.item?.iconLink, station: st.name, level: lvl.level });
+        }
+      }
+    }
+    // Deduplicate identical entries by name+station+level to avoid spam
+    const seen = new Set<string>();
+    const unique = out.filter((e) => {
+      const k = `${e.name}|${e.station}|${e.level}|${e.count}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    return unique.slice(0, 10);
+  }, [query, hideoutStations]);
 
   // Build enriched task matches including objectives and rewards
   const taskMatches = React.useMemo<{ task: Task; context: string; score: number; icon?: string; contextType: 'generic' | 'objective' | 'reward' }[]>(() => {
@@ -299,7 +326,7 @@ export function CommandMenu(props: CommandMenuProps) {
                 >
                   <div className="flex flex-col">
                     <span>{t.name}</span>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
                       {icon ? (
                         <img
                           src={icon}
@@ -308,116 +335,181 @@ export function CommandMenu(props: CommandMenuProps) {
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                       ) : null}
-                      <span className={
-                        contextType === 'objective'
-                          ? 'text-sky-400'
-                          : contextType === 'reward'
-                          ? 'text-emerald-400'
-                          : ''
-                      }>
+                      <span
+                        className={
+                          contextType === 'objective'
+                            ? 'text-sky-400'
+                            : contextType === 'reward'
+                            ? 'text-emerald-400'
+                            : ''
+                        }
+                      >
                         {context}
                       </span>
-                    </span>
+                    </div>
                   </div>
                 </CommandItem>
               ))}
             </CommandGroup>
 
-            <CommandGroup heading="Search • Prestiges">
-              {['Prestige 1', 'Prestige 2', 'Prestige 3', 'Prestige 4']
-                .filter(p => p.toLowerCase().includes(query.toLowerCase()))
-                .map(title => (
-                  <CommandItem
-                    key={`prestige-${title}`}
-                    value={`prestige-${title}`}
-                    onSelect={() => {
-                      onSetViewMode("prestiges");
-                      setTimeout(() => {
-                        window.dispatchEvent(
-                          new CustomEvent("taskTracker:globalSearch", {
-                            detail: { term: title, scope: "prestiges" },
-                          })
-                        );
-                      }, 0);
-                      setOpen(false);
-                    }}
-                  >
-                    {title}
-                  </CommandItem>
-                ))}
-            </CommandGroup>
+<CommandGroup heading="Search • Prestiges">
+{['Prestige 1', 'Prestige 2', 'Prestige 3', 'Prestige 4']
+.filter(p => p.toLowerCase().includes(query.toLowerCase()))
+.map(title => (
+<CommandItem
+key={`prestige-${title}`}
+value={`prestige-${title}`}
+onSelect={() => {
+onSetViewMode("prestiges");
+setTimeout(() => {
+window.dispatchEvent(
+new CustomEvent("taskTracker:globalSearch", {
+detail: { term: title, scope: "prestiges" },
+})
+);
+}, 0);
+setOpen(false);
+}}
+>
+{title}
+</CommandItem>
+))}
+</CommandGroup>
 
-            <CommandGroup heading="Search • Achievements">
-              {achievements
-                .filter(a =>
-                  [a.name, a.description ?? "", a.rarity ?? "", a.side ?? ""].some(v => v.toLowerCase().includes(query.toLowerCase()))
-                )
-                .slice(0, 10)
-                .map(a => (
-                  <CommandItem
-                    key={`ach-${a.id}`}
-                    value={`achievement-${a.name}`}
-                    onSelect={() => {
-                      onSetViewMode("achievements");
-                      setTimeout(() => {
-                        window.dispatchEvent(
-                          new CustomEvent("taskTracker:globalSearch", {
-                            detail: { term: a.name, scope: "achievements" },
-                          })
-                        );
-                      }, 0);
-                      setOpen(false);
-                    }}
-                  >
-                    {a.name}
-                  </CommandItem>
-                ))}
-            </CommandGroup>
+          {(() => {
+            // Group by station, then by level; render one group per station with non-focusable level headers
+            const byStation: Record<string, Record<number, { name: string; count: number; icon?: string; station: string; level: number }[]>> = {};
+            for (const m of hideoutMatches) {
+              byStation[m.station] ||= {} as Record<number, typeof hideoutMatches>;
+              (byStation[m.station][m.level] ||= []).push(m);
+            }
 
-            <CommandGroup heading="Search • Items">
-              {collectorItems
-                .filter(i => i.name.toLowerCase().includes(query.toLowerCase()))
-                .slice(0, 10)
-                .map(i => (
-                  <CommandItem
-                    key={`item-${i.name}`}
-                    value={`item-${i.name}`}
-                    onSelect={() => {
-                      onSetCollectorGroupBy("collector");
-                      onSetViewMode("collector");
-                      setTimeout(() => {
-                        window.dispatchEvent(
-                          new CustomEvent("taskTracker:globalSearch", {
-                            detail: { term: i.name, scope: "items" },
-                          })
-                        );
-                      }, 0);
-                      setOpen(false);
-                    }}
-                  >
-                    {i.name}
-                  </CommandItem>
-                ))}
-            </CommandGroup>
+            return Object.keys(byStation)
+              .sort((a, b) => a.localeCompare(b))
+              .flatMap((station, idx, arr) => {
+                const levelEntries = Object.entries(byStation[station])
+                  .map(([level, items]) => ({ level: Number(level), items }))
+                  .sort((a, b) => a.level - b.level);
+                const nodes: React.ReactNode[] = [];
+                for (const { level, items } of levelEntries) {
+                  nodes.push(
+                    <CommandGroup key={`hideout-group-${station}-lvl-${level}`} heading={`Search • Hideout • ${station} • Level ${level}`}>
+                      {items
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((m) => (
+                          <CommandItem
+                            key={`hideout-${m.station}-${m.level}-${m.name}`}
+                            value={`hideout-${m.station}-${m.level}-${m.name}`}
+                            onSelect={() => {
+                              onSetCollectorGroupBy("hideout-stations");
+                              onSetViewMode("collector");
+                              setTimeout(() => {
+                                window.dispatchEvent(
+                                  new CustomEvent("taskTracker:globalSearch", {
+                                    detail: { term: m.name, scope: "hideout" },
+                                  })
+                                );
+                              }, 0);
+                              setOpen(false);
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              {m.icon ? (
+                                <img
+                                  src={m.icon}
+                                  alt=""
+                                  className="h-3.5 w-3.5 object-contain"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              ) : null}
+                              <div className="flex flex-col">
+                                <span>
+                                  {m.name} ×{m.count}
+                                </span>
+                              </div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  );
+                }
+                if (idx < arr.length - 1) nodes.push(<CommandSeparator key={`hideout-sep-${station}`} />);
+                return nodes;
+              });
+          })()}
 
-            {query.toLowerCase().includes("prestige") && (
-              <CommandGroup heading="Search • Navigate">
-                <CommandItem value="go-prestiges" onSelect={handle.navigatePrestiges}>
-                  Go to Prestiges
-                </CommandItem>
-              </CommandGroup>
-            )}
-          </>
-        )}
+<CommandGroup heading="Search • Achievements">
+{achievements
+.filter(a =>
+[a.name, a.description ?? "", a.rarity ?? "", a.side ?? ""].some(v => v.toLowerCase().includes(query.toLowerCase()))
+)
+.slice(0, 10)
+.map(a => (
+<CommandItem
+key={`ach-${a.id}`}
+value={`achievement-${a.name}`}
+onSelect={() => {
+onSetViewMode("achievements");
+setTimeout(() => {
+window.dispatchEvent(
+new CustomEvent("taskTracker:globalSearch", {
+detail: { term: a.name, scope: "achievements" },
+})
+);
+}, 0);
+setOpen(false);
+}}
+>
+{a.name}
+</CommandItem>
+))}
+</CommandGroup>
 
-        <CommandSeparator />
+<CommandGroup heading="Search • Items">
+{collectorItems
+.filter(i => i.name.toLowerCase().includes(query.toLowerCase()))
+.slice(0, 10)
+.map(i => (
+<CommandItem
+key={`item-${i.name}`}
+value={`item-${i.name}`}
+onSelect={() => {
+onSetCollectorGroupBy("collector");
+onSetViewMode("collector");
+setTimeout(() => {
+window.dispatchEvent(
+new CustomEvent("taskTracker:globalSearch", {
+detail: { term: i.name, scope: "items" },
+})
+);
+}, 0);
+setOpen(false);
+}}
+>
+{i.name}
+</CommandItem>
+))}
+</CommandGroup>
 
-        <CommandGroup heading="Links">
-          <CommandItem value="storyline-quests" onSelect={handle.openStoryline}>
-            1.0 Storyline Quests
-          </CommandItem>
-        </CommandGroup>
-      </CommandList>
-    </CommandDialog>
-  );
+{query.toLowerCase().includes("prestige") && (
+<CommandGroup heading="Search • Navigate">
+<CommandItem value="go-prestiges" onSelect={handle.navigatePrestiges}>
+Go to Prestiges
+</CommandItem>
+</CommandGroup>
+)}
+</>
+)}
+
+<CommandSeparator />
+
+<CommandGroup heading="Links">
+<CommandItem value="storyline-quests" onSelect={handle.openStoryline}>
+1.0 Storyline Quests
+</CommandItem>
+</CommandGroup>
+</CommandList>
+</CommandDialog>
+);
 }
