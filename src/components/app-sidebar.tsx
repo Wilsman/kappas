@@ -25,6 +25,40 @@ import {
   SidebarMenuSubButton,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import type { Profile } from "@/utils/profile"
+import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { MoreHorizontal, UserPlus, Edit3, Trash2 } from "lucide-react"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   viewMode: "tree" | "grouped" | "collector" | "flow" | "prestiges" | "achievements"
@@ -40,6 +74,12 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSelectMap: (map: string | null) => void
   collectorGroupBy: 'collector' | 'hideout-stations'
   onSetCollectorGroupBy: (mode: 'collector' | 'hideout-stations') => void
+  profiles: Profile[]
+  activeProfileId: string
+  onSwitchProfile: (id: string) => void
+  onCreateProfile: (name?: string) => void
+  onRenameProfile: (id: string, name: string) => void
+  onDeleteProfile: (id: string) => void
 }
 
 export function AppSidebar({
@@ -56,16 +96,115 @@ export function AppSidebar({
   onSelectMap,
   collectorGroupBy,
   onSetCollectorGroupBy,
+  profiles,
+  activeProfileId,
+  onSwitchProfile,
+  onCreateProfile,
+  onRenameProfile,
+  onDeleteProfile,
   ...props
 }: AppSidebarProps) {
   const [perTraderOpen, setPerTraderOpen] = React.useState(false)
   const [perMapOpen, setPerMapOpen] = React.useState(false)
+  const [nameModalOpen, setNameModalOpen] = React.useState<null | { mode: 'create' | 'rename' }>(null)
+  const [nameInput, setNameInput] = React.useState("")
+  const activeProfile = React.useMemo(() => profiles.find(p => p.id === activeProfileId) || null, [profiles, activeProfileId])
+  const [menuOpen, setMenuOpen] = React.useState(false)
+  const closeAllOverlays = React.useCallback(() => {
+    setMenuOpen(false)
+    setNameModalOpen(null)
+    try { (document.activeElement as HTMLElement | null)?.blur?.() } catch { /* ignore blur errors */ }
+  }, [])
+  const [deleteOpen, setDeleteOpen] = React.useState(false)
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1">
-          <Database className="h-4 w-4" />
-          <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">EFT Tracker</span>
+        <div className="flex flex-col gap-2 px-2 py-1">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">EFT Tracker</span>
+          </div>
+          {/* Profile selector */}
+          <div className="group-data-[collapsible=icon]:hidden">
+            <label className="block text-[11px] text-muted-foreground mb-1">Character</label>
+            <div className="flex items-center gap-2">
+              <Select value={activeProfileId} onValueChange={(v) => onSwitchProfile(v)}>
+                <SelectTrigger className="w-full h-8">
+                  <SelectValue placeholder="Select character" />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Character actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={() => { setMenuOpen(false); setNameInput(""); setNameModalOpen({ mode: 'create' }) }}>
+                    <UserPlus className="mr-2 h-4 w-4" /> New character
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setMenuOpen(false); setNameInput(activeProfile?.name || ""); setNameModalOpen({ mode: 'rename' }) }} disabled={!activeProfile}>
+                    <Edit3 className="mr-2 h-4 w-4" /> Rename
+                  </DropdownMenuItem>
+                  <button
+                    className="w-full text-left px-2 py-1.5 text-sm flex items-center gap-2 hover:bg-muted disabled:opacity-50"
+                    disabled={!activeProfile}
+                    onClick={() => { setMenuOpen(false); setDeleteOpen(true) }}
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </button>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {/* Standalone delete confirmation outside the menu so it doesn't close instantly */}
+              <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete character?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This removes local progress for "{activeProfile?.name}".
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { if (activeProfile) onDeleteProfile(activeProfile.id); setDeleteOpen(false) }}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            {/* Create/Rename dialog */}
+            <Dialog open={!!nameModalOpen} onOpenChange={(o) => !o && setNameModalOpen(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{nameModalOpen?.mode === 'create' ? 'New Character' : 'Rename Character'}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <label className="text-sm">Name</label>
+                  <Input value={nameInput} onChange={(e) => setNameInput(e.target.value)} placeholder="e.g. Hardcore Wipe" />
+                </div>
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setNameModalOpen(null)}>Cancel</Button>
+                  <Button
+                    onClick={() => {
+                      const trimmed = nameInput.trim();
+                      if (!trimmed) return;
+                      // Close overlays immediately to avoid focus trap during async work
+                      closeAllOverlays();
+                      if (nameModalOpen?.mode === 'create') onCreateProfile(trimmed);
+                      else if (nameModalOpen?.mode === 'rename' && activeProfile) onRenameProfile(activeProfile.id, trimmed);
+                    }}
+                  >
+                    {nameModalOpen?.mode === 'create' ? 'Create' : 'Save'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </SidebarHeader>
       <SidebarContent>

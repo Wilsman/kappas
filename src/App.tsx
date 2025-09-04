@@ -8,7 +8,17 @@ import { Task, CollectorItemsData, Achievement, HideoutStation } from "./types";
 import { MindMap } from "./components/MindMap";
 import { FlowView } from "./components/FlowView";
 import { QuestProgressPanel } from "./components/QuestProgressPanel";
-import { taskStorage } from "./utils/indexedDB";
+import { taskStorage, migrateLegacyDataIfNeeded } from "./utils/indexedDB";
+import {
+  ensureProfiles,
+  getProfiles,
+  getActiveProfileId,
+  setActiveProfileId as setActiveProfileIdLS,
+  createProfile,
+  renameProfile,
+  deleteProfile,
+  type Profile,
+} from "@/utils/profile";
 import {
   loadCurrentPrestigeSummary,
   PRESTIGE_UPDATED_EVENT,
@@ -42,6 +52,8 @@ import { NotesWidget } from './components/NotesWidget';
 import { OnboardingModal } from './components/OnboardingModal';
 
 function App() {
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string>("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const [completedCollectorItems, setCompletedCollectorItems] = useState<
@@ -242,6 +254,48 @@ function App() {
     () => Object.keys(TRADER_COLORS),
     []
   );
+
+  // Profile actions
+  const handleSwitchProfile = useCallback(async (id: string) => {
+    if (!id || id === activeProfileId) return;
+    setActiveProfileIdLS(id);
+    setActiveProfileId(id);
+    try {
+      try { (document.activeElement as HTMLElement | null)?.blur?.() } catch { /* ignore blur errors */ }
+      taskStorage.setProfile(id);
+      await taskStorage.init();
+      const savedTasks = await taskStorage.loadCompletedTasks();
+      const savedCollectorItems = await taskStorage.loadCompletedCollectorItems();
+      const savedAchievements = await taskStorage.loadCompletedAchievements();
+      setCompletedTasks(savedTasks);
+      setCompletedCollectorItems(savedCollectorItems);
+      setCompletedAchievements(savedAchievements);
+      // Notify components like NotesWidget to update their per-profile state
+      window.dispatchEvent(new Event('taskTracker:profileChanged'));
+    } catch (e) {
+      console.error('Switch profile error', e);
+    }
+  }, [activeProfileId]);
+
+  const handleCreateProfile = useCallback(async (name?: string) => {
+    const p = createProfile(name || 'New Character');
+    setProfiles(getProfiles());
+    await handleSwitchProfile(p.id);
+  }, [handleSwitchProfile]);
+
+  const handleRenameProfile = useCallback((id: string, name: string) => {
+    renameProfile(id, name);
+    setProfiles(getProfiles());
+  }, []);
+
+  const handleDeleteProfile = useCallback(async (id: string) => {
+    const wasActive = id === activeProfileId;
+    deleteProfile(id);
+    const updated = getProfiles();
+    setProfiles(updated);
+    const nextActive = wasActive ? getActiveProfileId() : activeProfileId;
+    if (wasActive) await handleSwitchProfile(nextActive);
+  }, [activeProfileId, handleSwitchProfile]);
   const mapList = useMemo(() => {
     const set = new Set<string>();
     tasks.forEach((t) => t.map?.name && set.add(t.map.name));
@@ -273,6 +327,31 @@ function App() {
   useEffect(() => {
     const init = async () => {
       try {
+        const ensured = ensureProfiles();
+        setProfiles(ensured.profiles);
+        setActiveProfileId(ensured.activeId);
+
+        // One-time migrate legacy single-DB data into the first profile
+        await migrateLegacyDataIfNeeded(ensured.activeId);
+
+        // Migrate legacy unscoped UI prefs to active profile if present
+        try {
+          const lvl = localStorage.getItem('taskTracker_playerLevel');
+          const lvlScoped = localStorage.getItem(`taskTracker_playerLevel::${ensured.activeId}`);
+          if (lvl && !lvlScoped) localStorage.setItem(`taskTracker_playerLevel::${ensured.activeId}`, lvl);
+        } catch { /* ignore legacy migration errors */ }
+        try {
+          const en = localStorage.getItem('taskTracker_enableLevelFilter');
+          const enScoped = localStorage.getItem(`taskTracker_enableLevelFilter::${ensured.activeId}`);
+          if (en && !enScoped) localStorage.setItem(`taskTracker_enableLevelFilter::${ensured.activeId}`, en);
+        } catch { /* ignore legacy migration errors */ }
+        try {
+          const sc = localStorage.getItem('taskTracker_showCompleted');
+          const scScoped = localStorage.getItem(`taskTracker_showCompleted::${ensured.activeId}`);
+          if (sc && !scScoped) localStorage.setItem(`taskTracker_showCompleted::${ensured.activeId}`, sc);
+        } catch { /* ignore legacy migration errors */ }
+
+        taskStorage.setProfile(ensured.activeId);
         await taskStorage.init();
         const savedTasks = await taskStorage.loadCompletedTasks();
         const savedCollectorItems = await taskStorage.loadCompletedCollectorItems();
@@ -477,8 +556,8 @@ function App() {
       window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
       // Also reset player level filter state persisted in localStorage and notify listeners
       try {
-        localStorage.setItem('taskTracker_playerLevel', '1');
-        localStorage.setItem('taskTracker_enableLevelFilter', '0');
+        localStorage.setItem(`taskTracker_playerLevel::${activeProfileId}`, '1');
+        localStorage.setItem(`taskTracker_enableLevelFilter::${activeProfileId}`, '0');
       } catch (e) {
         console.warn('LocalStorage reset failed', e);
       }
@@ -487,7 +566,7 @@ function App() {
     } catch (err) {
       console.error("Reset error", err);
     }
-  }, []);
+  }, [activeProfileId]);
 
   // Check if onboarding should be shown (only once)
   useEffect(() => {
@@ -575,6 +654,12 @@ function App() {
           onSetViewMode={setViewMode}
           onSetFocus={handleSetFocus}
           focusMode={focusMode}
+          profiles={profiles}
+          activeProfileId={activeProfileId}
+          onSwitchProfile={handleSwitchProfile}
+          onCreateProfile={handleCreateProfile}
+          onRenameProfile={handleRenameProfile}
+          onDeleteProfile={handleDeleteProfile}
           traders={traderList}
           hiddenTraders={hiddenTraders}
           onToggleTraderVisibility={handleToggleTraderVisibility}
@@ -717,6 +802,7 @@ function App() {
                     mapFilter={selectedMap}
                     groupBy={groupBy}
                     onSetGroupBy={setGroupBy}
+                    activeProfileId={activeProfileId}
                   />
                 ) : viewMode === "collector" ? (
                   <CollectorView

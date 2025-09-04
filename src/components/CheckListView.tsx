@@ -24,6 +24,7 @@ interface CheckListViewProps {
   mapFilter?: string | null;
   groupBy: 'trader' | 'map';
   onSetGroupBy: (mode: 'trader' | 'map') => void;
+  activeProfileId: string;
 }
 
 export const CheckListView: React.FC<CheckListViewProps> = ({
@@ -37,6 +38,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   mapFilter,
   groupBy,
   onSetGroupBy,
+  activeProfileId,
 }) => {
   // Mark intentionally unused while preserving external API
   void _onTaskClick;
@@ -46,7 +48,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [enableLevelFilter, setEnableLevelFilter] = useState<boolean>(() => {
     try {
-      const stored = localStorage.getItem('taskTracker_enableLevelFilter');
+      const stored = localStorage.getItem(`taskTracker_enableLevelFilter::${activeProfileId}`);
       return stored != null ? stored === '1' : false;
     } catch {
       return false;
@@ -54,7 +56,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   });
   const [playerLevel, setPlayerLevel] = useState<number>(() => {
     try {
-      const stored = localStorage.getItem('taskTracker_playerLevel');
+      const stored = localStorage.getItem(`taskTracker_playerLevel::${activeProfileId}`);
       const lvl = Math.max(1, Number(stored) || 1);
       return lvl;
     } catch {
@@ -62,25 +64,59 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     }
   });
 
+  // Show/Hide completed tasks toggle (persisted)
+  const [showCompleted, setShowCompleted] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(`taskTracker_showCompleted::${activeProfileId}`);
+      return stored != null ? stored === '1' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // Reload persisted UI prefs when active profile changes
+  useEffect(() => {
+    try {
+      const storedLvl = localStorage.getItem(`taskTracker_playerLevel::${activeProfileId}`);
+      setPlayerLevel(Math.max(1, Number(storedLvl) || 1));
+    } catch {}
+    try {
+      const storedEnable = localStorage.getItem(`taskTracker_enableLevelFilter::${activeProfileId}`);
+      setEnableLevelFilter(storedEnable != null ? storedEnable === '1' : false);
+    } catch {}
+    try {
+      const storedShow = localStorage.getItem(`taskTracker_showCompleted::${activeProfileId}`);
+      setShowCompleted(storedShow != null ? storedShow === '1' : true);
+    } catch {}
+  }, [activeProfileId]);
+
   // (dependency map removed; checklist is always interactive)
 
   // Persist player level and toggle
 
   useEffect(() => {
     try {
-      localStorage.setItem('taskTracker_playerLevel', String(playerLevel));
+      localStorage.setItem(`taskTracker_playerLevel::${activeProfileId}`, String(playerLevel));
     } catch (e) {
       console.warn('Failed to persist player level', e);
     }
-  }, [playerLevel]);
+  }, [playerLevel, activeProfileId]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('taskTracker_enableLevelFilter', enableLevelFilter ? '1' : '0');
+      localStorage.setItem(`taskTracker_enableLevelFilter::${activeProfileId}`, enableLevelFilter ? '1' : '0');
     } catch (e) {
       console.warn('Failed to persist level filter toggle', e);
     }
-  }, [enableLevelFilter]);
+  }, [enableLevelFilter, activeProfileId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`taskTracker_showCompleted::${activeProfileId}`, showCompleted ? '1' : '0');
+    } catch (e) {
+      console.warn('Failed to persist show completed toggle', e);
+    }
+  }, [showCompleted, activeProfileId]);
 
   // Listen for global reset event to reset level to 1
   useEffect(() => {
@@ -137,6 +173,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         const lvl = Number.isFinite(playerLevel) ? playerLevel : 1;
         if (task.minPlayerLevel > lvl) return false;
       }
+      // Completed filter
+      if (!showCompleted && completedTasks.has(task.id)) return false;
       // Search filter
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase();
@@ -146,7 +184,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       }
       return true;
     }),
-    [tasks, showKappa, showLightkeeper, hiddenTraders, searchTerm, mapFilter, enableLevelFilter, playerLevel],
+    [tasks, showKappa, showLightkeeper, hiddenTraders, searchTerm, mapFilter, enableLevelFilter, playerLevel, showCompleted, completedTasks],
   );
 
   // Group tasks
@@ -233,6 +271,11 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             onChange={e => setSearchTerm(e.target.value)}
             className="w-full"
           />
+        </div>
+        {/* Show/Hide Completed toggle */}
+        <div className="flex items-center gap-2">
+          <Label htmlFor="show-completed" className="text-sm">Show Completed</Label>
+          <Switch id="show-completed" checked={showCompleted} onCheckedChange={setShowCompleted} />
         </div>
         <Button
           variant="outline"

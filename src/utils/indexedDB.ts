@@ -1,4 +1,4 @@
-const DB_NAME = 'TarkovQuests';
+const DB_BASE_NAME = 'TarkovQuests';
 const DB_VERSION = 4;
 const TASKS_STORE = 'completedTasks';
 const COLLECTOR_STORE = 'completedCollectorItems';
@@ -7,10 +7,25 @@ const ACHIEVEMENTS_STORE = 'completedAchievements';
 
 export class TaskStorage {
   private db: IDBDatabase | null = null;
+  private profileId: string = 'default';
+
+  setProfile(profileId: string) {
+    if (this.profileId !== profileId) {
+      try {
+        this.db?.close();
+      } catch {}
+      this.db = null;
+      this.profileId = profileId || 'default';
+    }
+  }
+
+  private getDbName(): string {
+    return `${DB_BASE_NAME}_${this.profileId}`;
+  }
 
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const request = indexedDB.open(this.getDbName(), DB_VERSION);
       
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
@@ -156,3 +171,74 @@ export class TaskStorage {
 }
 
 export const taskStorage = new TaskStorage();
+
+// One-time migration from legacy single-DB (TarkovQuests) into the first profile DB
+const LEGACY_DB_NAME = 'TarkovQuests';
+const MIGRATION_FLAG = 'taskTracker_profile_migrated_v1';
+
+export async function migrateLegacyDataIfNeeded(targetProfileId: string): Promise<void> {
+  try {
+    if (localStorage.getItem(MIGRATION_FLAG) === '1') return;
+  } catch {
+    // continue
+  }
+  // If the legacy DB doesn't exist, bail
+  const legacyExists = await new Promise<boolean>((resolve) => {
+    const req = indexedDB.open(LEGACY_DB_NAME);
+    let existed = true;
+    req.onupgradeneeded = () => {
+      // onupgradeneeded only fires when DB didn't exist; abort creation
+      existed = false;
+      req.transaction?.abort();
+    };
+    req.onsuccess = () => {
+      req.result.close();
+      resolve(existed);
+    };
+    req.onerror = () => resolve(false);
+  });
+  if (!legacyExists) {
+    try { localStorage.setItem(MIGRATION_FLAG, '1'); } catch {}
+    return;
+  }
+
+  // Open legacy and read stores, then write into profile-scoped DB
+  const readStoreAll = <T,>(db: IDBDatabase, storeName: string) => new Promise<T[]>((resolve, reject) => {
+    const tx = db.transaction([storeName], 'readonly');
+    const store = tx.objectStore(storeName);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result as T[]);
+    req.onerror = () => reject(req.error);
+  });
+
+  await new Promise<void>((resolve) => {
+    const req = indexedDB.open(LEGACY_DB_NAME, DB_VERSION);
+    req.onsuccess = async () => {
+      const legacyDb = req.result;
+      try {
+        const tasks = await readStoreAll<{ id: string }>(legacyDb, TASKS_STORE).catch(() => []);
+        const col = await readStoreAll<{ id: string }>(legacyDb, COLLECTOR_STORE).catch(() => []);
+        const ach = await readStoreAll<{ id: string }>(legacyDb, ACHIEVEMENTS_STORE).catch(() => []);
+        const pres = await readStoreAll<{ id: string; data: unknown }>(legacyDb, PRESTIGE_STORE).catch(() => []);
+
+        const t = new TaskStorage();
+        t.setProfile(targetProfileId);
+        await t.init();
+        await t.saveCompletedTasks(new Set(tasks.map(x => x.id)));
+        await t.saveCompletedCollectorItems(new Set(col.map(x => x.id)));
+        await t.saveCompletedAchievements(new Set(ach.map(x => x.id)));
+        for (const p of pres) {
+          await t.savePrestigeProgress(p.id, p.data);
+        }
+
+        try { localStorage.setItem(MIGRATION_FLAG, '1'); } catch {}
+      } catch {
+        // ignore migration errors; do not block app
+      } finally {
+        legacyDb.close();
+        resolve();
+      }
+    };
+    req.onerror = () => resolve();
+  });
+}

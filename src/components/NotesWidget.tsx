@@ -4,23 +4,34 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { getActiveProfileId, withProfileKey } from "@/utils/profile";
 
-const STORAGE_KEY = "taskTracker_notes";
+const BASE_STORAGE_KEY = "taskTracker_notes";
 
 export function NotesWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [value, setValue] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const saveTimer = useRef<number | null>(null);
+  const [profileId, setProfileId] = useState<string>("");
+  const storageKey = useMemo(() => withProfileKey(BASE_STORAGE_KEY, profileId || getActiveProfileId()), [profileId]);
 
   // Load once on mount
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setValue(raw);
-    } catch {
-      // ignore
-    }
+    const load = () => {
+      try {
+        const id = getActiveProfileId();
+        setProfileId(id);
+        const raw = localStorage.getItem(withProfileKey(BASE_STORAGE_KEY, id));
+        setValue(raw || "");
+      } catch {
+        // ignore
+      }
+    };
+    load();
+    const onProfile = () => load();
+    window.addEventListener('taskTracker:profileChanged', onProfile);
+    return () => window.removeEventListener('taskTracker:profileChanged', onProfile);
   }, []);
 
   // Debounced auto-save
@@ -31,7 +42,7 @@ export function NotesWidget() {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, value);
+        localStorage.setItem(storageKey, value);
       } catch {
         // ignore
       } finally {
@@ -42,7 +53,7 @@ export function NotesWidget() {
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [value, isOpen]);
+  }, [value, isOpen, storageKey]);
 
   const chars = useMemo(() => value.trim().length, [value]);
 
