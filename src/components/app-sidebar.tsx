@@ -8,6 +8,7 @@ import {
   Database,
   ChevronRight,
   ListTodo,
+  RotateCcw,
 } from "lucide-react"
 
 import {
@@ -80,6 +81,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onCreateProfile: (name?: string) => void
   onRenameProfile: (id: string, name: string) => void
   onDeleteProfile: (id: string) => void
+  onResetProfile: () => void
 }
 
 export function AppSidebar({
@@ -102,6 +104,7 @@ export function AppSidebar({
   onCreateProfile,
   onRenameProfile,
   onDeleteProfile,
+  onResetProfile,
   ...props
 }: AppSidebarProps) {
   const [perTraderOpen, setPerTraderOpen] = React.useState(false)
@@ -116,6 +119,7 @@ export function AppSidebar({
     try { (document.activeElement as HTMLElement | null)?.blur?.() } catch { /* ignore blur errors */ }
   }, [])
   const [deleteOpen, setDeleteOpen] = React.useState(false)
+  const [resetOpen, setResetOpen] = React.useState(false)
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -151,6 +155,13 @@ export function AppSidebar({
                   <DropdownMenuItem onClick={() => { setMenuOpen(false); setNameInput(activeProfile?.name || ""); setNameModalOpen({ mode: 'rename' }) }} disabled={!activeProfile}>
                     <Edit3 className="mr-2 h-4 w-4" /> Rename
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!activeProfile}
+                    onClick={() => { setMenuOpen(false); setResetOpen(true) }}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset progress
+                  </DropdownMenuItem>
                   <button
                     className="w-full text-left px-2 py-1.5 text-sm flex items-center gap-2 hover:bg-muted disabled:opacity-50"
                     disabled={!activeProfile}
@@ -172,6 +183,23 @@ export function AppSidebar({
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={() => { if (activeProfile) onDeleteProfile(activeProfile.id); setDeleteOpen(false) }}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              {/* Reset confirmation */}
+              <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset progress?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This resets all completed tasks, items, achievements and prestige for "{activeProfile?.name}".
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { onResetProfile(); setResetOpen(false); }}>
+                      Reset
+                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>

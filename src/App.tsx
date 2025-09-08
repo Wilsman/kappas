@@ -655,6 +655,7 @@ function App() {
           onCreateProfile={handleCreateProfile}
           onRenameProfile={handleRenameProfile}
           onDeleteProfile={handleDeleteProfile}
+          onResetProfile={handleResetProgress}
           traders={traderList}
           hiddenTraders={hiddenTraders}
           onToggleTraderVisibility={handleToggleTraderVisibility}

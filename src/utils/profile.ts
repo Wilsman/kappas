@@ -13,7 +13,7 @@ function loadProfiles(): Profile[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed as Profile[];
-  } catch {}
+  } catch { /* empty */ }
   return [];
 }
 
