@@ -1,13 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { useIsMobile } from "./hooks/use-mobile";
 import { RotateCcw, BarChart3, Search } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { TextShimmerWave } from "@/components/ui/text-shimmer-wave";
 import { Task, CollectorItemsData, Achievement, HideoutStation } from "./types";
-import { MindMap } from "./components/MindMap";
-import { FlowView } from "./components/FlowView";
 import { QuestProgressPanel } from "./components/QuestProgressPanel";
+import { Skeleton } from "@/components/ui/skeleton";
 import { taskStorage, migrateLegacyDataIfNeeded } from "./utils/indexedDB";
 import {
   ensureProfiles,
@@ -43,10 +42,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "./components/ui/alert-dialog";
-import { CheckListView } from './components/CheckListView';
-import { CollectorView } from './components/ItemTrackerView';
-import { PrestigesView } from './components/PrestigesView';
-import { AchievementsView } from './components/AchievementsView';
+// Lazily-loaded heavy views
+const FlowView = lazy(() => import('./components/FlowView').then(m => ({ default: m.FlowView })));
+const MindMap = lazy(() => import('./components/MindMap').then(m => ({ default: m.MindMap })));
+const CheckListView = lazy(() => import('./components/CheckListView').then(m => ({ default: m.CheckListView })));
+const CollectorView = lazy(() => import('./components/ItemTrackerView').then(m => ({ default: m.CollectorView })));
+const PrestigesView = lazy(() => import('./components/PrestigesView').then(m => ({ default: m.PrestigesView })));
+const AchievementsView = lazy(() => import('./components/AchievementsView').then(m => ({ default: m.AchievementsView })));
 import { CommandMenu } from './components/CommandMenu';
 import { NotesWidget } from './components/NotesWidget';
 import { OnboardingModal } from './components/OnboardingModal';
@@ -786,6 +788,20 @@ function App() {
                 )}
               >
                 {/* Quests sub-tabs removed; view selection handled via sidebar */}
+                <Suspense
+                  fallback={
+                    <div className="p-6 space-y-4">
+                      <div className="space-y-2">
+                        <Skeleton className="h-6 w-40" />
+                        <Skeleton className="h-4 w-64" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Skeleton className="h-40 w-full" />
+                        <Skeleton className="h-40 w-full" />
+                      </div>
+                    </div>
+                  }
+                >
                 {viewMode === "grouped" ? (
                   <CheckListView
                     tasks={tasks}
@@ -837,6 +853,7 @@ function App() {
                     highlightedTaskId={highlightedTask}
                   />
                 )}
+                </Suspense>
               </main>
 
               {/* Right Progress */}

@@ -13,4 +13,9 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    // Raise the warning threshold to avoid noisy large-chunk warnings.
+    // This does not change runtime behavior; it only silences the warning.
+    chunkSizeWarningLimit: 1000,
+  },
 });
