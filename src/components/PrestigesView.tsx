@@ -4,10 +4,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { taskStorage } from '@/utils/indexedDB';
 import { computePrestigeRequirements, PRESTIGE_UPDATED_EVENT } from '@/utils/prestige';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { CheckCheck, RotateCcw } from 'lucide-react';
 
 export function PrestigesView(): JSX.Element {
   const [searchTerm, setSearchTerm] = useQueryState('prestigeSearch', { defaultValue: '' });
@@ -387,6 +400,42 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
     return items;
   }
 
+  function handleMarkAllComplete() {
+    const completedState: PrestigeProgress = {
+      level: levelTarget,
+      strength: strengthTarget,
+      endurance: enduranceTarget,
+      charisma: charismaTarget,
+      hideout: {
+        intelligence: 2,
+        security: 3,
+        restSpace: 3,
+        roubles: roublesTarget,
+      },
+      quests: {
+        collector: true,
+        newBeginning: true,
+      },
+      extras: {
+        scavs: extra?.scavsTarget ?? 0,
+        pmc: extra?.pmcTarget ?? 0,
+        raiders: extra?.raidersTarget ?? 0,
+        labsExtracted: extra?.requireLabsExtract ?? false,
+        labsTransitToStreets: extra?.requireLabsTransitToStreets ?? false,
+        streetsExtracted: extra?.requireStreetsExtract ?? false,
+        anyLabyrinthFigurine: extra?.requireAnyLabyrinthFigurine ?? false,
+        figurines: Object.fromEntries(
+          (extra?.figurines ?? []).map((f) => [f.id, true])
+        ) as Record<string, boolean>,
+      },
+    };
+    setState(completedState);
+  }
+
+  function handleResetProgress() {
+    setState(defaultState);
+  }
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -420,6 +469,62 @@ function PrestigeCard(props: PrestigeCardProps): JSX.Element {
               {title}
             </Badge>
           </span>
+          <div className="flex items-center gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2"
+                  title="Mark all requirements as complete"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  <span className="hidden sm:inline">Complete All</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Mark All Requirements Complete?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will set all requirements for {title} to their maximum values (Level {levelTarget}, all stats, hideout upgrades, quests, and objectives).
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleMarkAllComplete}>
+                    Mark Complete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2"
+                  title="Reset all progress"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span className="hidden sm:inline">Reset</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset {title} Progress?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will reset all progress for {title} back to zero. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleResetProgress} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Reset Progress
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
