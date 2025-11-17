@@ -50,9 +50,14 @@ const CheckListView = lazy(() => import('./components/CheckListView').then(m => 
 const CollectorView = lazy(() => import('./components/ItemTrackerView').then(m => ({ default: m.CollectorView })));
 const PrestigesView = lazy(() => import('./components/PrestigesView').then(m => ({ default: m.PrestigesView })));
 const AchievementsView = lazy(() => import('./components/AchievementsView').then(m => ({ default: m.AchievementsView })));
-import { CommandMenu } from './components/CommandMenu';
-import { NotesWidget } from './components/NotesWidget';
-import { OnboardingModal } from './components/OnboardingModal';
+const StorylineQuestsView = lazy(() =>
+  import("./components/StorylineQuestsView").then((m) => ({
+    default: m.StorylineQuestsView,
+  }))
+);
+import { CommandMenu } from "./components/CommandMenu";
+import { NotesWidget } from "./components/NotesWidget";
+import { OnboardingModal } from "./components/OnboardingModal";
 
 function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -65,6 +70,8 @@ function App() {
   const [completedHideoutItems, setCompletedHideoutItems] = useState<
     Set<string>
   >(new Set());
+  const [completedStorylineObjectives, setCompletedStorylineObjectives] =
+    useState<Set<string>>(new Set());
   // Show all traders by default (no hidden traders initially)
   const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -74,7 +81,12 @@ function App() {
   const handleRefresh = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
+      const {
+        tasks: tasksData,
+        collectorItems: collectorData,
+        achievements: achievementsData,
+        hideoutStations,
+      } = await fetchCombinedData();
       setTasks(tasksData.data.tasks);
       setApiCollectorItems(collectorData);
       setAchievements(achievementsData.data.achievements);
@@ -92,7 +104,8 @@ function App() {
 
   // Transform collector items data to match the expected structure (Live API only)
   const collectorItems = useMemo(() => {
-    if (!apiCollectorItems) return [] as { name: string; order: number; img: string; id: string }[];
+    if (!apiCollectorItems)
+      return [] as { name: string; order: number; img: string; id: string }[];
     return apiCollectorItems.data.task.objectives.flatMap((objective) =>
       objective.items.map((item) => ({
         name: item.name,
@@ -104,10 +117,18 @@ function App() {
   }, [apiCollectorItems]);
 
   const [viewMode, setViewMode] = useState<
-    "tree" | "grouped" | "collector" | "flow" | "prestiges" | "achievements"
+    | "tree"
+    | "grouped"
+    | "collector"
+    | "flow"
+    | "prestiges"
+    | "achievements"
+    | "storyline"
   >("grouped");
   const [groupBy, setGroupBy] = useState<"trader" | "map">("trader");
-  const [collectorGroupBy, setCollectorGroupBy] = useState<"collector" | "hideout-stations">("collector");
+  const [collectorGroupBy, setCollectorGroupBy] = useState<
+    "collector" | "hideout-stations"
+  >("collector");
   const [selectedMap, setSelectedMap] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
@@ -117,7 +138,9 @@ function App() {
   }, [isMobile]);
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [completedAchievements, setCompletedAchievements] = useState<Set<string>>(new Set());
+  const [completedAchievements, setCompletedAchievements] = useState<
+    Set<string>
+  >(new Set());
   const [hideoutStations, setHideoutStations] = useState<HideoutStation[]>([]);
 
   // Lightweight client-side routing for deep links like /Items/CollectorItems?search=...
@@ -125,7 +148,10 @@ function App() {
     return pathname.replace(/\/+$/, "");
   }
   function parsePath(pathname: string) {
-    const parts = normalizePath(pathname).split("/").filter(Boolean).map(p => p.toLowerCase());
+    const parts = normalizePath(pathname)
+      .split("/")
+      .filter(Boolean)
+      .map((p) => p.toLowerCase());
     // Defaults
     let nextView: typeof viewMode = "grouped";
     let nextCollectorGroupBy: typeof collectorGroupBy | undefined;
@@ -139,11 +165,14 @@ function App() {
     } else if (parts[0] === "items") {
       nextView = "collector";
       if (parts[1] === "collectoritems") nextCollectorGroupBy = "collector";
-      else if (parts[1] === "hideoutstations") nextCollectorGroupBy = "hideout-stations";
+      else if (parts[1] === "hideoutstations")
+        nextCollectorGroupBy = "hideout-stations";
     } else if (parts[0] === "prestiges") {
       nextView = "prestiges";
     } else if (parts[0] === "achievements") {
       nextView = "achievements";
+    } else if (parts[0] === "storyline") {
+      nextView = "storyline";
     }
 
     return { nextView, nextCollectorGroupBy };
@@ -160,7 +189,8 @@ function App() {
     };
     applyFromLocation();
     // Normalize legacy checklist routes to root (default view), preserving query
-    const { pathname: initialPathname, search: initialSearch } = window.location;
+    const { pathname: initialPathname, search: initialSearch } =
+      window.location;
     if (/^\/(quests\/(checklist)?)\/?$/i.test(initialPathname)) {
       window.history.replaceState(null, "", `/${initialSearch}`);
     }
@@ -177,11 +207,16 @@ function App() {
       // Default checklist view lives at root
       nextPath = "/";
     } else if (viewMode === "collector") {
-      nextPath = collectorGroupBy === "hideout-stations" ? "/Items/HideoutStations" : "/Items/CollectorItems";
+      nextPath =
+        collectorGroupBy === "hideout-stations"
+          ? "/Items/HideoutStations"
+          : "/Items/CollectorItems";
     } else if (viewMode === "prestiges") {
       nextPath = "/Prestiges";
     } else if (viewMode === "achievements") {
       nextPath = "/Achievements";
+    } else if (viewMode === "storyline") {
+      nextPath = "/Storyline";
     } else if (viewMode === "flow") {
       nextPath = "/Quests/Flow";
     } else if (viewMode === "tree") {
@@ -212,8 +247,27 @@ function App() {
     [completedAchievements]
   );
 
+  const handleToggleStorylineObjective = useCallback(
+    async (id: string) => {
+      const next = new Set(completedStorylineObjectives);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setCompletedStorylineObjectives(next);
+      try {
+        await taskStorage.saveCompletedStorylineObjectives(next);
+      } catch (err) {
+        console.error("Save storyline objectives error", err);
+      }
+    },
+    [completedStorylineObjectives]
+  );
+
   const totalQuests = tasks.length;
   const completedQuests = completedTasks.size;
+
+  // Calculate storyline objectives (Tour chapter has 31 objectives total)
+  const totalStorylineObjectives = 31; // 23 main + 8 optional from Tour chapter
+  const completedStorylineCount = completedStorylineObjectives.size;
 
   // Build progress data for QuestProgressPanel
   const traderProgress = useMemo(() => {
@@ -251,54 +305,68 @@ function App() {
   }, [tasks, completedTasks]);
 
   // Derived lists for sidebar
-  const traderList = useMemo(
-    () => Object.keys(TRADER_COLORS),
-    []
-  );
+  const traderList = useMemo(() => Object.keys(TRADER_COLORS), []);
 
   // Profile actions
-  const handleSwitchProfile = useCallback(async (id: string) => {
-    if (!id || id === activeProfileId) return;
-    setActiveProfileIdLS(id);
-    setActiveProfileId(id);
-    try {
-      try { (document.activeElement as HTMLElement | null)?.blur?.() } catch { /* ignore blur errors */ }
-      taskStorage.setProfile(id);
-      await taskStorage.init();
-      const savedTasks = await taskStorage.loadCompletedTasks();
-      const savedCollectorItems = await taskStorage.loadCompletedCollectorItems();
-      const savedHideoutItems = await taskStorage.loadCompletedHideoutItems();
-      const savedAchievements = await taskStorage.loadCompletedAchievements();
-      setCompletedTasks(savedTasks);
-      setCompletedCollectorItems(savedCollectorItems);
-      setCompletedHideoutItems(savedHideoutItems);
-      setCompletedAchievements(savedAchievements);
-      // Notify components like NotesWidget to update their per-profile state
-      window.dispatchEvent(new Event('taskTracker:profileChanged'));
-    } catch (e) {
-      console.error('Switch profile error', e);
-    }
-  }, [activeProfileId]);
+  const handleSwitchProfile = useCallback(
+    async (id: string) => {
+      if (!id || id === activeProfileId) return;
+      setActiveProfileIdLS(id);
+      setActiveProfileId(id);
+      try {
+        try {
+          (document.activeElement as HTMLElement | null)?.blur?.();
+        } catch {
+          /* ignore blur errors */
+        }
+        taskStorage.setProfile(id);
+        await taskStorage.init();
+        const savedTasks = await taskStorage.loadCompletedTasks();
+        const savedCollectorItems =
+          await taskStorage.loadCompletedCollectorItems();
+        const savedHideoutItems = await taskStorage.loadCompletedHideoutItems();
+        const savedAchievements = await taskStorage.loadCompletedAchievements();
+        const savedStorylineObjectives =
+          await taskStorage.loadCompletedStorylineObjectives();
+        setCompletedTasks(savedTasks);
+        setCompletedCollectorItems(savedCollectorItems);
+        setCompletedHideoutItems(savedHideoutItems);
+        setCompletedAchievements(savedAchievements);
+        setCompletedStorylineObjectives(savedStorylineObjectives);
+        // Notify components like NotesWidget to update their per-profile state
+        window.dispatchEvent(new Event("taskTracker:profileChanged"));
+      } catch (e) {
+        console.error("Switch profile error", e);
+      }
+    },
+    [activeProfileId]
+  );
 
-  const handleCreateProfile = useCallback(async (name?: string) => {
-    const p = createProfile(name || 'New Character');
-    setProfiles(getProfiles());
-    await handleSwitchProfile(p.id);
-  }, [handleSwitchProfile]);
+  const handleCreateProfile = useCallback(
+    async (name?: string) => {
+      const p = createProfile(name || "New Character");
+      setProfiles(getProfiles());
+      await handleSwitchProfile(p.id);
+    },
+    [handleSwitchProfile]
+  );
 
   const handleRenameProfile = useCallback((id: string, name: string) => {
     renameProfile(id, name);
     setProfiles(getProfiles());
   }, []);
 
-  const handleDeleteProfile = useCallback(async (id: string) => {
-    const wasActive = id === activeProfileId;
-    deleteProfile(id);
-    const updated = getProfiles();
-    setProfiles(updated);
-    const nextActive = wasActive ? getActiveProfileId() : activeProfileId;
-    if (wasActive) await handleSwitchProfile(nextActive);
-  }, [activeProfileId, handleSwitchProfile]);
+  const handleDeleteProfile = useCallback(
+    async (id: string) => {
+      const wasActive = id === activeProfileId;
+      deleteProfile(id);
+      const updated = getProfiles();
+      setProfiles(updated);
+      const nextActive = wasActive ? getActiveProfileId() : activeProfileId;
+      if (wasActive) await handleSwitchProfile(nextActive);
+    },
+    [activeProfileId, handleSwitchProfile]
+  );
   const mapList = useMemo(() => {
     const set = new Set<string>();
     tasks.forEach((t) => t.map?.name && set.add(t.map.name));
@@ -339,31 +407,59 @@ function App() {
 
         // Migrate legacy unscoped UI prefs to active profile if present
         try {
-          const lvl = localStorage.getItem('taskTracker_playerLevel');
-          const lvlScoped = localStorage.getItem(`taskTracker_playerLevel::${ensured.activeId}`);
-          if (lvl && !lvlScoped) localStorage.setItem(`taskTracker_playerLevel::${ensured.activeId}`, lvl);
-        } catch { /* ignore legacy migration errors */ }
+          const lvl = localStorage.getItem("taskTracker_playerLevel");
+          const lvlScoped = localStorage.getItem(
+            `taskTracker_playerLevel::${ensured.activeId}`
+          );
+          if (lvl && !lvlScoped)
+            localStorage.setItem(
+              `taskTracker_playerLevel::${ensured.activeId}`,
+              lvl
+            );
+        } catch {
+          /* ignore legacy migration errors */
+        }
         try {
-          const en = localStorage.getItem('taskTracker_enableLevelFilter');
-          const enScoped = localStorage.getItem(`taskTracker_enableLevelFilter::${ensured.activeId}`);
-          if (en && !enScoped) localStorage.setItem(`taskTracker_enableLevelFilter::${ensured.activeId}`, en);
-        } catch { /* ignore legacy migration errors */ }
+          const en = localStorage.getItem("taskTracker_enableLevelFilter");
+          const enScoped = localStorage.getItem(
+            `taskTracker_enableLevelFilter::${ensured.activeId}`
+          );
+          if (en && !enScoped)
+            localStorage.setItem(
+              `taskTracker_enableLevelFilter::${ensured.activeId}`,
+              en
+            );
+        } catch {
+          /* ignore legacy migration errors */
+        }
         try {
-          const sc = localStorage.getItem('taskTracker_showCompleted');
-          const scScoped = localStorage.getItem(`taskTracker_showCompleted::${ensured.activeId}`);
-          if (sc && !scScoped) localStorage.setItem(`taskTracker_showCompleted::${ensured.activeId}`, sc);
-        } catch { /* ignore legacy migration errors */ }
+          const sc = localStorage.getItem("taskTracker_showCompleted");
+          const scScoped = localStorage.getItem(
+            `taskTracker_showCompleted::${ensured.activeId}`
+          );
+          if (sc && !scScoped)
+            localStorage.setItem(
+              `taskTracker_showCompleted::${ensured.activeId}`,
+              sc
+            );
+        } catch {
+          /* ignore legacy migration errors */
+        }
 
         taskStorage.setProfile(ensured.activeId);
         await taskStorage.init();
         const savedTasks = await taskStorage.loadCompletedTasks();
-        const savedCollectorItems = await taskStorage.loadCompletedCollectorItems();
+        const savedCollectorItems =
+          await taskStorage.loadCompletedCollectorItems();
         const savedHideoutItems = await taskStorage.loadCompletedHideoutItems();
         const savedAchievements = await taskStorage.loadCompletedAchievements();
+        const savedStorylineObjectives =
+          await taskStorage.loadCompletedStorylineObjectives();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedHideoutItems(savedHideoutItems);
         setCompletedAchievements(savedAchievements);
+        setCompletedStorylineObjectives(savedStorylineObjectives);
 
         // Load cached API data instantly if present
         const cached = loadCombinedCache();
@@ -379,7 +475,12 @@ function App() {
         if (needsRefresh) {
           // Refresh in background; if no cache, this awaits to ensure UI has data
           try {
-            const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
+            const {
+              tasks: tasksData,
+              collectorItems: collectorData,
+              achievements: achievementsData,
+              hideoutStations,
+            } = await fetchCombinedData();
             setTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
@@ -398,7 +499,12 @@ function App() {
         } else if (!cached) {
           // Fresh cache was missing but TTL says fresh (edge) → fetch to populate and render
           try {
-            const { tasks: tasksData, collectorItems: collectorData, achievements: achievementsData, hideoutStations } = await fetchCombinedData();
+            const {
+              tasks: tasksData,
+              collectorItems: collectorData,
+              achievements: achievementsData,
+              hideoutStations,
+            } = await fetchCombinedData();
             setTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
@@ -481,8 +587,6 @@ function App() {
     [completedTasks, tasks]
   );
 
-  
-
   // Sidebar trader filter: multi-select toggle
   const handleToggleTraderVisibility = useCallback(
     (trader: string) => {
@@ -545,20 +649,20 @@ function App() {
 
   const handleToggleHideoutItem = useCallback(
     async (itemKey: string) => {
-      console.log('[Hideout] Toggling item key:', itemKey);
+      console.log("[Hideout] Toggling item key:", itemKey);
       const next = new Set(completedHideoutItems);
       if (next.has(itemKey)) {
         next.delete(itemKey);
-        console.log('[Hideout] Removed from set');
+        console.log("[Hideout] Removed from set");
       } else {
         next.add(itemKey);
-        console.log('[Hideout] Added to set');
+        console.log("[Hideout] Added to set");
       }
-      console.log('[Hideout] Current set size:', next.size);
+      console.log("[Hideout] Current set size:", next.size);
       setCompletedHideoutItems(next);
       try {
         await taskStorage.saveCompletedHideoutItems(next);
-        console.log('[Hideout] Saved to storage');
+        console.log("[Hideout] Saved to storage");
       } catch (err) {
         console.error("Save hideout items error", err);
       }
@@ -571,12 +675,14 @@ function App() {
     setCompletedCollectorItems(new Set());
     setCompletedHideoutItems(new Set());
     setCompletedAchievements(new Set());
+    setCompletedStorylineObjectives(new Set());
     try {
       console.debug("[Prestige] Reset:start");
       await taskStorage.saveCompletedTasks(new Set());
       await taskStorage.saveCompletedCollectorItems(new Set());
       await taskStorage.saveCompletedHideoutItems(new Set());
       await taskStorage.saveCompletedAchievements(new Set());
+      await taskStorage.saveCompletedStorylineObjectives(new Set());
       // Reset prestige by saving empty entries per prestige id, mirroring other save-based resets
       for (const cfg of PRESTIGE_CONFIGS) {
         await taskStorage.savePrestigeProgress(cfg.id, {});
@@ -586,12 +692,18 @@ function App() {
       window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
       // Also reset player level filter state persisted in localStorage and notify listeners
       try {
-        localStorage.setItem(`taskTracker_playerLevel::${activeProfileId}`, '1');
-        localStorage.setItem(`taskTracker_enableLevelFilter::${activeProfileId}`, '0');
+        localStorage.setItem(
+          `taskTracker_playerLevel::${activeProfileId}`,
+          "1"
+        );
+        localStorage.setItem(
+          `taskTracker_enableLevelFilter::${activeProfileId}`,
+          "0"
+        );
       } catch (e) {
-        console.warn('LocalStorage reset failed', e);
+        console.warn("LocalStorage reset failed", e);
       }
-      window.dispatchEvent(new Event('taskTracker:reset'));
+      window.dispatchEvent(new Event("taskTracker:reset"));
       console.debug("[Prestige] Reset:event dispatched");
     } catch (err) {
       console.error("Reset error", err);
@@ -600,7 +712,9 @@ function App() {
 
   // Check if onboarding should be shown (only once)
   useEffect(() => {
-    const onboardingShown = localStorage.getItem('taskTracker_onboarding_shown');
+    const onboardingShown = localStorage.getItem(
+      "taskTracker_onboarding_shown"
+    );
     if (!onboardingShown && !isLoading) {
       setShowOnboarding(true);
     }
@@ -608,7 +722,7 @@ function App() {
 
   const handleCloseOnboarding = useCallback(() => {
     setShowOnboarding(false);
-    localStorage.setItem('taskTracker_onboarding_shown', 'true');
+    localStorage.setItem("taskTracker_onboarding_shown", "true");
   }, []);
 
   const handleTaskClick = useCallback(
@@ -642,7 +756,15 @@ function App() {
       displayTotalQuests: totalQuests,
       displayCompletedQuests: completedQuests,
     };
-  }, [focusMode, totalQuests, completedQuests, totalKappaTasks, completedKappaTasks, totalLightkeeperTasks, completedLightkeeperTasks]);
+  }, [
+    focusMode,
+    totalQuests,
+    completedQuests,
+    totalKappaTasks,
+    completedKappaTasks,
+    totalLightkeeperTasks,
+    completedLightkeeperTasks,
+  ]);
 
   const progressTitle = useMemo(() => {
     if (focusMode === "kappa") return "Kappa Progress";
@@ -713,7 +835,9 @@ function App() {
                   <div className="flex items-center gap-2 min-w-0">
                     <SidebarTrigger className="-ml-1" />
                     <h1 className="text-xl font-semibold truncate md:peer-data-[state=collapsed]:hidden">
-                      {isMobile ? "EFT Tracker" : "Escape from Tarkov Task Tracker"}
+                      {isMobile
+                        ? "EFT Tracker"
+                        : "Escape from Tarkov Task Tracker"}
                     </h1>
                     <span className="inline-flex text-[10px] px-2 py-0.5 rounded-full bg-orange-600/10 text-orange-600 border border-orange-600/20 font-semibold">
                       BETA
@@ -756,7 +880,9 @@ function App() {
                         Kappa
                       </Button>
                       <Button
-                        variant={focusMode === "lightkeeper" ? "default" : "ghost"}
+                        variant={
+                          focusMode === "lightkeeper" ? "default" : "ghost"
+                        }
                         size="sm"
                         className={cn(
                           "rounded-full px-3",
@@ -769,7 +895,9 @@ function App() {
                         <span
                           className={cn(
                             "mr-2 h-2 w-2 rounded-full",
-                            focusMode === "lightkeeper" ? "bg-white" : "bg-amber-500"
+                            focusMode === "lightkeeper"
+                              ? "bg-white"
+                              : "bg-amber-500"
                           )}
                           aria-hidden
                         />
@@ -784,13 +912,21 @@ function App() {
                       variant="outline"
                       size="sm"
                       className="pl-2 pr-2.5 gap-2"
-                      onClick={() => window.dispatchEvent(new Event("open-command-menu"))}
+                      onClick={() =>
+                        window.dispatchEvent(new Event("open-command-menu"))
+                      }
                     >
                       <Search className="h-4 w-4" />
-                      <span className="text-xs text-muted-foreground">Search</span>
+                      <span className="text-xs text-muted-foreground">
+                        Search
+                      </span>
                       <span className="ml-1 hidden lg:flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <span className="px-1.5 py-0.5 rounded border bg-background">Ctrl</span>
-                        <span className="px-1.5 py-0.5 rounded border bg-background">K</span>
+                        <span className="px-1.5 py-0.5 rounded border bg-background">
+                          Ctrl
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded border bg-background">
+                          K
+                        </span>
                       </span>
                     </Button>
                     <span className="h-4 w-px bg-border/60" />
@@ -802,8 +938,15 @@ function App() {
                       disabled={isRefreshing}
                       aria-label="Refresh data"
                     >
-                      <RotateCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                      <span className="text-xs">{isRefreshing ? "Refreshing…" : "Refresh"}</span>
+                      <RotateCcw
+                        className={cn(
+                          "h-4 w-4",
+                          isRefreshing && "animate-spin"
+                        )}
+                      />
+                      <span className="text-xs">
+                        {isRefreshing ? "Refreshing…" : "Refresh"}
+                      </span>
                     </Button>
                   </div>
                 </div>
@@ -819,7 +962,8 @@ function App() {
                   viewMode === "grouped" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
-                    viewMode === "prestiges"
+                    viewMode === "prestiges" ||
+                    viewMode === "storyline"
                     ? "overflow-y-auto"
                     : "overflow-hidden"
                 )}
@@ -839,59 +983,64 @@ function App() {
                     </div>
                   }
                 >
-                {viewMode === "grouped" ? (
-                  <CheckListView
-                    tasks={tasks}
-                    completedTasks={completedTasks}
-                    hiddenTraders={hiddenTraders}
-                    showKappa={showKappa}
-                    showLightkeeper={showLightkeeper}
-                    onToggleComplete={handleToggleComplete}
-                    onTaskClick={handleTaskClick}
-                    mapFilter={selectedMap}
-                    groupBy={groupBy}
-                    onSetGroupBy={setGroupBy}
-                    activeProfileId={activeProfileId}
-                  />
-                ) : viewMode === "collector" ? (
-                  <CollectorView
-                    collectorItems={collectorItems}
-                    completedCollectorItems={completedCollectorItems}
-                    onToggleCollectorItem={handleToggleCollectorItem}
-                    completedHideoutItems={completedHideoutItems}
-                    onToggleHideoutItem={handleToggleHideoutItem}
-                    groupBy={collectorGroupBy}
-                    hideoutStations={hideoutStations}
-                  />
-                ) : viewMode === "prestiges" ? (
-                  <PrestigesView />
-                ) : viewMode === "achievements" ? (
-                  <AchievementsView
-                    achievements={achievements}
-                    completed={completedAchievements}
-                    onToggle={handleToggleAchievement}
-                  />
-                ) : viewMode === "flow" ? (
-                  <FlowView
-                    tasks={tasks}
-                    completedTasks={completedTasks}
-                    hiddenTraders={hiddenTraders}
-                    showKappa={showKappa}
-                    showLightkeeper={showLightkeeper}
-                    onToggleComplete={handleToggleComplete}
-                    highlightedTaskId={highlightedTask}
-                  />
-                ) : (
-                  <MindMap
-                    tasks={tasks}
-                    completedTasks={completedTasks}
-                    hiddenTraders={hiddenTraders}
-                    showKappa={showKappa}
-                    showLightkeeper={showLightkeeper}
-                    onToggleComplete={handleToggleComplete}
-                    highlightedTaskId={highlightedTask}
-                  />
-                )}
+                  {viewMode === "grouped" ? (
+                    <CheckListView
+                      tasks={tasks}
+                      completedTasks={completedTasks}
+                      hiddenTraders={hiddenTraders}
+                      showKappa={showKappa}
+                      showLightkeeper={showLightkeeper}
+                      onToggleComplete={handleToggleComplete}
+                      onTaskClick={handleTaskClick}
+                      mapFilter={selectedMap}
+                      groupBy={groupBy}
+                      onSetGroupBy={setGroupBy}
+                      activeProfileId={activeProfileId}
+                    />
+                  ) : viewMode === "collector" ? (
+                    <CollectorView
+                      collectorItems={collectorItems}
+                      completedCollectorItems={completedCollectorItems}
+                      onToggleCollectorItem={handleToggleCollectorItem}
+                      completedHideoutItems={completedHideoutItems}
+                      onToggleHideoutItem={handleToggleHideoutItem}
+                      groupBy={collectorGroupBy}
+                      hideoutStations={hideoutStations}
+                    />
+                  ) : viewMode === "prestiges" ? (
+                    <PrestigesView />
+                  ) : viewMode === "achievements" ? (
+                    <AchievementsView
+                      achievements={achievements}
+                      completed={completedAchievements}
+                      onToggle={handleToggleAchievement}
+                    />
+                  ) : viewMode === "storyline" ? (
+                    <StorylineQuestsView
+                      completedObjectives={completedStorylineObjectives}
+                      onToggleObjective={handleToggleStorylineObjective}
+                    />
+                  ) : viewMode === "flow" ? (
+                    <FlowView
+                      tasks={tasks}
+                      completedTasks={completedTasks}
+                      hiddenTraders={hiddenTraders}
+                      showKappa={showKappa}
+                      showLightkeeper={showLightkeeper}
+                      onToggleComplete={handleToggleComplete}
+                      highlightedTaskId={highlightedTask}
+                    />
+                  ) : (
+                    <MindMap
+                      tasks={tasks}
+                      completedTasks={completedTasks}
+                      hiddenTraders={hiddenTraders}
+                      showKappa={showKappa}
+                      showLightkeeper={showLightkeeper}
+                      onToggleComplete={handleToggleComplete}
+                      highlightedTaskId={highlightedTask}
+                    />
+                  )}
                 </Suspense>
               </main>
 
@@ -922,6 +1071,8 @@ function App() {
                     completedLightkeeperTasks={completedLightkeeperTasks}
                     totalAchievements={achievements.length}
                     completedAchievements={completedAchievements.size}
+                    totalStorylineObjectives={totalStorylineObjectives}
+                    completedStorylineObjectives={completedStorylineCount}
                     totalPrestigeSteps={prestigeProgress?.total}
                     completedPrestigeSteps={prestigeProgress?.completed}
                     currentPrestigeId={prestigeProgress?.id}
@@ -938,7 +1089,8 @@ function App() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will reset all completed tasks and cannot be undone.
+                          This will reset all completed tasks and cannot be
+                          undone.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>

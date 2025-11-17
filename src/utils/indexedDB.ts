@@ -1,10 +1,11 @@
 const DB_BASE_NAME = 'TarkovQuests';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const TASKS_STORE = 'completedTasks';
 const COLLECTOR_STORE = 'completedCollectorItems';
 const PRESTIGE_STORE = 'prestigeProgress';
 const ACHIEVEMENTS_STORE = 'completedAchievements';
 const HIDEOUT_ITEMS_STORE = 'completedHideoutItems';
+const STORYLINE_OBJECTIVES_STORE = 'completedStorylineObjectives';
 
 export class TaskStorage {
   private db: IDBDatabase | null = null;
@@ -50,6 +51,9 @@ export class TaskStorage {
         }
         if (!db.objectStoreNames.contains(HIDEOUT_ITEMS_STORE)) {
           db.createObjectStore(HIDEOUT_ITEMS_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORYLINE_OBJECTIVES_STORE)) {
+          db.createObjectStore(STORYLINE_OBJECTIVES_STORE, { keyPath: 'id' });
         }
       };
     });
@@ -197,6 +201,39 @@ export class TaskStorage {
         resolve(completed);
       };
       req.onerror = () => reject(req.error);
+    });
+  }
+
+  async saveCompletedStorylineObjectives(completedObjectives: Set<string>): Promise<void> {
+    if (!this.db) await this.init();
+    
+    const transaction = this.db!.transaction([STORYLINE_OBJECTIVES_STORE], 'readwrite');
+    const store = transaction.objectStore(STORYLINE_OBJECTIVES_STORE);
+    
+    await store.clear();
+    
+    for (const objectiveId of completedObjectives) {
+      await store.add({ id: objectiveId, completed: true });
+    }
+  }
+
+  async loadCompletedStorylineObjectives(): Promise<Set<string>> {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([STORYLINE_OBJECTIVES_STORE], 'readonly');
+      const store = transaction.objectStore(STORYLINE_OBJECTIVES_STORE);
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        const completed = new Set<string>();
+        request.result.forEach((item: { id: string }) => {
+          completed.add(item.id);
+        });
+        resolve(completed);
+      };
+      
+      request.onerror = () => reject(request.error);
     });
   }
 }
