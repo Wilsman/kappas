@@ -58,6 +58,7 @@ const StorylineQuestsView = lazy(() =>
 import { CommandMenu } from "./components/CommandMenu";
 import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
+import { STORYLINE_QUESTS } from "@/data/storylineQuests";
 
 function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -265,9 +266,27 @@ function App() {
   const totalQuests = tasks.length;
   const completedQuests = completedTasks.size;
 
-  // Calculate storyline objectives (Tour chapter has 31 objectives total)
-  const totalStorylineObjectives = 31; // 23 main + 8 optional from Tour chapter
-  const completedStorylineCount = completedStorylineObjectives.size;
+  // Calculate storyline objectives (only main objectives count towards progress)
+  const { totalStorylineObjectives, completedStorylineCount } = useMemo(() => {
+    let total = 0;
+    let completed = 0;
+
+    STORYLINE_QUESTS.forEach((quest) => {
+      quest.objectives?.forEach((obj) => {
+        if (obj.type === "main") {
+          total++;
+          if (completedStorylineObjectives.has(obj.id)) {
+            completed++;
+          }
+        }
+      });
+    });
+
+    return {
+      totalStorylineObjectives: total,
+      completedStorylineCount: completed,
+    };
+  }, [completedStorylineObjectives]);
 
   // Build progress data for QuestProgressPanel
   const traderProgress = useMemo(() => {
