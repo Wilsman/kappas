@@ -9,7 +9,8 @@ import {
   ChevronRight,
   ListTodo,
   RotateCcw,
-} from "lucide-react"
+  Home,
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -69,7 +70,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "flow"
     | "prestiges"
     | "achievements"
-    | "storyline";
+    | "storyline"
+    | "hideout-requirements";
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void;
   onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
   focusMode: "all" | "kappa" | "lightkeeper";
@@ -114,19 +116,28 @@ export function AppSidebar({
   onResetProfile,
   ...props
 }: AppSidebarProps) {
-  const [perTraderOpen, setPerTraderOpen] = React.useState(false)
-  const [perMapOpen, setPerMapOpen] = React.useState(false)
-  const [nameModalOpen, setNameModalOpen] = React.useState<null | { mode: 'create' | 'rename' }>(null)
-  const [nameInput, setNameInput] = React.useState("")
-  const activeProfile = React.useMemo(() => profiles.find(p => p.id === activeProfileId) || null, [profiles, activeProfileId])
-  const [menuOpen, setMenuOpen] = React.useState(false)
+  const [perTraderOpen, setPerTraderOpen] = React.useState(false);
+  const [perMapOpen, setPerMapOpen] = React.useState(false);
+  const [nameModalOpen, setNameModalOpen] = React.useState<null | {
+    mode: "create" | "rename";
+  }>(null);
+  const [nameInput, setNameInput] = React.useState("");
+  const activeProfile = React.useMemo(
+    () => profiles.find((p) => p.id === activeProfileId) || null,
+    [profiles, activeProfileId]
+  );
+  const [menuOpen, setMenuOpen] = React.useState(false);
   const closeAllOverlays = React.useCallback(() => {
-    setMenuOpen(false)
-    setNameModalOpen(null)
-    try { (document.activeElement as HTMLElement | null)?.blur?.() } catch { /* ignore blur errors */ }
-  }, [])
-  const [deleteOpen, setDeleteOpen] = React.useState(false)
-  const [resetOpen, setResetOpen] = React.useState(false)
+    setMenuOpen(false);
+    setNameModalOpen(null);
+    try {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    } catch {
+      /* ignore blur errors */
+    }
+  }, []);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [resetOpen, setResetOpen] = React.useState(false);
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -483,6 +494,24 @@ export function AppSidebar({
                       >
                         <Database />
                         <span>Hideout Stations</span>
+                      </a>
+                    </SidebarMenuSubButton>
+                  </li>
+                  <li>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={viewMode === "hideout-requirements"}
+                    >
+                      <a
+                        className={`${
+                          viewMode === "hideout-requirements"
+                            ? "border-l-2 border-emerald-500 pl-6"
+                            : "pl-6"
+                        } cursor-pointer`}
+                        onClick={() => onSetViewMode("hideout-requirements")}
+                      >
+                        <Home />
+                        <span>Hideout Requirements</span>
                       </a>
                     </SidebarMenuSubButton>
                   </li>

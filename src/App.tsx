@@ -55,6 +55,11 @@ const StorylineQuestsView = lazy(() =>
     default: m.StorylineQuestsView,
   }))
 );
+const HideoutRequirementsView = lazy(() =>
+  import("./components/HideoutRequirementsView").then((m) => ({
+    default: m.HideoutRequirementsView,
+  }))
+);
 import { CommandMenu } from "./components/CommandMenu";
 import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -125,6 +130,7 @@ function App() {
     | "prestiges"
     | "achievements"
     | "storyline"
+    | "hideout-requirements"
   >("grouped");
   const [groupBy, setGroupBy] = useState<"trader" | "map">("trader");
   const [collectorGroupBy, setCollectorGroupBy] = useState<
@@ -168,6 +174,8 @@ function App() {
       if (parts[1] === "collectoritems") nextCollectorGroupBy = "collector";
       else if (parts[1] === "hideoutstations")
         nextCollectorGroupBy = "hideout-stations";
+      else if (parts[1] === "hideoutrequirements")
+        nextView = "hideout-requirements";
     } else if (parts[0] === "prestiges") {
       nextView = "prestiges";
     } else if (parts[0] === "achievements") {
@@ -212,6 +220,8 @@ function App() {
         collectorGroupBy === "hideout-stations"
           ? "/Items/HideoutStations"
           : "/Items/CollectorItems";
+    } else if (viewMode === "hideout-requirements") {
+      nextPath = "/Items/HideoutRequirements";
     } else if (viewMode === "prestiges") {
       nextPath = "/Prestiges";
     } else if (viewMode === "achievements") {
@@ -1038,6 +1048,23 @@ function App() {
                     <StorylineQuestsView
                       completedObjectives={completedStorylineObjectives}
                       onToggleObjective={handleToggleStorylineObjective}
+                    />
+                  ) : viewMode === "hideout-requirements" ? (
+                    <HideoutRequirementsView
+                      hideoutStations={hideoutStations}
+                      completedHideoutItems={completedHideoutItems}
+                      onNavigateToStation={(stationName) => {
+                        setCollectorGroupBy("hideout-stations");
+                        setViewMode("collector");
+                        // Use setTimeout to ensure view switches before search
+                        setTimeout(() => {
+                          window.dispatchEvent(
+                            new CustomEvent("taskTracker:globalSearch", {
+                              detail: { term: stationName, scope: "items" },
+                            })
+                          );
+                        }, 100);
+                      }}
                     />
                   ) : viewMode === "flow" ? (
                     <FlowView
