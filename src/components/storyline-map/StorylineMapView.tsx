@@ -215,9 +215,6 @@ export function StorylineMapView({
               <Map className="h-6 w-6 text-primary" />
               <h1 className="font-bold text-lg">Tarkov Storyline Map</h1>
             </div>
-            <p className="text-[10px] text-muted-foreground/70 mb-3">
-              Click to see path • Double-click to toggle • Ctrl+scroll to zoom
-            </p>
             {/* WIP Warning */}
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2">
               <div className="flex items-start gap-2">
@@ -246,6 +243,14 @@ export function StorylineMapView({
             onClose={() => setSelectedNodeId(null)}
           />
         )}
+        {/* Controls hint pill at bottom */}
+        <Panel position="bottom-center" className="!mb-4">
+          <div className="px-4 py-2 rounded-full bg-card/70 backdrop-blur-sm border border-border/50 shadow-lg">
+            <p className="text-xs text-muted-foreground">
+              Click node to see path • Ctrl+scroll to zoom
+            </p>
+          </div>
+        </Panel>
       </ReactFlow>
     </div>
   );
