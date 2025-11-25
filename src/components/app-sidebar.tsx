@@ -10,6 +10,7 @@ import {
   ListTodo,
   RotateCcw,
   Home,
+  Map,
 } from "lucide-react";
 
 import {
@@ -26,30 +27,30 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import type { Profile } from "@/utils/profile"
-import { Button } from "@/components/ui/button"
+} from "@/components/ui/sidebar";
+import type { Profile } from "@/utils/profile";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,8 +60,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { MoreHorizontal, UserPlus, Edit3, Trash2 } from "lucide-react"
+} from "@/components/ui/alert-dialog";
+import { MoreHorizontal, UserPlus, Edit3, Trash2 } from "lucide-react";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   viewMode:
@@ -71,6 +72,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "prestiges"
     | "achievements"
     | "storyline"
+    | "storyline-map"
     | "hideout-requirements";
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void;
   onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
@@ -343,6 +345,66 @@ export function AppSidebar({
           <SidebarGroupLabel>Navigate</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* 1.0 Storyline - at the top */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={
+                    viewMode === "storyline" || viewMode === "storyline-map"
+                  }
+                  onClick={() => onSetViewMode("storyline")}
+                >
+                  <Package />
+                  <span>1.0 Storyline</span>
+                  <span className="ml-auto rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+                    WIP
+                  </span>
+                </SidebarMenuButton>
+                <SidebarMenuSub className="relative pl-4">
+                  {/* Submenu guide line */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute left-2 top-2 bottom-2 border-l border-border/30"
+                  />
+                  <li>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={viewMode === "storyline"}
+                    >
+                      <a
+                        className={`${
+                          viewMode === "storyline"
+                            ? "border-l-2 border-emerald-500 pl-6"
+                            : "pl-6"
+                        } cursor-pointer`}
+                        onClick={() => onSetViewMode("storyline")}
+                      >
+                        <ListTodo />
+                        <span>Quest Objectives</span>
+                      </a>
+                    </SidebarMenuSubButton>
+                  </li>
+                  <li>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={viewMode === "storyline-map"}
+                    >
+                      <a
+                        className={`${
+                          viewMode === "storyline-map"
+                            ? "border-l-2 border-emerald-500 pl-6"
+                            : "pl-6"
+                        } cursor-pointer`}
+                        onClick={() => onSetViewMode("storyline-map")}
+                      >
+                        <Map />
+                        <span>Decision Map</span>
+                      </a>
+                    </SidebarMenuSubButton>
+                  </li>
+                </SidebarMenuSub>
+              </SidebarMenuItem>
+
+              {/* Regular Quests */}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={
@@ -632,24 +694,6 @@ export function AppSidebar({
                     ))}
                   </SidebarMenuSub>
                 )}
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Collections & Stations */}
-        <SidebarGroup>
-          <SidebarGroupLabel>More</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => onSetViewMode("storyline")}
-                  isActive={viewMode === "storyline"}
-                >
-                  <Package />
-                  <span>1.0 Storyline Quests</span>
-                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

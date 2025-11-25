@@ -1,11 +1,12 @@
 const DB_BASE_NAME = 'TarkovQuests';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const TASKS_STORE = 'completedTasks';
 const COLLECTOR_STORE = 'completedCollectorItems';
 const PRESTIGE_STORE = 'prestigeProgress';
 const ACHIEVEMENTS_STORE = 'completedAchievements';
 const HIDEOUT_ITEMS_STORE = 'completedHideoutItems';
 const STORYLINE_OBJECTIVES_STORE = 'completedStorylineObjectives';
+const STORYLINE_MAP_NODES_STORE = 'completedStorylineMapNodes';
 
 export class TaskStorage {
   private db: IDBDatabase | null = null;
@@ -54,6 +55,9 @@ export class TaskStorage {
         }
         if (!db.objectStoreNames.contains(STORYLINE_OBJECTIVES_STORE)) {
           db.createObjectStore(STORYLINE_OBJECTIVES_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORYLINE_MAP_NODES_STORE)) {
+          db.createObjectStore(STORYLINE_MAP_NODES_STORE, { keyPath: 'id' });
         }
       };
     });
@@ -223,6 +227,39 @@ export class TaskStorage {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([STORYLINE_OBJECTIVES_STORE], 'readonly');
       const store = transaction.objectStore(STORYLINE_OBJECTIVES_STORE);
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        const completed = new Set<string>();
+        request.result.forEach((item: { id: string }) => {
+          completed.add(item.id);
+        });
+        resolve(completed);
+      };
+      
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async saveCompletedStorylineMapNodes(completedNodes: Set<string>): Promise<void> {
+    if (!this.db) await this.init();
+    
+    const transaction = this.db!.transaction([STORYLINE_MAP_NODES_STORE], 'readwrite');
+    const store = transaction.objectStore(STORYLINE_MAP_NODES_STORE);
+    
+    await store.clear();
+    
+    for (const nodeId of completedNodes) {
+      await store.add({ id: nodeId, completed: true });
+    }
+  }
+
+  async loadCompletedStorylineMapNodes(): Promise<Set<string>> {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([STORYLINE_MAP_NODES_STORE], 'readonly');
+      const store = transaction.objectStore(STORYLINE_MAP_NODES_STORE);
       const request = store.getAll();
       
       request.onsuccess = () => {

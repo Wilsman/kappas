@@ -19,6 +19,7 @@ interface CommandMenuProps {
     | "prestiges"
     | "achievements"
     | "storyline"
+    | "storyline-map"
     | "hideout-requirements";
   groupBy: "trader" | "map";
   collectorGroupBy: "collector" | "hideout-stations";
@@ -361,6 +362,10 @@ export function CommandMenu(props: CommandMenuProps) {
       onSetViewMode("storyline");
       setOpen(false);
     },
+    navigateStorylineMap() {
+      onSetViewMode("storyline-map");
+      setOpen(false);
+    },
   } as const;
 
   return (
@@ -688,6 +693,13 @@ export function CommandMenu(props: CommandMenuProps) {
             onSelect={handle.navigateStoryline}
           >
             1.0 Storyline Quests {viewMode === "storyline" ? "(current)" : ""}
+          </CommandItem>
+          <CommandItem
+            value="storyline-map"
+            onSelect={handle.navigateStorylineMap}
+          >
+            Storyline Decision Map{" "}
+            {viewMode === "storyline-map" ? "(current)" : ""}
           </CommandItem>
         </CommandGroup>
       </CommandList>

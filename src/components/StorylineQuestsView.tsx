@@ -4,22 +4,27 @@ import {
   Scroll,
   ChevronDown,
   ChevronRight,
+  Map,
+  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 
 import { STORYLINE_QUESTS } from "@/data/storylineQuests";
 
 interface StorylineQuestsViewProps {
   completedObjectives: Set<string>;
   onToggleObjective: (id: string) => void;
+  onNavigateToMap?: () => void;
 }
 
 export function StorylineQuestsView({
   completedObjectives,
   onToggleObjective,
+  onNavigateToMap,
 }: StorylineQuestsViewProps): JSX.Element {
   const [expandedQuests, setExpandedQuests] = useState<
     Record<string, { main: boolean; optional: boolean }>
@@ -49,11 +54,36 @@ export function StorylineQuestsView({
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-5xl mx-auto space-y-6">
+        {/* WIP Warning Banner */}
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-amber-600 dark:text-amber-400">
+                Work in Progress
+              </h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300/80 mt-1">
+                This section is still being developed. Quest data and objectives
+                may be incomplete or inaccurate as the 1.0 storyline is still
+                being documented by the community.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold">1.0 Storyline Quests</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <BookOpen className="h-8 w-8 text-primary" />
+              <h1 className="text-3xl font-bold">1.0 Storyline Quests</h1>
+            </div>
+            {onNavigateToMap && (
+              <Button variant="outline" onClick={onNavigateToMap}>
+                <Map className="h-4 w-4 mr-2" />
+                Decision Map
+              </Button>
+            )}
           </div>
           <p className="text-muted-foreground">
             Track your progress through the 1.0 storyline quest objectives

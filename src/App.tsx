@@ -60,6 +60,11 @@ const HideoutRequirementsView = lazy(() =>
     default: m.HideoutRequirementsView,
   }))
 );
+const StorylineMapView = lazy(() =>
+  import("./components/storyline-map").then((m) => ({
+    default: m.StorylineMapView,
+  }))
+);
 import { CommandMenu } from "./components/CommandMenu";
 import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -78,6 +83,9 @@ function App() {
   >(new Set());
   const [completedStorylineObjectives, setCompletedStorylineObjectives] =
     useState<Set<string>>(new Set());
+  const [completedStorylineMapNodes, setCompletedStorylineMapNodes] = useState<
+    Set<string>
+  >(new Set());
   // Show all traders by default (no hidden traders initially)
   const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -130,6 +138,7 @@ function App() {
     | "prestiges"
     | "achievements"
     | "storyline"
+    | "storyline-map"
     | "hideout-requirements"
   >("grouped");
   const [groupBy, setGroupBy] = useState<"trader" | "map">("trader");
@@ -181,7 +190,11 @@ function App() {
     } else if (parts[0] === "achievements") {
       nextView = "achievements";
     } else if (parts[0] === "storyline") {
-      nextView = "storyline";
+      if (parts[1] === "map") {
+        nextView = "storyline-map";
+      } else {
+        nextView = "storyline";
+      }
     }
 
     return { nextView, nextCollectorGroupBy };
@@ -228,6 +241,8 @@ function App() {
       nextPath = "/Achievements";
     } else if (viewMode === "storyline") {
       nextPath = "/Storyline";
+    } else if (viewMode === "storyline-map") {
+      nextPath = "/Storyline/Map";
     } else if (viewMode === "flow") {
       nextPath = "/Quests/Flow";
     } else if (viewMode === "tree") {
@@ -271,6 +286,21 @@ function App() {
       }
     },
     [completedStorylineObjectives]
+  );
+
+  const handleToggleStorylineMapNode = useCallback(
+    async (id: string) => {
+      const next = new Set(completedStorylineMapNodes);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setCompletedStorylineMapNodes(next);
+      try {
+        await taskStorage.saveCompletedStorylineMapNodes(next);
+      } catch (err) {
+        console.error("Save storyline map nodes error", err);
+      }
+    },
+    [completedStorylineMapNodes]
   );
 
   const totalQuests = tasks.length;
@@ -357,11 +387,14 @@ function App() {
         const savedAchievements = await taskStorage.loadCompletedAchievements();
         const savedStorylineObjectives =
           await taskStorage.loadCompletedStorylineObjectives();
+        const savedStorylineMapNodes =
+          await taskStorage.loadCompletedStorylineMapNodes();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedHideoutItems(savedHideoutItems);
         setCompletedAchievements(savedAchievements);
         setCompletedStorylineObjectives(savedStorylineObjectives);
+        setCompletedStorylineMapNodes(savedStorylineMapNodes);
         // Notify components like NotesWidget to update their per-profile state
         window.dispatchEvent(new Event("taskTracker:profileChanged"));
       } catch (e) {
@@ -484,11 +517,14 @@ function App() {
         const savedAchievements = await taskStorage.loadCompletedAchievements();
         const savedStorylineObjectives =
           await taskStorage.loadCompletedStorylineObjectives();
+        const savedStorylineMapNodes =
+          await taskStorage.loadCompletedStorylineMapNodes();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedHideoutItems(savedHideoutItems);
         setCompletedAchievements(savedAchievements);
         setCompletedStorylineObjectives(savedStorylineObjectives);
+        setCompletedStorylineMapNodes(savedStorylineMapNodes);
 
         // Load cached API data instantly if present
         const cached = loadCombinedCache();
@@ -1048,6 +1084,13 @@ function App() {
                     <StorylineQuestsView
                       completedObjectives={completedStorylineObjectives}
                       onToggleObjective={handleToggleStorylineObjective}
+                      onNavigateToMap={() => setViewMode("storyline-map")}
+                    />
+                  ) : viewMode === "storyline-map" ? (
+                    <StorylineMapView
+                      completedNodes={completedStorylineMapNodes}
+                      onToggleNode={handleToggleStorylineMapNode}
+                      onBack={() => setViewMode("storyline")}
                     />
                   ) : viewMode === "hideout-requirements" ? (
                     <HideoutRequirementsView
