@@ -9,6 +9,7 @@ export interface StoryNodeData {
   isCompleted?: boolean;
   isCurrentStep?: boolean;
   isIrreversible?: boolean;
+  isUndetermined?: boolean;
   note?: string;
 }
 
@@ -18,16 +19,27 @@ function StoryNode({ data }: { data: StoryNodeData }) {
       className={cn(
         "min-w-[200px] max-w-[260px] rounded-lg border-2 bg-card p-3 shadow-lg transition-all",
         data.isCompleted && "border-green-500 bg-green-500/10",
-        data.isCurrentStep && "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/50",
-        !data.isCompleted && !data.isCurrentStep && "border-border",
-        data.isIrreversible && "border-dashed"
+        data.isCurrentStep &&
+          "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/50",
+        !data.isCompleted &&
+          !data.isCurrentStep &&
+          !data.isUndetermined &&
+          "border-border",
+        data.isUndetermined &&
+          "border-purple-500/60 border-dashed bg-purple-500/5",
+        data.isIrreversible && !data.isUndetermined && "border-dashed"
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={cn("!bg-primary", data.isUndetermined && "!bg-purple-500")}
+      />
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
           {data.isCompleted && <span className="text-green-500">✓</span>}
           {data.isCurrentStep && <span className="text-amber-500">►</span>}
+          {data.isUndetermined && <span className="text-purple-500">?</span>}
           <span className="font-semibold text-sm">{data.label}</span>
         </div>
         {data.description && (
@@ -51,8 +63,17 @@ function StoryNode({ data }: { data: StoryNodeData }) {
             Irreversible
           </span>
         )}
+        {data.isUndetermined && (
+          <span className="inline-block rounded bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-400">
+            ⚠ Unconfirmed
+          </span>
+        )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-primary"
+      />
     </div>
   );
 }

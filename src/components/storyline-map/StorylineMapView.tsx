@@ -18,6 +18,7 @@ import { toPng } from "html-to-image";
 import StoryNode from "./StoryNode";
 import DecisionNode from "./DecisionNode";
 import EndingNode from "./EndingNode";
+import UnknownZone from "./UnknownZone";
 import { CostPanel } from "./CostPanel";
 import { EndingBreakdownPanel } from "./EndingBreakdownPanel";
 import {
@@ -34,6 +35,7 @@ const nodeTypes = {
   story: StoryNode,
   decision: DecisionNode,
   ending: EndingNode,
+  zone: UnknownZone,
 };
 
 interface StorylineMapViewProps {
@@ -297,6 +299,17 @@ export function StorylineMapView({
                   <span className="font-semibold">Work in Progress:</span> Map
                   data may be incomplete as the 1.0 storyline is still being
                   documented.
+                </p>
+              </div>
+            </div>
+            {/* Unconfirmed Zone Legend */}
+            <div className="rounded-md border border-purple-500/30 bg-purple-500/10 p-2 mt-2">
+              <div className="flex items-start gap-2">
+                <span className="text-purple-500 flex-shrink-0 mt-0.5">❓</span>
+                <p className="text-xs text-purple-300/80">
+                  <span className="font-semibold">Unconfirmed Territory:</span>{" "}
+                  The purple-tinted zone at the bottom marks paths that are not
+                  yet fully verified by the community.
                 </p>
               </div>
             </div>

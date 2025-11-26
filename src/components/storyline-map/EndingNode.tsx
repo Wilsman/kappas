@@ -15,6 +15,7 @@ export interface EndingNodeData {
   description?: string;
   endingType: EndingType;
   isSelected?: boolean;
+  isUndetermined?: boolean;
 }
 
 const endingColors: Record<EndingType, string> = {
@@ -36,14 +37,16 @@ const endingIcons: Record<EndingType, string> = {
 };
 
 function EndingNode({ data }: { data: EndingNodeData }) {
-  const color = endingColors[data.endingType] || "#64748b";
+  const baseColor = endingColors[data.endingType] || "#64748b";
+  const color = data.isUndetermined ? "#a855f7" : baseColor;
   const icon = endingIcons[data.endingType] || "🏁";
 
   return (
     <div
       className={cn(
         "min-w-[180px] max-w-[240px] rounded-lg border-2 bg-card p-3 shadow-lg cursor-pointer transition-all hover:scale-105",
-        data.isSelected && "ring-4 ring-offset-2 ring-offset-background"
+        data.isSelected && "ring-4 ring-offset-2 ring-offset-background",
+        data.isUndetermined && "border-dashed"
       )}
       style={{
         borderColor: color,
@@ -60,12 +63,17 @@ function EndingNode({ data }: { data: EndingNodeData }) {
         style={{ background: color }}
       />
       <div className="space-y-1.5 text-center">
-        <div className="text-2xl">{icon}</div>
+        <div className="text-2xl">{data.isUndetermined ? "❓" : icon}</div>
         <span className="font-bold text-sm" style={{ color }}>
           {data.label}
         </span>
         {data.description && (
           <p className="text-xs text-muted-foreground">{data.description}</p>
+        )}
+        {data.isUndetermined && (
+          <span className="inline-block rounded bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-400">
+            ⚠ Path Unconfirmed
+          </span>
         )}
         <p className="text-[10px] text-muted-foreground/70 mt-1">
           Click to see path breakdown

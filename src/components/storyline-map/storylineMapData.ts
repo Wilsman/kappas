@@ -198,7 +198,7 @@ export const initialNodes: Node[] = [
   {
     id: "the-ticket-prapor",
     type: "story",
-    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 2 },
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 1.75 },
     data: {
       label: "The Ticket Quest",
       description: "Build Intel Center 1, wait for Kerman's call",
@@ -208,7 +208,7 @@ export const initialNodes: Node[] = [
   {
     id: "contact-kerman-prapor",
     type: "story",
-    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 3 },
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 2.4 },
     data: {
       label: "Contact Mr. Kerman",
       description: "Kerman says you need the case back",
@@ -217,7 +217,7 @@ export const initialNodes: Node[] = [
   {
     id: "investigate-lighthouse",
     type: "story",
-    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 4 },
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 3.1 },
     data: {
       label: "Investigate Lighthouse Camp",
       description: "Search Prapor's camp on Lighthouse for clues",
@@ -226,7 +226,7 @@ export const initialNodes: Node[] = [
   {
     id: "talk-mechanic-network",
     type: "story",
-    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 5 },
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 3.9 },
     data: {
       label: "Talk to Mechanic (Network Provider)",
       description: "Mechanic helps unlock Lightkeeper access early",
@@ -235,10 +235,29 @@ export const initialNodes: Node[] = [
   {
     id: "unlock-lightkeeper",
     type: "story",
-    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 6 },
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 4.7 },
     data: {
       label: "Unlock Lightkeeper",
       description: "Complete tasks to gain access to Lightkeeper trader",
+    },
+  },
+  {
+    id: "lk-blue-folders",
+    type: "story",
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 5.5 },
+    data: {
+      label: "Hand Over 3 Blue Folders",
+      description: "Give 3 Intelligence folders to Lightkeeper",
+    },
+  },
+  {
+    id: "lk-flare-kills",
+    type: "story",
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 6.1 },
+    data: {
+      label: "Yellow Flare + 15 Kills",
+      description: "Launch yellow flare at ULTRA entrance on Interchange, then eliminate 15 targets in one raid",
+      note: "In one raid",
     },
   },
   {
@@ -655,11 +674,25 @@ export const initialNodes: Node[] = [
     },
   },
 
+  // ============ UNKNOWN TERRITORY ZONE ============
+  {
+    id: "unknown-zone",
+    type: "zone",
+    position: { x: -COL_WIDTH * 2.5, y: ROW_HEIGHT * 30.2 },
+    draggable: false,
+    selectable: false,
+    zIndex: -1,
+    data: {
+      width: COL_WIDTH * 6,
+      height: ROW_HEIGHT * 5,
+    },
+  },
+
   // ============ ENDINGS ============
   {
     id: "savior-ending",
     type: "ending",
-    position: { x: -COL_WIDTH * 1.8, y: ROW_HEIGHT * 32 },
+    position: { x: -COL_WIDTH * 1.8, y: ROW_HEIGHT * 32.5 },
     data: {
       label: "🌟 Savior Ending",
       description: "Best: Save Tarkov, complete all story tasks for Kerman",
@@ -669,7 +702,7 @@ export const initialNodes: Node[] = [
   {
     id: "fallen-ending",
     type: "ending",
-    position: { x: -COL_WIDTH * 0.5, y: ROW_HEIGHT * 32 },
+    position: { x: -COL_WIDTH * 0.5, y: ROW_HEIGHT * 32.5 },
     data: {
       label: "❌ Fallen Ending",
       description: "Refused to help Kerman gather evidence",
@@ -679,7 +712,7 @@ export const initialNodes: Node[] = [
   {
     id: "survivor-ending",
     type: "ending",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 32 },
+    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 32.5 },
     data: {
       label: "🛡️ Survivor Ending",
       description: "Buy freedom with ₽300M or ₽500M and complete all tasks",
@@ -689,7 +722,7 @@ export const initialNodes: Node[] = [
   {
     id: "debtor-ending",
     type: "ending",
-    position: { x: COL_WIDTH * 2.1, y: ROW_HEIGHT * 32 },
+    position: { x: COL_WIDTH * 2.1, y: ROW_HEIGHT * 32.5 },
     data: {
       label: "⛓️ Debtor Ending",
       description: "Worst: Can't pay bribe - debts catch up",
@@ -761,8 +794,20 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#22c55e" },
   },
   {
-    id: "e-lk-recover",
+    id: "e-lk-blue-folders",
     source: "unlock-lightkeeper",
+    target: "lk-blue-folders",
+    style: { stroke: "#22c55e" },
+  },
+  {
+    id: "e-blue-folders-flare",
+    source: "lk-blue-folders",
+    target: "lk-flare-kills",
+    style: { stroke: "#22c55e" },
+  },
+  {
+    id: "e-flare-recover",
+    source: "lk-flare-kills",
     target: "recover-case-lk",
     style: { stroke: "#22c55e" },
   },
