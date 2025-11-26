@@ -610,7 +610,7 @@ export const initialNodes: Node[] = [
   {
     id: "survivor-ending",
     type: "ending",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 24 },
+    position: { x: COL_WIDTH * 0.73, y: ROW_HEIGHT * 24 },
     data: {
       label: "🛡️ Survivor Ending",
       description: "Buy freedom with ₽300M or ₽500M and complete all tasks",
