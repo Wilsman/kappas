@@ -590,7 +590,7 @@ export const initialNodes: Node[] = [
   {
     id: "savior-ending",
     type: "ending",
-    position: { x: -COL_WIDTH * 1.8, y: ROW_HEIGHT * 23 },
+    position: { x: -COL_WIDTH * 1.8, y: ROW_HEIGHT * 24 },
     data: {
       label: "🌟 Savior Ending",
       description: "Best: Save Tarkov, thwart bad actors. Complete ALL side quests + survive Terminal",
@@ -600,7 +600,7 @@ export const initialNodes: Node[] = [
   {
     id: "fallen-ending",
     type: "ending",
-    position: { x: -COL_WIDTH * 0.6, y: ROW_HEIGHT * 23 },
+    position: { x: -COL_WIDTH * 0.6, y: ROW_HEIGHT * 24 },
     data: {
       label: "� Fallen Ending",
       description: "Escape but 'fall into darkness' - skipped side quests or failed Terminal",
@@ -610,7 +610,7 @@ export const initialNodes: Node[] = [
   {
     id: "survivor-ending",
     type: "ending",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 23 },
+    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 24 },
     data: {
       label: "🛡️ Survivor Ending",
       description: "Buy freedom with ₽300M or ₽500M and complete all tasks",
@@ -620,7 +620,7 @@ export const initialNodes: Node[] = [
   {
     id: "debtor-ending",
     type: "ending",
-    position: { x: COL_WIDTH * 2.1, y: ROW_HEIGHT * 23 },
+    position: { x: COL_WIDTH * 2.1, y: ROW_HEIGHT * 24 },
     data: {
       label: "⛓️ Debtor Ending",
       description: "Worst: Can't pay bribe - debts catch up",
