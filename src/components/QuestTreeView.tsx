@@ -535,16 +535,20 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
               className="pl-10"
             />
           </div>
-          
+
           {/* Search Results Summary */}
           {searchResults && searchResults.length > 0 && (
             <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-2 rounded border">
               <div className="flex items-center gap-1 mb-1">
                 <Target className="h-3 w-3" />
-                <span className="font-medium">{searchResults.length} quest{searchResults.length > 1 ? 's' : ''} found</span>
+                <span className="font-medium">
+                  {searchResults.length} quest
+                  {searchResults.length > 1 ? "s" : ""} found
+                </span>
               </div>
               <div className="text-xs opacity-75">
-                🔍 Orange highlight = Search match • 🔗 Blue highlight = Dependency path • Auto-expanded to show paths
+                🔍 Orange highlight = Search match • 🔗 Blue highlight =
+                Dependency path • Auto-expanded to show paths
               </div>
             </div>
           )}
@@ -559,8 +563,10 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
             className="px-3 py-1 rounded border bg-background text-sm"
           >
             <option value="all">All Traders</option>
-            {availableTraders.map(trader => (
-              <option key={trader} value={trader}>{trader}</option>
+            {availableTraders.map((trader) => (
+              <option key={trader} value={trader}>
+                {trader}
+              </option>
             ))}
           </select>
 
@@ -574,11 +580,11 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
 
           {/* Clear Search */}
           {searchTerm && (
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
-                setSearchTerm('');
+                setSearchTerm("");
                 setSelectedTaskId(null);
               }}
             >
@@ -588,19 +594,22 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
 
           {/* Stats */}
           <div className="ml-auto text-sm text-muted-foreground">
-            {filteredTasks.filter(task => completedTasks.has(task.id)).length} / {filteredTasks.length} completed
+            {filteredTasks.filter((task) => completedTasks.has(task.id)).length}{" "}
+            / {filteredTasks.length} completed
           </div>
         </div>
       </div>
 
       {/* Selected Task Breadcrumb */}
       {selectedTaskId && (
-        <div className="border-b bg-card p-3">
-          <div className="text-xs text-muted-foreground mb-1">Dependency Path:</div>
+        <div className="sticky top-0 z-10 border-b bg-card p-3">
+          <div className="text-xs text-muted-foreground mb-1">
+            Dependency Path:
+          </div>
           <div className="flex items-center gap-1 flex-wrap">
             {(() => {
               const chain = getTaskDependencyChain(selectedTaskId, tasks);
-              const taskMap = new Map(tasks.map(task => [task.id, task]));
+              const taskMap = new Map(tasks.map((task) => [task.id, task]));
               return chain.map((taskId, index) => {
                 const task = taskMap.get(taskId);
                 if (!task) return null;
@@ -608,21 +617,25 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
                 const isCompleted = completedTasks.has(taskId);
                 return (
                   <React.Fragment key={taskId}>
-                    <span 
+                    <span
                       className={cn(
-                        'text-xs px-2 py-1 rounded cursor-pointer transition-colors',
-                        isLast ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'bg-gray-800 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-600',
-                        isCompleted && 'line-through opacity-60'
+                        "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
+                        isLast
+                          ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                          : "bg-gray-800 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-600",
+                        isCompleted && "line-through opacity-60"
                       )}
                       onClick={() => setSelectedTaskId(taskId)}
                     >
                       {task.name}
                     </span>
-                    {!isLast && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+                    {!isLast && (
+                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    )}
                   </React.Fragment>
                 );
               });
-            })()} 
+            })()}
           </div>
         </div>
       )}
@@ -636,7 +649,7 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
           </div>
         ) : (
           <div className="space-y-2">
-            {treeData.map(node => renderTreeNode(node))}
+            {treeData.map((node) => renderTreeNode(node))}
           </div>
         )}
       </div>

@@ -331,14 +331,20 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           <Input
             placeholder="Search tasks..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full"
           />
         </div>
         {/* Show/Hide Completed toggle */}
         <div className="flex items-center gap-2">
-          <Label htmlFor="show-completed" className="text-sm">Show Completed</Label>
-          <Switch id="show-completed" checked={showCompleted} onCheckedChange={setShowCompleted} />
+          <Label htmlFor="show-completed" className="text-sm">
+            Show Completed
+          </Label>
+          <Switch
+            id="show-completed"
+            checked={showCompleted}
+            onCheckedChange={setShowCompleted}
+          />
         </div>
         <Button
           variant="outline"
@@ -361,20 +367,20 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         {/* Group By controls moved here from sidebar */}
         <div className="flex items-center gap-2">
           <Button
-            variant={groupBy === 'trader' ? 'default' : 'outline'}
+            variant={groupBy === "trader" ? "default" : "outline"}
             size="sm"
             className="px-2"
-            onClick={() => onSetGroupBy('trader')}
+            onClick={() => onSetGroupBy("trader")}
             aria-label="Group by Trader"
             title="Group by Trader"
           >
             <UserCheck className="h-4 w-4" />
           </Button>
           <Button
-            variant={groupBy === 'map' ? 'default' : 'outline'}
+            variant={groupBy === "map" ? "default" : "outline"}
             size="sm"
             className="px-2"
-            onClick={() => onSetGroupBy('map')}
+            onClick={() => onSetGroupBy("map")}
             aria-label="Group by Map"
             title="Group by Map"
           >
@@ -383,31 +389,46 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         </div>
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Label htmlFor="player-level" className="text-sm text-muted-foreground">PMC Level</Label>
+            <Label
+              htmlFor="player-level"
+              className="text-sm text-muted-foreground"
+            >
+              PMC Level
+            </Label>
             <Input
               id="player-level"
               type="number"
               min={1}
-              value={Number.isFinite(playerLevel) ? playerLevel : ''}
-              onChange={e => setPlayerLevel(Math.max(1, Number(e.target.value) || 1))}
+              value={Number.isFinite(playerLevel) ? playerLevel : ""}
+              onChange={(e) =>
+                setPlayerLevel(Math.max(1, Number(e.target.value) || 1))
+              }
               className="w-20 h-8"
             />
           </div>
           <div className="flex items-center gap-2">
-            <Label htmlFor="level-filter" className="text-sm">Enable</Label>
-            <Switch id="level-filter" checked={enableLevelFilter} onCheckedChange={setEnableLevelFilter} />
+            <Label htmlFor="level-filter" className="text-sm">
+              Enable
+            </Label>
+            <Switch
+              id="level-filter"
+              checked={enableLevelFilter}
+              onCheckedChange={setEnableLevelFilter}
+            />
           </div>
         </div>
       </div>
 
       {/* Selected Task Breadcrumb */}
       {selectedTaskId && (
-        <div className="mb-3 border rounded-md bg-card p-3">
-          <div className="text-xs text-muted-foreground mb-1">Dependency Path:</div>
+        <div className="sticky top-0 z-10 mb-3 border rounded-md bg-card p-3">
+          <div className="text-xs text-muted-foreground mb-1">
+            Dependency Path:
+          </div>
           <div className="flex items-center gap-1 flex-wrap">
             {(() => {
               const chain = getTaskDependencyChain(selectedTaskId, tasks);
-              const taskMap = new Map(tasks.map(t => [t.id, t]));
+              const taskMap = new Map(tasks.map((t) => [t.id, t]));
               const crumbs = chain.map((tid, index) => {
                 const t = taskMap.get(tid);
                 if (!t) return null;
@@ -417,23 +438,31 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                   <React.Fragment key={tid}>
                     <span
                       className={cn(
-                        'text-xs px-2 py-1 rounded cursor-pointer transition-colors',
-                        isLast ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'bg-gray-800 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-600',
-                        isDone && 'line-through opacity-60'
+                        "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
+                        isLast
+                          ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                          : "bg-gray-800 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-600",
+                        isDone && "line-through opacity-60"
                       )}
                       onClick={() => handleBreadcrumbClick(tid)}
                     >
                       {t.name}
                     </span>
-                    {!isLast && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+                    {!isLast && (
+                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    )}
                   </React.Fragment>
                 );
               });
 
               // Compute a single next task (direct dependent of the current/last)
               const lastId = chain[chain.length - 1];
-              const nextCandidates = tasks.filter(t => t.taskRequirements?.some(req => req.task.id === lastId));
-              const nextTask = nextCandidates.sort((a, b) => a.name.localeCompare(b.name))[0];
+              const nextCandidates = tasks.filter((t) =>
+                t.taskRequirements?.some((req) => req.task.id === lastId)
+              );
+              const nextTask = nextCandidates.sort((a, b) =>
+                a.name.localeCompare(b.name)
+              )[0];
 
               return (
                 <>
@@ -443,8 +472,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                       <ArrowRight className="h-3 w-3 text-muted-foreground" />
                       <span
                         className={cn(
-                          'text-xs px-2 py-1 rounded cursor-pointer transition-colors',
-                          'bg-gray-700 text-white dark:bg-gray-800 hover:bg-gray-600'
+                          "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
+                          "bg-gray-700 text-white dark:bg-gray-800 hover:bg-gray-600"
                         )}
                         onClick={() => handleBreadcrumbClick(nextTask.id)}
                         title="Go to next task"
@@ -468,23 +497,31 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         onValueChange={setExpandedGroups}
       >
         {sortedGroups.map(([groupName, groupTasks]) => {
-          const completedCount = groupTasks.filter(t => completedTasks.has(t.id)).length;
+          const completedCount = groupTasks.filter((t) =>
+            completedTasks.has(t.id)
+          ).length;
           const totalCount = groupTasks.length;
-          const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+          const progress =
+            totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
           return (
-            <AccordionItem key={groupName} value={groupName} className="border rounded-lg bg-card">
+            <AccordionItem
+              key={groupName}
+              value={groupName}
+              className="border rounded-lg bg-card"
+            >
               <AccordionTrigger className="px-4 py-2 hover:no-underline">
                 <div className="flex items-center justify-between w-full">
                   <span className="text-lg font-semibold flex items-center gap-2">
-                    {groupBy === 'trader' && groupTasks[0]?.trader?.imageLink && (
-                      <img
-                        src={groupTasks[0].trader.imageLink}
-                        alt={groupName}
-                        loading="lazy"
-                        className="h-5 w-5 rounded-full object-cover"
-                      />
-                    )}
+                    {groupBy === "trader" &&
+                      groupTasks[0]?.trader?.imageLink && (
+                        <img
+                          src={groupTasks[0].trader.imageLink}
+                          alt={groupName}
+                          loading="lazy"
+                          className="h-5 w-5 rounded-full object-cover"
+                        />
+                      )}
                     {groupName}
                   </span>
                   <div className="flex items-center gap-4">
@@ -497,32 +534,34 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 border-t">
                 <div className="pr-2 space-y-1">
-                  {groupTasks.map(task => {
+                  {groupTasks.map((task) => {
                     const isCompleted = completedTasks.has(task.id);
                     return (
-                      <div key={task.id} ref={el => itemRefs.current.set(task.id, el)}>
+                      <div
+                        key={task.id}
+                        ref={(el) => itemRefs.current.set(task.id, el)}
+                      >
                         <Collapsible
                           open={selectedTaskId === task.id}
                           onOpenChange={(open) => {
                             if (open) setSelectedTaskId(task.id);
-                            else if (selectedTaskId === task.id) setSelectedTaskId(null);
+                            else if (selectedTaskId === task.id)
+                              setSelectedTaskId(null);
                           }}
                         >
                           {/* Main single-row */}
                           <div
-                            className={
-                              cn(
-                                "flex items-center gap-2 p-1.5 rounded-md transition-colors group",
-                                "hover:bg-muted"
-                              )
-                            }
+                            className={cn(
+                              "flex items-center gap-2 p-1.5 rounded-md transition-colors group",
+                              "hover:bg-muted"
+                            )}
                           >
                             <Checkbox
                               id={task.id}
                               checked={isCompleted}
                               onCheckedChange={() => onToggleComplete(task.id)}
                               disabled={false}
-                              onClick={e => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
                             />
                             {task.wikiLink && (
                               <a
@@ -530,7 +569,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-muted-foreground hover:text-foreground"
-                                onClick={e => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
                                 aria-label="Open wiki"
                               >
                                 <Link2 className="h-4 w-4" />
@@ -547,10 +586,17 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
                                 <span
                                   className={cn(
-                                    "flex-1 min-w-0 text-[15px] leading-tight flex items-center gap-2",
+                                    "flex-1 min-w-0 text-[15px] leading-tight flex items-center gap-2"
                                   )}
                                 >
-                                  <span className={cn("truncate", isCompleted && "line-through")}>{task.name}</span>
+                                  <span
+                                    className={cn(
+                                      "truncate",
+                                      isCompleted && "line-through"
+                                    )}
+                                  >
+                                    {task.name}
+                                  </span>
                                 </span>
 
                                 {/* Right-side compact info */}
@@ -564,10 +610,20 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                     />
                                   )}
                                   {task.kappaRequired && (
-                                    <span title="Kappa" className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">K</span>
+                                    <span
+                                      title="Kappa"
+                                      className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500"
+                                    >
+                                      K
+                                    </span>
                                   )}
                                   {task.lightkeeperRequired && (
-                                    <span title="Lightkeeper" className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500">LK</span>
+                                    <span
+                                      title="Lightkeeper"
+                                      className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500"
+                                    >
+                                      LK
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -579,40 +635,54 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                             <div className="mx-7 mb-2 rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground space-y-2">
                               {task.map && (
                                 <div className="flex items-center gap-2">
-                                  <span className="font-medium text-foreground/80">Map:</span>
+                                  <span className="font-medium text-foreground/80">
+                                    Map:
+                                  </span>
                                   <span>{task.map.name}</span>
                                 </div>
                               )}
 
-                              {task.objectives && task.objectives.length > 0 && (
-                                <div className="space-y-1">
-                                  <div className="inline-flex items-center gap-1 text-foreground/80">
-                                    <span className="text-[11px] text-yellow-600">Objectives</span>
+                              {task.objectives &&
+                                task.objectives.length > 0 && (
+                                  <div className="space-y-1">
+                                    <div className="inline-flex items-center gap-1 text-foreground/80">
+                                      <span className="text-[11px] text-yellow-600">
+                                        Objectives
+                                      </span>
+                                    </div>
+                                    <ul className="list-disc pl-5 space-y-0.5">
+                                      {task.objectives.map(
+                                        (objective, index) => (
+                                          <li key={index}>
+                                            {"playerLevel" in objective
+                                              ? `Reach level ${objective.playerLevel}`
+                                              : objective.description}
+                                          </li>
+                                        )
+                                      )}
+                                    </ul>
                                   </div>
-                                  <ul className="list-disc pl-5 space-y-0.5">
-                                    {task.objectives.map((objective, index) => (
-                                      <li key={index}>
-                                        {'playerLevel' in objective
-                                          ? `Reach level ${objective.playerLevel}`
-                                          : objective.description}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
+                                )}
 
-                              {((task.startRewards?.items && task.startRewards.items.length > 0) ||
-                                (task.finishRewards?.items && task.finishRewards.items.length > 0)) && (
+                              {((task.startRewards?.items &&
+                                task.startRewards.items.length > 0) ||
+                                (task.finishRewards?.items &&
+                                  task.finishRewards.items.length > 0)) && (
                                 <div className="space-y-1">
                                   <div className="inline-flex items-center gap-1 text-foreground/80">
                                     <Award className="h-3 w-3" />
                                     <span className="text-[11px]">Rewards</span>
                                   </div>
                                   <ul className="list-disc pl-5 space-y-0.5">
-                                    {[...(task.startRewards?.items ?? []), ...(task.finishRewards?.items ?? [])].map((reward, index) => (
+                                    {[
+                                      ...(task.startRewards?.items ?? []),
+                                      ...(task.finishRewards?.items ?? []),
+                                    ].map((reward, index) => (
                                       <li key={index}>
                                         {reward.item.name}
-                                        {reward.count > 1 ? ` (${reward.count})` : ''}
+                                        {reward.count > 1
+                                          ? ` (${reward.count})`
+                                          : ""}
                                       </li>
                                     ))}
                                   </ul>
@@ -630,8 +700,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           );
         })}
       </Accordion>
-
-
     </div>
   );
 };
