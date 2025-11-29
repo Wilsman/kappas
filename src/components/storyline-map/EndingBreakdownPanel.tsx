@@ -1,5 +1,5 @@
 import { Panel } from "@xyflow/react";
-import { X, Clock, Coins, Bitcoin, ChevronRight } from "lucide-react";
+import { X, Clock, Coins, Bitcoin, ChevronRight, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PathBreakdown } from "./storylineMapData";
 
@@ -14,11 +14,17 @@ export function EndingBreakdownPanel({
   breakdown,
   onClose,
 }: EndingBreakdownPanelProps) {
-  const { steps, totalCostRoubles, totalCostBTC, totalTimeGateHours } = breakdown;
+  const {
+    steps,
+    totalCostRoubles,
+    totalCostBTC,
+    totalCraftHours,
+    totalTimeGateHours,
+  } = breakdown;
 
-  // Filter to show only significant steps (with costs or time gates)
+  // Filter to show only significant steps (with costs, crafts, or time gates)
   const significantSteps = steps.filter(
-    (s) => s.cost || s.isTimeGate
+    (s) => s.cost || s.isCraft || s.isTimeGate
   );
 
   return (
@@ -43,12 +49,21 @@ export function EndingBreakdownPanel({
         </div>
 
         {/* Totals Summary */}
-        <div className="p-3 border-b bg-muted/10 grid grid-cols-3 gap-2 text-center">
+        <div className="p-3 border-b bg-muted/10 grid grid-cols-4 gap-2 text-center">
+          {totalCraftHours > 0 && (
+            <div className="space-y-0.5">
+              <div className="flex items-center justify-center gap-1 text-cyan-500">
+                <Wrench className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold">Crafts</span>
+              </div>
+              <p className="text-sm font-bold">{totalCraftHours}h</p>
+            </div>
+          )}
           {totalTimeGateHours > 0 && (
             <div className="space-y-0.5">
-              <div className="flex items-center justify-center gap-1 text-amber-500">
+              <div className="flex items-center justify-center gap-1 text-rose-500">
                 <Clock className="h-3.5 w-3.5" />
-                <span className="text-xs font-semibold">Time Gates</span>
+                <span className="text-xs font-semibold">Wait</span>
               </div>
               <p className="text-sm font-bold">{totalTimeGateHours}h</p>
             </div>
@@ -75,11 +90,12 @@ export function EndingBreakdownPanel({
               <p className="text-sm font-bold">{totalCostBTC} BTC</p>
             </div>
           )}
-          {totalTimeGateHours === 0 &&
+          {totalCraftHours === 0 &&
+            totalTimeGateHours === 0 &&
             totalCostRoubles === 0 &&
             totalCostBTC === 0 && (
-              <div className="col-span-3 text-xs text-muted-foreground">
-                No major costs or time gates
+              <div className="col-span-4 text-xs text-muted-foreground">
+                No major costs or time requirements
               </div>
             )}
         </div>
@@ -108,10 +124,16 @@ export function EndingBreakdownPanel({
                     </p>
                   )}
                   <div className="flex flex-wrap gap-2 mt-0.5">
+                    {step.isCraft && step.craftHours && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-cyan-500">
+                        <Wrench className="h-2.5 w-2.5" />
+                        {step.craftHours}h craft
+                      </span>
+                    )}
                     {step.isTimeGate && step.timeGateHours && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500">
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-rose-500">
                         <Clock className="h-2.5 w-2.5" />
-                        {step.timeGateHours}h
+                        {step.timeGateHours}h wait
                       </span>
                     )}
                     {step.cost !== undefined && step.cost > 0 && (

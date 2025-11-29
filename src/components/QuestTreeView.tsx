@@ -600,43 +600,107 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
         </div>
       </div>
 
-      {/* Selected Task Breadcrumb */}
+      {/* Selected Task Breadcrumb - shows all predecessors and successors */}
       {selectedTaskId && (
         <div className="sticky top-0 z-10 border-b bg-card p-3">
-          <div className="text-xs text-muted-foreground mb-1">
-            Dependency Path:
-          </div>
-          <div className="flex items-center gap-1 flex-wrap">
-            {(() => {
-              const chain = getTaskDependencyChain(selectedTaskId, tasks);
-              const taskMap = new Map(tasks.map((task) => [task.id, task]));
-              return chain.map((taskId, index) => {
-                const task = taskMap.get(taskId);
-                if (!task) return null;
-                const isLast = index === chain.length - 1;
-                const isCompleted = completedTasks.has(taskId);
-                return (
-                  <React.Fragment key={taskId}>
-                    <span
-                      className={cn(
-                        "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
-                        isLast
-                          ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                          : "bg-gray-800 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-600",
-                        isCompleted && "line-through opacity-60"
-                      )}
-                      onClick={() => setSelectedTaskId(taskId)}
-                    >
-                      {task.name}
-                    </span>
-                    {!isLast && (
-                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
+          {(() => {
+            const taskMap = new Map(tasks.map((t) => [t.id, t]));
+            const currentTask = taskMap.get(selectedTaskId);
+            if (!currentTask) return null;
+
+            // Get direct predecessors (tasks this one requires)
+            const predecessors = currentTask.taskRequirements
+              .map((req) => taskMap.get(req.task.id))
+              .filter((t): t is Task => !!t)
+              .sort((a, b) => a.name.localeCompare(b.name));
+
+            // Get direct successors (tasks that require this one)
+            const successors = tasks
+              .filter((t) =>
+                t.taskRequirements?.some(
+                  (req) => req.task.id === selectedTaskId
+                )
+              )
+              .sort((a, b) => a.name.localeCompare(b.name));
+
+            return (
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Previous tasks */}
+                {predecessors.length > 0 && (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        Previous
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {predecessors.map((t) => (
+                          <span
+                            key={t.id}
+                            className={cn(
+                              "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
+                              "bg-gray-800 hover:bg-gray-600",
+                              completedTasks.has(t.id) &&
+                                "line-through opacity-60"
+                            )}
+                            onClick={() => setSelectedTaskId(t.id)}
+                          >
+                            {t.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground self-end mb-1" />
+                  </>
+                )}
+
+                {/* Current task */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Current
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
+                      "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
+                      completedTasks.has(selectedTaskId) &&
+                        "line-through opacity-60"
                     )}
-                  </React.Fragment>
-                );
-              });
-            })()}
-          </div>
+                    onClick={() => setSelectedTaskId(selectedTaskId)}
+                  >
+                    {currentTask.name}
+                  </span>
+                </div>
+
+                {/* Next tasks (leads to) */}
+                {successors.length > 0 && (
+                  <>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground self-end mb-1" />
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        Leads to
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {successors.map((t) => (
+                          <span
+                            key={t.id}
+                            className={cn(
+                              "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
+                              "bg-gray-700 hover:bg-gray-600",
+                              completedTasks.has(t.id) &&
+                                "line-through opacity-60"
+                            )}
+                            onClick={() => setSelectedTaskId(t.id)}
+                          >
+                            {t.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

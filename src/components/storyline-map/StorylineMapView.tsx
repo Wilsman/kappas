@@ -139,22 +139,41 @@ export function StorylineMapView({
     };
   }, [selectedNodeId]);
 
-  // Helper to detect time gates from description or note
-  const detectTimeGate = (data: Record<string, unknown>) => {
+  // Helper to detect crafts and time gates from description or note
+  // Crafts: have "craft" in text (e.g., "55 hour craft", "6 hour craft")
+  // Time gates: hours without "craft" (e.g., "72 hour wait", pure waiting)
+  const detectWaitTimes = (data: Record<string, unknown>) => {
     const description = data.description as string | undefined;
     const note = data.note as string | undefined;
-    const match =
-      description?.match(/(\d+)\s*hour/i) || note?.match(/(\d+)\s*hour/i);
+    const combined = `${description || ""} ${note || ""}`;
+
+    // Check for craft mentions
+    const craftMatch = combined.match(/(\d+)\s*hour\s*craft/i);
+    const isCraft = !!craftMatch || /\bcraft\b/i.test(combined);
+    const craftHours = craftMatch ? parseInt(craftMatch[1], 10) : undefined;
+
+    // Check for general hour mentions (time gates are hours WITHOUT craft)
+    const hourMatch = combined.match(/(\d+)\s*hour/i);
+    const hasHours = !!hourMatch;
+    const hours = hourMatch ? parseInt(hourMatch[1], 10) : undefined;
+
+    // Time gate = has hours but NOT a craft (pure waiting)
+    const isTimeGate = hasHours && !isCraft;
+
     return {
-      isTimeGate: !!match,
-      timeGateHours: match ? parseInt(match[1], 10) : undefined,
+      isCraft,
+      craftHours: isCraft ? craftHours || hours : undefined,
+      isTimeGate,
+      timeGateHours: isTimeGate ? hours : undefined,
     };
   };
 
   // Initialize nodes with completion status from props
   const initialNodesWithState = useMemo(() => {
     return initialNodes.map((node) => {
-      const timeGateInfo = detectTimeGate(node.data as Record<string, unknown>);
+      const waitTimeInfo = detectWaitTimes(
+        node.data as Record<string, unknown>
+      );
       return {
         ...node,
         data: {
@@ -163,7 +182,7 @@ export function StorylineMapView({
           isCurrentStep: node.id === currentNodeId,
           isSelected: node.id === selectedNodeId,
           isOnPath: pathNodeIds.has(node.id),
-          ...timeGateInfo,
+          ...waitTimeInfo,
         },
       };
     });
@@ -275,14 +294,16 @@ export function StorylineMapView({
           nodeColor={(node) => {
             const data = node.data as Record<string, unknown>;
             const hasCost = (data.cost as number) > 0;
+            const isCraft = data.isCraft as boolean;
             const isTimeGate = data.isTimeGate as boolean;
-            if (data.isCurrentStep) return "#f59e0b";
-            if (data.isCompleted) return "#22c55e";
+            if (data.isCurrentStep) return "#f59e0b"; // amber
+            if (data.isCompleted) return "#22c55e"; // green
             if (node.type === "decision") return "#eab308";
             if (node.type === "ending") return "#ef4444";
-            if (hasCost && isTimeGate) return "#f97316"; // orange
-            if (hasCost) return "#eab308"; // yellow
-            if (isTimeGate) return "#fb7185"; // rose
+            if (hasCost && isTimeGate) return "#f97316"; // orange (cost + wait)
+            if (hasCost) return "#eab308"; // yellow (cost only)
+            if (isCraft) return "#22d3ee"; // cyan (craft)
+            if (isTimeGate) return "#fb7185"; // rose (time-gate wait)
             return "#444";
           }}
           maskColor="rgba(0, 0, 0, 0.8)"

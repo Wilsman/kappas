@@ -92,11 +92,14 @@ export interface PathBreakdown {
     description?: string;
     note?: string;
     cost?: number;
+    isCraft?: boolean;
+    craftHours?: number;
     isTimeGate?: boolean;
     timeGateHours?: number;
   }>;
   totalCostRoubles: number;
   totalCostBTC: number;
+  totalCraftHours: number;
   totalTimeGateHours: number;
 }
 
@@ -104,6 +107,7 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
   const steps: PathBreakdown["steps"] = [];
   let totalCostRoubles = 0;
   let totalCostBTC = 0;
+  let totalCraftHours = 0;
   let totalTimeGateHours = 0;
 
   for (const node of pathNodes) {
@@ -112,14 +116,25 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
     const description = data.description as string | undefined;
     const note = data.note as string | undefined;
     const cost = data.cost as number | undefined;
+    const combined = `${description || ''} ${note || ''}`;
 
-    // Detect time gates from description OR note field
-    const timeGateMatch =
-      description?.match(/(\d+)\s*hour/i) || note?.match(/(\d+)\s*hour/i);
-    const isTimeGate = !!timeGateMatch;
-    const timeGateHours = timeGateMatch ? parseInt(timeGateMatch[1], 10) : 0;
+    // Detect crafts: have "craft" in text (e.g., "55 hour craft", "6 hour craft")
+    const craftMatch = combined.match(/(\d+)\s*hour\s*craft/i);
+    const isCraft = !!craftMatch || /\bcraft\b/i.test(combined);
+    
+    // Detect general hour mentions
+    const hourMatch = combined.match(/(\d+)\s*hour/i);
+    const hours = hourMatch ? parseInt(hourMatch[1], 10) : 0;
+    const craftHours = isCraft ? (craftMatch ? parseInt(craftMatch[1], 10) : hours) : 0;
+    
+    // Time gate = has hours but NOT a craft (pure waiting)
+    const isTimeGate = !!hourMatch && !isCraft;
+    const timeGateHours = isTimeGate ? hours : 0;
 
-    if (isTimeGate) {
+    if (isCraft && craftHours > 0) {
+      totalCraftHours += craftHours;
+    }
+    if (isTimeGate && timeGateHours > 0) {
       totalTimeGateHours += timeGateHours;
     }
 
@@ -138,6 +153,8 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
       description,
       note,
       cost,
+      isCraft,
+      craftHours: isCraft ? craftHours : undefined,
       isTimeGate,
       timeGateHours: isTimeGate ? timeGateHours : undefined,
     });
@@ -147,6 +164,7 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
     steps,
     totalCostRoubles,
     totalCostBTC,
+    totalCraftHours,
     totalTimeGateHours,
   };
 }
@@ -290,9 +308,9 @@ export const initialNodes: Node[] = [
     type: "story",
     position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 3 },
     data: {
-      label: "⏳ 55 Hour Timegate",
-      description: "Wait ~55 hours before case can be unlocked",
-      note: "Time gate penalty for keeping case",
+      label: "⏳ 55 Hour Craft",
+      description: "Craft jammer at Workbench to unlock case",
+      note: "55 hour craft, requires continuous power",
     },
   },
   {
@@ -330,8 +348,8 @@ export const initialNodes: Node[] = [
     position: { x: 0, y: ROW_HEIGHT * 9 },
     data: {
       label: "Obtain Signal Jammer",
-      description: "Mechanic advised to look in laboratories",
-      note: "Location: The Lab",
+      description: "Find jammer in Labs - 3 spawn locations",
+      note: "Spawns: Round Table/Cats, Residential Unit, Conference Room",
     },
   },
   {
@@ -406,13 +424,23 @@ export const initialNodes: Node[] = [
     },
   },
   {
+    id: "obtain-blank-rfid",
+    type: "story",
+    position: { x: -COL_WIDTH * 1.8, y: ROW_HEIGHT * 17 },
+    data: {
+      label: "Obtain Blank RFID Card",
+      description: "Find a blank RFID card at any keycard spawn location",
+      note: "Pure RNG chance - Labs keycard room has spawns",
+    },
+  },
+  {
     id: "obtain-lab-master-pass",
     type: "story",
-    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 17 },
+    position: { x: -COL_WIDTH * 0.6, y: ROW_HEIGHT * 17 },
     data: {
       label: "Obtain Lab Master Pass",
-      description: "Find in TerraGroup Lab offices (Kruglov's office)",
-      note: "Location: The Lab",
+      description: "Open new keycard room on Labs and open the safe inside",
+      note: "Uses 2 black keycard charges!",
     },
   },
   {
@@ -478,8 +506,8 @@ export const initialNodes: Node[] = [
     position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 24 },
     data: {
       label: "Collect RFID Encrypter",
-      description: "Collect from Klimov Street 14A",
-      note: "Location: Streets of Tarkov",
+      description: "Collect from Elektronik's apartment (Klimov Street 14A)",
+      note: "Above Labs transit on Streets",
     },
   },
   {
@@ -644,7 +672,7 @@ export const initialNodes: Node[] = [
   {
     id: "prapor-tasks",
     type: "story",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 21 },
+    position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 21 },
     data: {
       label: "Complete Prapor's Tasks in Time",
       description: "Need to hurry, 72 hours for these three missions (0/3)",
@@ -653,7 +681,7 @@ export const initialNodes: Node[] = [
   {
     id: "kill-pmcs-raid",
     type: "story",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 22 },
+    position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 22 },
     data: {
       label: "Eliminate PMC Operatives in One Raid",
       description: "Can't leave until all 4 targets are eliminated (0/4)",
@@ -662,7 +690,7 @@ export const initialNodes: Node[] = [
   {
     id: "streets-targets",
     type: "story",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 23 },
+    position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 23 },
     data: {
       label: "Eliminate Targets on Streets of Tarkov",
       description: "Clear out 50 targets on Streets (0/50)",
@@ -671,7 +699,7 @@ export const initialNodes: Node[] = [
   {
     id: "convert-evidence",
     type: "story",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 24 },
+    position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 24 },
     data: {
       label: "Convert Evidence Folders to SSD",
       description: "Digitalize info at Intelligence Center in Hideout (craft)",
@@ -930,9 +958,21 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#22c55e" },
   },
   {
+    id: "e-activate-rfid-blank",
+    source: "activate-rfid-case",
+    target: "obtain-blank-rfid",
+    style: { stroke: "#22c55e" },
+  },
+  {
     id: "e-activate-rfid-masterpass",
     source: "activate-rfid-case",
     target: "obtain-lab-master-pass",
+    style: { stroke: "#22c55e" },
+  },
+  {
+    id: "e-blank-rfid-use",
+    source: "obtain-blank-rfid",
+    target: "use-master-pass",
     style: { stroke: "#22c55e" },
   },
   {
@@ -1093,10 +1133,12 @@ export const initialEdges: Edge[] = [
   },
 
   // ============ POST-PAYMENT STEPS ============
+  // 300M path skips Prapor's tasks entirely - goes directly to evacuation
   {
-    id: "e-300m-prapor-tasks",
+    id: "e-300m-skip-to-evacuation",
     source: "pay-300m",
-    target: "prapor-tasks",
+    target: "wait-evacuation",
+    label: "Skip Tasks",
     style: { stroke: "#22c55e" },
   },
   {

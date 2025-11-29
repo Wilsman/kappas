@@ -12,13 +12,17 @@ export interface StoryNodeData {
   isUndetermined?: boolean;
   isTimeGate?: boolean;
   timeGateHours?: number;
+  isCraft?: boolean;
+  craftHours?: number;
   note?: string;
 }
 
 function StoryNode({ data }: { data: StoryNodeData }) {
   const hasCost = data.cost !== undefined && data.cost > 0;
   const isTimeGate = data.isTimeGate;
-  const hasCostOrTime = hasCost || isTimeGate;
+  const isCraft = data.isCraft;
+  const hasWaitTime = isTimeGate || isCraft;
+  const hasCostOrTime = hasCost || hasWaitTime;
 
   return (
     <div
@@ -29,12 +33,27 @@ function StoryNode({ data }: { data: StoryNodeData }) {
         // Current step
         data.isCurrentStep &&
           "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/50",
-        // Time gate styling (when not completed/current)
+        // Craft styling (when not completed/current) - cyan/blue
+        !data.isCompleted &&
+          !data.isCurrentStep &&
+          isCraft &&
+          !isTimeGate &&
+          !hasCost &&
+          "border-cyan-400/70 bg-cyan-500/5",
+        // Time gate styling (when not completed/current) - rose
         !data.isCompleted &&
           !data.isCurrentStep &&
           isTimeGate &&
+          !isCraft &&
           !hasCost &&
           "border-rose-400/70 bg-rose-500/5",
+        // Both craft and time gate (rare)
+        !data.isCompleted &&
+          !data.isCurrentStep &&
+          isCraft &&
+          isTimeGate &&
+          !hasCost &&
+          "border-purple-400/70 bg-purple-500/5",
         // Cost styling (when not completed/current)
         !data.isCompleted &&
           !data.isCurrentStep &&
@@ -65,17 +84,23 @@ function StoryNode({ data }: { data: StoryNodeData }) {
         className={cn(
           "!bg-primary",
           data.isUndetermined && "!bg-purple-500",
+          isCraft && !isTimeGate && !data.isCompleted && "!bg-cyan-400",
           isTimeGate && !data.isCompleted && "!bg-rose-400",
           hasCost && !data.isCompleted && "!bg-yellow-500"
         )}
       />
       <div className="space-y-1.5">
-        {/* Badges row for time gate and cost indicators */}
+        {/* Badges row for craft, time gate, and cost indicators */}
         {hasCostOrTime && !data.isCompleted && (
           <div className="flex flex-wrap gap-1 mb-1">
+            {isCraft && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] font-medium text-cyan-400">
+                🔧 {data.craftHours ? `${data.craftHours}h craft` : "Craft"}
+              </span>
+            )}
             {isTimeGate && (
               <span className="inline-flex items-center gap-0.5 rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-medium text-rose-400">
-                ⏳ {data.timeGateHours ? `${data.timeGateHours}h` : "Wait"}
+                ⏳ {data.timeGateHours ? `${data.timeGateHours}h wait` : "Wait"}
               </span>
             )}
             {hasCost && (

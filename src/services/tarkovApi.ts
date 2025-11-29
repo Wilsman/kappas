@@ -2,6 +2,36 @@ import { TaskData, CollectorItemsData, HideoutStationsData, AchievementsData } f
 
 const TARKOV_API_URL = 'https://api.tarkov.dev/graphql';
 
+// ============================================================================
+// TEMPORARY TASK REQUIREMENT OVERRIDES
+// Set to false when the API is fixed and these overrides are no longer needed
+// ============================================================================
+const ENABLE_TASK_REQUIREMENT_OVERRIDES = true;
+
+// Map of taskId -> array of requirement task IDs to REMOVE
+const TASK_REQUIREMENT_OVERRIDES: Record<string, string[]> = {
+  // Test Drive - Part 1: Remove incorrect Grenadier dependency
+  '5c0bd94186f7747a727f09b2': ['5c0d190cd09282029f5390d8'], // Grenadier
+  // Huntsman Path - Justice: Remove incorrect Trophy dependency (both should depend on Secured Perimeter)
+  '5d25e43786f7740a212217fa': ['5d25e2c386f77443e7549029'], // Huntsman Path - Trophy
+};
+
+function applyTaskRequirementOverrides<T extends { id: string; taskRequirements: { task: { id: string; name: string } }[] }>(tasks: T[]): T[] {
+  if (!ENABLE_TASK_REQUIREMENT_OVERRIDES) return tasks;
+  
+  return tasks.map(task => {
+    const overrides = TASK_REQUIREMENT_OVERRIDES[task.id];
+    if (!overrides || overrides.length === 0) return task;
+    
+    return {
+      ...task,
+      taskRequirements: task.taskRequirements.filter(
+        req => !overrides.includes(req.task.id)
+      ),
+    };
+  });
+}
+
 interface CombinedApiData {
   data: {
     tasks: TaskData['data']['tasks'];
@@ -198,7 +228,10 @@ export async function fetchCombinedData(): Promise<{
 
   // Transform the combined result into separate TaskData and CollectorItemsData
   // Aggregate maps from objectives into task.maps array
-  const tasksWithMaps = result.data.tasks.map(task => {
+  // Apply task requirement overrides before processing
+  const tasksWithOverrides = applyTaskRequirementOverrides(result.data.tasks);
+  
+  const tasksWithMaps = tasksWithOverrides.map(task => {
     const mapsSet = new Set<string>();
     
     // Collect unique map names from all objectives
