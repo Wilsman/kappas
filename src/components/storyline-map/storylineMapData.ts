@@ -201,6 +201,7 @@ export const initialNodes: Node[] = [
     data: {
       label: "Decision 1: The Armored Case",
       description: "Hand over to Prapor or keep it for yourself?",
+      note: "Only matters if you refuse Mr. Kerman at Decision 2 (affects final bribe cost)",
       isIrreversible: true,
     },
   },
@@ -212,9 +213,10 @@ export const initialNodes: Node[] = [
     position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 1 },
     data: {
       label: "Hand Over to Prapor",
-      description: "₽1M reward, keep Prapor's trust (Recommended)",
+      description: "₽1M reward, keep Prapor's trust",
+      note: "If you refuse Mr. Kerman later: final bribe cost ₽300M (saves ₽200M)",
       cost: -1000000, // Negative = reward
-      isIrreversible: true,
+      isIrreversible: false,
     },
   },
   {
@@ -300,7 +302,8 @@ export const initialNodes: Node[] = [
     data: {
       label: "Keep the Case",
       description: "Prapor gets mad: -0.5 rep",
-      isIrreversible: true,
+      note: "If you refuse Mr. Kerman later: final bribe cost ₽500M",
+      isIrreversible: false,
     },
   },
   {
@@ -634,7 +637,8 @@ export const initialNodes: Node[] = [
     position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 18.75 },
     data: {
       label: "Decision 3: Pay Prapor's Bribe?",
-      description: "₽300M (gave case) or ₽500M (kept case) to escape?",
+      description: "₽300M (gave case to Prapor) or ₽500M (kept case) to escape?",
+      note: "Cost determined by your Decision 1 choice",
       isIrreversible: true,
     },
   },
@@ -644,7 +648,8 @@ export const initialNodes: Node[] = [
     position: { x: COL_WIDTH * 0.2, y: ROW_HEIGHT * 20 },
     data: {
       label: "Pay ₽300 Million",
-      description: "Loyalty discount - you gave Prapor the case",
+      description: "Loyalty discount - you gave Prapor the case earlier",
+      note: "₽200M savings from Decision 1 choice",
       cost: 300000000,
     },
   },
@@ -654,7 +659,8 @@ export const initialNodes: Node[] = [
     position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 20 },
     data: {
       label: "Pay ₽500 Million",
-      description: "No discount - you kept the case from Prapor",
+      description: "No discount - you kept the case from Prapor earlier",
+      note: "₽200M penalty from Decision 1 choice",
       cost: 500000000,
     },
   },
@@ -716,13 +722,23 @@ export const initialNodes: Node[] = [
     },
   },
   {
-    id: "timegate-indefinite",
+    id: "obtain-prapor-letter",
     type: "story",
     position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 26 },
     data: {
-      label: "⏳ Indefinite Timegate",
-      description: "Unknown wait time before evacuation opens",
-      note: "May take considerable time",
+      label: "Obtain Prapor's Letter",
+      description: "Buy 'Prapor's letter for the port checkpoint' from Prapor",
+      note: "Can buy 2 per reset",
+    },
+  },
+  {
+    id: "terminal-transit-shoreline",
+    type: "story",
+    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 27 },
+    data: {
+      label: "Terminal Transit (Shoreline)",
+      description: "Take letter to Terminal transit on Shoreline, survive Terminal",
+      note: "Must be between 22:00 - 04:00",
     },
   },
 
@@ -764,10 +780,10 @@ export const initialNodes: Node[] = [
   {
     id: "survivor-ending",
     type: "ending",
-    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 33.5 },
+    position: { x: COL_WIDTH * 0.7, y: ROW_HEIGHT * 29 },
     data: {
       label: "🛡️ Survivor Ending",
-      description: "Buy freedom with ₽300M or ₽500M and complete all tasks",
+      description: "Escape Tarkov through Terminal after paying Prapor's bribe",
       endingType: "survivor",
     },
   },
@@ -1172,14 +1188,20 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#3b82f6" },
   },
   {
-    id: "e-evacuation-timegate",
+    id: "e-evacuation-prapor-letter",
     source: "wait-evacuation",
-    target: "timegate-indefinite",
+    target: "obtain-prapor-letter",
     style: { stroke: "#3b82f6" },
   },
   {
-    id: "e-timegate-survivor",
-    source: "timegate-indefinite",
+    id: "e-prapor-letter-terminal",
+    source: "obtain-prapor-letter",
+    target: "terminal-transit-shoreline",
+    style: { stroke: "#3b82f6" },
+  },
+  {
+    id: "e-terminal-survivor",
+    source: "terminal-transit-shoreline",
     target: "survivor-ending",
     style: { stroke: "#3b82f6" },
   },
