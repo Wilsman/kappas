@@ -16,6 +16,7 @@ import "@xyflow/react/dist/style.css";
 import { toPng } from "html-to-image";
 
 import StoryNode from "./StoryNode";
+import CraftNode from "./CraftNode";
 import DecisionNode from "./DecisionNode";
 import EndingNode from "./EndingNode";
 import UnknownZone from "./UnknownZone";
@@ -28,11 +29,18 @@ import {
   getPathBreakdown,
   getPathEdgeIds,
 } from "./storylineMapData";
-import { Map, ArrowLeft, AlertTriangle, Download } from "lucide-react";
+import {
+  Map,
+  ArrowLeft,
+  AlertTriangle,
+  Download,
+  ExternalLink,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const nodeTypes = {
   story: StoryNode,
+  craft: CraftNode,
   decision: DecisionNode,
   ending: EndingNode,
   zone: UnknownZone,
@@ -233,7 +241,7 @@ export function StorylineMapView({
   // Double-click to toggle completion (when unlocked)
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.type === "story" && !nodesLocked) {
+      if ((node.type === "story" || node.type === "craft") && !nodesLocked) {
         onToggleNode(node.id);
       }
     },
@@ -331,8 +339,32 @@ export function StorylineMapView({
               <Map className="h-6 w-6 text-primary" />
               <h1 className="font-bold text-lg">Tarkov Storyline Map</h1>
             </div>
-            <div className="mb-2">
+            <div className="mb-2 flex gap-2">
               <DownloadButton />
+            </div>
+            <div className="mb-2">
+              <a
+                href="https://x.com/Callsign_Smokey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/30 hover:shadow-md transition-all duration-200 hover:scale-105 text-xs"
+              >
+                <svg
+                  className="w-3 h-3 text-primary"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                <span className="font-medium text-primary group-hover:text-primary/90">
+                  @Callsign_Smokey
+                </span>
+                <span className="text-muted-foreground group-hover:text-muted-foreground/80">
+                  • Storyline Data
+                </span>
+                <ExternalLink className="w-2.5 h-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+              </a>
             </div>
             {/* WIP Warning */}
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2">
