@@ -26,125 +26,6 @@ export interface StorylineQuest {
 
 export const STORYLINE_QUESTS: StorylineQuest[] = [
   {
-    id: "falling-skies",
-    name: "Falling Skies",
-    description:
-      "Best method: Keep doing Tour until completing Mechanic's quest, then go to the broken plane in Woods",
-    notes:
-      "⚠️ Known Issues:\n• Quest is rumored to be bugged\n• Some reports say standard accounts need 0.2 Prapor Reputation to progress\n• Quest actually requires 'Reach Prapor LVL 2' which may cause softlock for some players",
-    icon: "/2.png",
-    objectives: [
-      {
-        id: "falling-skies-main-1",
-        type: "main",
-        description: "Locate the fallen plane",
-      },
-      {
-        id: "falling-skies-main-2",
-        type: "main",
-        description:
-          "Reach Loyalty Level 2 with Prapor (Non-Unheard Or EOD Only)",
-      },
-      {
-        id: "falling-skies-main-3",
-        type: "main",
-        description: "Ask the traders about the fallen plane",
-      },
-      {
-        id: "falling-skies-main-4",
-        type: "main",
-        description: "Gather information from Therapist",
-      },
-      {
-        id: "falling-skies-opt-1",
-        type: "optional",
-        description: "Hand over cash to Therapist 2,000$",
-      },
-      {
-        id: "falling-skies-main-5",
-        type: "main",
-        description:
-          "Retrieve the flash drive from one of the G-Wagon SUVs (Shoreline near Tunnel)",
-      },
-      {
-        id: "falling-skies-main-6",
-        type: "main",
-        description: "Hand over flash drive to Prapor",
-      },
-      {
-        id: "falling-skies-main-7",
-        type: "main",
-        description: "Wait for Prapor",
-      },
-      {
-        id: "falling-skies-main-8",
-        type: "main",
-        description: "Retrieve the plane's flight recorder",
-      },
-      {
-        id: "falling-skies-main-9",
-        type: "main",
-        description:
-          "Leave the flight recorder in the specified spot (Shoreline in the house corner room at the fishers' island)",
-      },
-      {
-        id: "falling-skies-main-10",
-        type: "main",
-        description: "Visit Prapor",
-      },
-      {
-        id: "falling-skies-main-11",
-        type: "main",
-        description: "Hand over 2 Toolset",
-      },
-      {
-        id: "falling-skies-main-12",
-        type: "main",
-        description: "Hand over 3 Rechargeable battery",
-      },
-      {
-        id: "falling-skies-main-13",
-        type: "main",
-        description: "Hand over 5 Printed circuit board",
-      },
-      {
-        id: "falling-skies-main-14",
-        type: "main",
-        description: "Longer wait for Prapor",
-      },
-      {
-        id: "falling-skies-main-15",
-        type: "main",
-        description: "Hand over the flight crew's transcript to Prapor",
-      },
-      {
-        id: "falling-skies-main-16",
-        type: "main",
-        description: "Hand over Elektronik's secure flash drive to Prapor",
-      },
-      {
-        id: "falling-skies-main-17",
-        type: "main",
-        description: "Wait for Prapor",
-      },
-      {
-        id: "falling-skies-main-18",
-        type: "main",
-        description: "Retrieve the armored case and choose one of:",
-      },
-      {
-        id: "falling-skies-main-19",
-        type: "main",
-        description: "Hand over the armored case to Prapor",
-      },
-      {
-        id: "falling-skies-main-20",
-        type: "main",
-        description: "Keep the armored case for yourself",
-      },
-    ],
-  },
-  {
     id: "tour",
     name: "Tour",
     description:
@@ -360,129 +241,136 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
     },
   },
   {
-    id: "accidental-witness",
-    name: "Accidental Witness",
-    description: "Check the car between customs dorm",
-    icon: "/7.png",
+    id: "falling-skies",
+    name: "Falling Skies",
+    description:
+      "Best method: Keep doing Tour until completing Mechanic's quest, then go to the broken plane in Woods",
+    notes:
+      "⚠️ Known Issues:\n• Quest is rumored to be bugged\n• Some reports say standard accounts need 0.2 Prapor Reputation to progress\n• Quest actually requires 'Reach Prapor LVL 2' which may cause softlock for some players",
+    icon: "/2.png",
     objectives: [
       {
-        id: "accidental-witness-main-1",
+        id: "falling-skies-main-1",
         type: "main",
-        description: "Figure out where Kozlov lived",
+        description: "Locate the fallen plane",
       },
       {
-        id: "accidental-witness-main-2",
+        id: "falling-skies-main-2",
         type: "main",
-        description: "Read the note on Kozlov's door",
+        description:
+          "Reach Loyalty Level 2 with Prapor (Non-Unheard Or EOD Only)",
       },
       {
-        id: "accidental-witness-main-3",
+        id: "falling-skies-main-3",
         type: "main",
-        description: "Find out what Kozlov was involved in",
+        description: "Ask the traders about the fallen plane",
       },
       {
-        id: "accidental-witness-opt-1",
+        id: "falling-skies-main-4",
+        type: "main",
+        description: "Gather information from Therapist",
+      },
+      {
+        id: "falling-skies-opt-1",
         type: "optional",
-        description: "Access Kozlov's room",
+        description: "Hand over cash to Therapist 2,000$",
       },
       {
-        id: "accidental-witness-opt-2",
-        type: "optional",
-        description: "Figure out where to get Kozlov's key",
-      },
-      {
-        id: "accidental-witness-main-4",
+        id: "falling-skies-main-5",
         type: "main",
-        description: "Ask the traders about Anastasia",
+        description:
+          "Retrieve the flash drive from one of the G-Wagon SUVs (Shoreline near Tunnel)",
       },
       {
-        id: "accidental-witness-main-5",
+        id: "falling-skies-main-6",
         type: "main",
-        description: "Access Skier's accomplice's apartment",
+        description: "Hand over flash drive to Prapor",
       },
       {
-        id: "accidental-witness-opt-3",
-        type: "optional",
-        description: "Find the key to the apartment",
-      },
-      {
-        id: "accidental-witness-main-6",
+        id: "falling-skies-main-7",
         type: "main",
-        description: "Learn more about Skier's accomplice's apartment",
+        description: "Wait for Prapor",
       },
       {
-        id: "accidental-witness-main-7",
+        id: "falling-skies-main-8",
         type: "main",
-        description: "Read the documents in Skier's accomplice's apartment",
+        description: "Retrieve the plane's flight recorder",
       },
       {
-        id: "accidental-witness-main-8",
+        id: "falling-skies-main-9",
         type: "main",
-        description: "Report to Skier",
+        description:
+          "Leave the flight recorder in the specified spot (Shoreline in the house corner room at the fishers' island)",
       },
       {
-        id: "accidental-witness-main-9",
+        id: "falling-skies-main-10",
         type: "main",
-        description: "Talk to Ragman",
+        description: "Visit Prapor",
       },
       {
-        id: "accidental-witness-main-10",
+        id: "falling-skies-main-11",
         type: "main",
-        description: "Locate Anastasia's apartment",
+        description: "Hand over 2 Toolset",
       },
       {
-        id: "accidental-witness-main-11",
+        id: "falling-skies-main-12",
         type: "main",
-        description: "Investigate the entrance to Anastasia's building",
+        description: "Hand over 3 Rechargeable battery",
       },
       {
-        id: "accidental-witness-main-12",
+        id: "falling-skies-main-13",
         type: "main",
-        description: "Learn more about Anastasia",
+        description: "Hand over 5 Printed circuit board",
       },
       {
-        id: "accidental-witness-main-13",
+        id: "falling-skies-main-14",
         type: "main",
-        description: "Locate courier Pasha",
+        description: "Longer wait for Prapor",
       },
       {
-        id: "accidental-witness-main-14",
+        id: "falling-skies-main-15",
         type: "main",
-        description: "Search the ambush spot",
+        description: "Hand over the flight crew's transcript to Prapor",
       },
       {
-        id: "accidental-witness-main-15",
+        id: "falling-skies-main-16",
         type: "main",
-        description: "Talk to Skier",
+        description: "Hand over Elektronik's secure flash drive to Prapor",
       },
       {
-        id: "accidental-witness-main-16",
+        id: "falling-skies-main-17",
         type: "main",
-        description: "Locate Reshala's stash",
+        description: "Wait for Prapor",
       },
       {
-        id: "accidental-witness-main-17",
+        id: "falling-skies-main-18",
         type: "main",
-        description: "Investigate Reshala's bunkhouse",
+        description: "Retrieve the armored case and choose one of:",
       },
       {
-        id: "accidental-witness-main-18",
+        id: "falling-skies-main-19",
         type: "main",
-        description: "Locate Kozlov's hideout",
+        description: "Hand over the armored case to Prapor",
       },
       {
-        id: "accidental-witness-main-19",
+        id: "falling-skies-main-20",
         type: "main",
-        description: "Locate and obtain Kozlov's evidence",
+        description: "Keep the armored case for yourself",
       },
     ],
+  },
+  {
+    id: "the-ticket",
+    name: "The Ticket",
+    description: "Earned automatically after completing Falling Skies",
+    icon: "/3.png",
   },
   {
     id: "batya",
     name: "Batya",
     description:
-      "Turns out BEAR didn’t send just regular squads into Tarkov, there were real SOF guys here. I’d like to know more about those units and what exactly they were doing.",
-    icon: "/3.png",
+      "Turns out BEAR didn't send just regular squads into Tarkov, there were real SOF guys here. I'd like to know more about those units and what exactly they were doing.",
+    icon: "/4.png",
     objectives: [
       {
         id: "batya-main-1",
@@ -601,11 +489,18 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
     ],
   },
   {
+    id: "the-unheard",
+    name: "The Unheard",
+    description: "The Unheard questline",
+    icon: "/5.png",
+    objectives: [],
+  },
+  {
     id: "blue-fire",
     name: "Blue Fire",
     description:
       "Find flyer at any of these locations:\n• Woods med camp: Inside a GREEN container taped to a white drawer\n• Interchange: New area flyer\n• Interchange: Big Terragroup area behind old co-op extract, med tent/bunker",
-    icon: "/5.png",
+    icon: "/6.png",
     objectives: [
       {
         id: "blue-fire-main-1",
@@ -621,19 +516,11 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
     ],
   },
   {
-    id: "the-labyrinth",
-    name: "The Labyrinth",
-    description:
-      "Go into the access tunnel in Shoreline Resort Basement\n\nRequires: Knossos key\nSee: escapefromtarkov.fandom.com/wiki/Knossos_LLC_facility_key",
-    icon: "/8.png",
-    objectives: [],
-  },
-  {
     id: "they-are-already-here",
     name: "They Are Already Here",
     description:
       "Complete any ONE of these:\n• Kill cultist\n• Loot dorms marked room\n• Get note next to cultist circle in abandoned village\n• Fisherman island on Shoreline where the green box is",
-    icon: "/6.png",
+    icon: "/7.png",
     objectives: [
       {
         id: "they-are-already-here-main-1",
@@ -679,7 +566,8 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
       {
         id: "they-are-already-here-main-8",
         type: "main",
-        description: "Locate and neutralize 3x Cultist Priests",
+        description: "Locate and neutralize 2x Cultist Priests",
+        progress: { current: 0, required: 2 },
       },
       {
         id: "they-are-already-here-main-9",
@@ -689,9 +577,129 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
     ],
   },
   {
-    id: "the-ticket",
-    name: "The Ticket",
-    description: "Earned automatically after completing Falling Skies",
+    id: "accidental-witness",
+    name: "Accidental Witness",
+    description: "Check the car between customs dorm",
+    icon: "/8.png",
+    objectives: [
+      {
+        id: "accidental-witness-main-1",
+        type: "main",
+        description: "Figure out where Kozlov lived",
+      },
+      {
+        id: "accidental-witness-main-2",
+        type: "main",
+        description: "Read the note on Kozlov's door",
+      },
+      {
+        id: "accidental-witness-main-3",
+        type: "main",
+        description: "Find out what Kozlov was involved in",
+      },
+      {
+        id: "accidental-witness-opt-1",
+        type: "optional",
+        description: "Access Kozlov's room",
+      },
+      {
+        id: "accidental-witness-opt-2",
+        type: "optional",
+        description: "Figure out where to get Kozlov's key",
+      },
+      {
+        id: "accidental-witness-main-4",
+        type: "main",
+        description: "Ask the traders about Anastasia",
+      },
+      {
+        id: "accidental-witness-main-5",
+        type: "main",
+        description: "Access Skier's accomplice's apartment",
+      },
+      {
+        id: "accidental-witness-opt-3",
+        type: "optional",
+        description: "Find the key to the apartment",
+      },
+      {
+        id: "accidental-witness-main-6",
+        type: "main",
+        description: "Learn more about Skier's accomplice's apartment",
+      },
+      {
+        id: "accidental-witness-main-7",
+        type: "main",
+        description: "Read the documents in Skier's accomplice's apartment",
+      },
+      {
+        id: "accidental-witness-main-8",
+        type: "main",
+        description: "Report to Skier",
+      },
+      {
+        id: "accidental-witness-main-9",
+        type: "main",
+        description: "Talk to Ragman",
+      },
+      {
+        id: "accidental-witness-main-10",
+        type: "main",
+        description: "Locate Anastasia's apartment",
+      },
+      {
+        id: "accidental-witness-main-11",
+        type: "main",
+        description: "Investigate the entrance to Anastasia's building",
+      },
+      {
+        id: "accidental-witness-main-12",
+        type: "main",
+        description: "Learn more about Anastasia",
+      },
+      {
+        id: "accidental-witness-main-13",
+        type: "main",
+        description: "Locate courier Pasha",
+      },
+      {
+        id: "accidental-witness-main-14",
+        type: "main",
+        description: "Search the ambush spot",
+      },
+      {
+        id: "accidental-witness-main-15",
+        type: "main",
+        description: "Talk to Skier",
+      },
+      {
+        id: "accidental-witness-main-16",
+        type: "main",
+        description: "Locate Reshala's stash",
+      },
+      {
+        id: "accidental-witness-main-17",
+        type: "main",
+        description: "Investigate Reshala's bunkhouse",
+      },
+      {
+        id: "accidental-witness-main-18",
+        type: "main",
+        description: "Locate Kozlov's hideout",
+      },
+      {
+        id: "accidental-witness-main-19",
+        type: "main",
+        description: "Locate and obtain Kozlov's evidence",
+      },
+    ],
+  },
+  {
+    id: "the-labyrinth",
+    name: "The Labyrinth",
+    description:
+      "Go into the access tunnel in Shoreline Resort Basement\n\nRequires: Knossos key\nSee: escapefromtarkov.fandom.com/wiki/Knossos_LLC_facility_key",
     icon: "/9.png",
+    objectives: [],
   },
 ];

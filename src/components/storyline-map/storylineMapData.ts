@@ -1,8 +1,8 @@
 import type { Node, Edge } from "@xyflow/react";
 
 // Layout constants for better alignment
-const ROW_HEIGHT = 160;
-const COL_WIDTH = 320;
+const ROW_HEIGHT = 180;
+const COL_WIDTH = 350;
 
 // Ending IDs for easy reference
 export const ENDING_IDS = [
@@ -281,7 +281,7 @@ export const initialNodes: Node[] = [
     data: {
       label: "Yellow Flare + 15 Kills",
       description: "Launch yellow flare at ULTRA entrance on Interchange, then eliminate 15 targets in one raid",
-      note: "In one raid",
+      note: "In one raid\n🏆 Achievement: I am Speed - Kill 10 targets without dying",
     },
   },
   {
@@ -417,13 +417,23 @@ export const initialNodes: Node[] = [
     },
   },
   {
+    id: "build-solar-power",
+    type: "story",
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 15.5 },
+    data: {
+      label: "Build Solar Power Module",
+      description: "Construct Solar Power in Hideout for keycard encryption",
+      note: "Hideout: Solar Power Module required",
+    },
+  },
+  {
     id: "activate-rfid-case",
     type: "story",
     position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 16 },
     data: {
       label: "Activate RFID from Case",
-      description: "Kerman sends instructions - need Intel Center in Hideout",
-      note: "Hideout: Intelligence Center",
+      description: "Kerman sends instructions - need Intel Center + Solar Power in Hideout",
+      note: "Hideout: Intelligence Center + Solar Power",
     },
   },
   {
@@ -480,17 +490,37 @@ export const initialNodes: Node[] = [
     position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 21 },
     data: {
       label: "Talk to Mechanic",
-      description: "Mechanic offers alternative: pay 40 BTC for Elektronik key",
+      description: "Mechanic offers alternative: pay 40 BTC OR 40 Million roubles for Elektronik key",
+    },
+  },
+  {
+    id: "payment-choice",
+    type: "decision",
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 21.5 },
+    data: {
+      label: "Payment Method",
+      description: "Choose BTC or Roubles payment",
+      isIrreversible: true,
     },
   },
   {
     id: "turn-in-btc",
     type: "story",
-    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 22 },
+    position: { x: -COL_WIDTH * 1.8, y: ROW_HEIGHT * 22.5 },
     data: {
       label: "Hand Over 40 Bitcoins",
       description: "Give 40 BTC to Mechanic for Elektronik key",
       cost: 40,
+    },
+  },
+  {
+    id: "turn-in-roubles",
+    type: "story",
+    position: { x: -COL_WIDTH * 0.6, y: ROW_HEIGHT * 22.5 },
+    data: {
+      label: "Pay 40 Million Roubles",
+      description: "Give 40M roubles to Mechanic for Elektronik key",
+      cost: 40000000,
     },
   },
   {
@@ -523,6 +553,16 @@ export const initialNodes: Node[] = [
     },
   },
   {
+    id: "final-keycard-craft",
+    type: "story",
+    position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 25.5 },
+    data: {
+      label: "⏳ Final Craft for Keycard",
+      description: "Complete final encryption craft at Intelligence Center",
+      note: "6 hour craft at Intelligence Center",
+    },
+  },
+  {
     id: "arrive-terminal-kerman",
     type: "story",
     position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 26 },
@@ -538,8 +578,8 @@ export const initialNodes: Node[] = [
     position: { x: -COL_WIDTH * 1.2, y: ROW_HEIGHT * 27 },
     data: {
       label: "Swipe Keycard at Intercom",
-      description: "The intercom is on the road leading to the terminal gate",
-      note: "Card doesn't work! Alerts authorities",
+      description: "The intercom is on the road leading to the terminal gate (Shoreline Port Entrance)",
+      note: "Location: Shoreline Port Entrance intercom inside keycard reader",
     },
   },
   {
@@ -588,7 +628,7 @@ export const initialNodes: Node[] = [
     data: {
       label: "⏳ Wait for Kerman's Contact",
       description: "Wait for Mr. Kerman's trusted contact to get in touch",
-      note: "~24 hour timegate (unknown exact duration)",
+      note: "~24 hour timegate (unknown exact duration)\n🏆 Achievement: Through all your Tensions - Complete Kerman cooperation path",
     },
   },
 
@@ -605,7 +645,7 @@ export const initialNodes: Node[] = [
   {
     id: "head-to-terminal",
     type: "story",
-    position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 16 },
+    position: { x: COL_WIDTH * 0.8, y: ROW_HEIGHT * 16 },
     data: {
       label: "Head to Terminal",
       description: "Go to port Terminal via Shoreline checkpoint",
@@ -614,7 +654,7 @@ export const initialNodes: Node[] = [
   {
     id: "use-ticket-terminal",
     type: "story",
-    position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 17 },
+    position: { x: COL_WIDTH * 0.8, y: ROW_HEIGHT * 17 },
     data: {
       label: "Use Ticket at Terminal",
       description: "Swipe keycard at gate intercom - alerts authorities",
@@ -623,7 +663,7 @@ export const initialNodes: Node[] = [
   {
     id: "meet-prapor",
     type: "story",
-    position: { x: COL_WIDTH * 1.2, y: ROW_HEIGHT * 18 },
+    position: { x: COL_WIDTH * 0.8, y: ROW_HEIGHT * 18 },
     data: {
       label: "Meet Prapor",
       description: "Prapor arrives with his men - he controls this exit",
@@ -667,10 +707,50 @@ export const initialNodes: Node[] = [
   {
     id: "cant-pay",
     type: "story",
-    position: { x: COL_WIDTH * 2.1, y: ROW_HEIGHT * 20 },
+    position: { x: COL_WIDTH * 2.2, y: ROW_HEIGHT * 20 },
     data: {
       label: "Can't/Won't Pay",
       description: "Refuse or unable to pay Prapor's bribe",
+    },
+  },
+  {
+    id: "pvp-branch",
+    type: "story",
+    position: { x: COL_WIDTH * 2.2, y: ROW_HEIGHT * 16 },
+    data: {
+      label: "PVP Alternative Path",
+      description: "Complete PVP objectives instead of main path",
+      note: "PVP: Kill 5 PMCs without killing Scavs (Shoreline/Interchange) OR Co-Op Extract with Scav (Woods/Reserve)",
+    },
+  },
+  {
+    id: "fence-rep-path",
+    type: "story",
+    position: { x: COL_WIDTH * 2.2, y: ROW_HEIGHT * 17 },
+    data: {
+      label: "Fence Reputation Path",
+      description: "Alternative: Reach 4.0 Fence Reputation",
+      note: "Requires max positive Fence standing",
+    },
+  },
+  {
+    id: "report-kerman-prapor",
+    type: "story",
+    position: { x: COL_WIDTH * 2.2, y: ROW_HEIGHT * 18 },
+    data: {
+      label: "Report Kerman to Prapor",
+      description: "Betray Kerman and inform Prapor of his plans",
+      note: "🏆 Achievement: Easy Way - Choose betrayal path",
+    },
+  },
+  {
+    id: "help-kerman-turnsgrave",
+    type: "story",
+    position: { x: -COL_WIDTH * 1.8, y: ROW_HEIGHT * 31.6 },
+    data: {
+      label: "Help Kerman find Evidence on Turnsgrave",
+      description: "Locate additional TerraGroup evidence at Turnsgrave location",
+      note: "Required for Savior ending",
     },
   },
 
@@ -742,20 +822,7 @@ export const initialNodes: Node[] = [
     },
   },
 
-  // ============ UNKNOWN TERRITORY ZONE ============
-  {
-    id: "unknown-zone",
-    type: "zone",
-    position: { x: -COL_WIDTH * 2.5, y: ROW_HEIGHT * 30.2 },
-    draggable: false,
-    selectable: false,
-    zIndex: -1,
-    data: {
-      width: COL_WIDTH * 6,
-      height: ROW_HEIGHT * 6.5,
-    },
-  },
-
+  
   // ============ ENDINGS ============
   {
     id: "savior-ending",
@@ -968,8 +1035,14 @@ export const initialEdges: Edge[] = [
 
   // ============ KERMAN'S PATH (Green - Best endings) ============
   {
-    id: "e-yes-activate-rfid",
+    id: "e-yes-build-solar",
     source: "trust-yes",
+    target: "build-solar-power",
+    style: { stroke: "#22c55e" },
+  },
+  {
+    id: "e-solar-activate-rfid",
+    source: "build-solar-power",
     target: "activate-rfid-case",
     style: { stroke: "#22c55e" },
   },
@@ -1011,22 +1084,42 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#ef4444" },
   },
   {
-    id: "e-talk-kerman-mechanic",
+    id: "e-talk-kerman-payment-choice",
     source: "talk-kerman-rfid",
     target: "talk-mechanic",
     style: { stroke: "#22c55e" },
   },
   {
-    id: "e-mechanic-btc",
+    id: "e-mechanic-payment-choice",
     source: "talk-mechanic",
-    target: "turn-in-btc",
+    target: "payment-choice",
     style: { stroke: "#22c55e" },
+  },
+  {
+    id: "e-payment-btc",
+    source: "payment-choice",
+    target: "turn-in-btc",
+    label: "Pay BTC",
+    style: { stroke: "#f59e0b" },
+  },
+  {
+    id: "e-payment-roubles",
+    source: "payment-choice",
+    target: "turn-in-roubles",
+    label: "Pay Roubles",
+    style: { stroke: "#3b82f6" },
   },
   {
     id: "e-btc-timegate",
     source: "turn-in-btc",
     target: "timegate-24-40h",
-    style: { stroke: "#22c55e" },
+    style: { stroke: "#f59e0b" },
+  },
+  {
+    id: "e-roubles-timegate",
+    source: "turn-in-roubles",
+    target: "timegate-24-40h",
+    style: { stroke: "#3b82f6" },
   },
   {
     id: "e-timegate-collect-rfid",
@@ -1035,14 +1128,20 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#22c55e" },
   },
   {
-    id: "e-collect-rfid-use",
+    id: "e-collect-rfid-final-craft",
     source: "collect-rfid-streets",
     target: "use-rfid-keycard",
     style: { stroke: "#22c55e" },
   },
   {
-    id: "e-use-rfid-arrive",
+    id: "e-use-rfid-final-craft",
     source: "use-rfid-keycard",
+    target: "final-keycard-craft",
+    style: { stroke: "#22c55e" },
+  },
+  {
+    id: "e-final-craft-arrive",
+    source: "final-keycard-craft",
     target: "arrive-terminal-kerman",
     style: { stroke: "#22c55e" },
   },
@@ -1087,8 +1186,14 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#22c55e" },
   },
   {
-    id: "e-deliver-wait",
+    id: "e-deliver-turnsgrave",
     source: "deliver-evidence-kerman",
+    target: "help-kerman-turnsgrave",
+    style: { stroke: "#22c55e" },
+  },
+  {
+    id: "e-turnsgrave-wait",
+    source: "help-kerman-turnsgrave",
     target: "wait-kerman-contact",
     style: { stroke: "#22c55e" },
   },
@@ -1099,7 +1204,45 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#22c55e" },
   },
 
-  // ============ REFUSE KERMAN PATH (Blue - Survivor/Debtor) ============
+  // ============ PVP & ALTERNATIVE PATHS ============
+  {
+    id: "e-trust-no-pvp",
+    source: "trust-no",
+    target: "pvp-branch",
+    label: "PVP Path",
+    style: { stroke: "#ef4444" },
+  },
+  {
+    id: "e-pvp-fence-rep",
+    source: "pvp-branch",
+    target: "fence-rep-path",
+    style: { stroke: "#ef4444" },
+  },
+  {
+    id: "e-fence-rep-report",
+    source: "fence-rep-path",
+    target: "report-kerman-prapor",
+    style: { stroke: "#ef4444" },
+  },
+  {
+    id: "e-report-prapor-bribe",
+    source: "report-kerman-prapor",
+    target: "prapor-bribe",
+    style: { stroke: "#ef4444" },
+  },
+  {
+    id: "e-bribe-refuse",
+    source: "prapor-bribe",
+    target: "cant-pay",
+    label: "Refuse",
+    style: { stroke: "#ef4444" },
+  },
+  {
+    id: "e-cantpay-debtor",
+    source: "cant-pay",
+    target: "debtor-ending",
+    style: { stroke: "#ef4444" },
+  },
   {
     id: "e-no-terminal",
     source: "trust-no",

@@ -345,17 +345,6 @@ export function StorylineMapView({
                 </p>
               </div>
             </div>
-            {/* Unconfirmed Zone Legend */}
-            <div className="rounded-md border border-purple-500/30 bg-purple-500/10 p-2 mt-2">
-              <div className="flex items-start gap-2">
-                <span className="text-purple-500 flex-shrink-0 mt-0.5">❓</span>
-                <p className="text-xs text-purple-300/80">
-                  <span className="font-semibold">Unconfirmed Territory:</span>{" "}
-                  The purple-tinted zone at the bottom marks paths that are not
-                  yet fully verified by the community.
-                </p>
-              </div>
-            </div>
           </div>
         </Panel>
         <CostPanel totalCost={calculateTotalCost()} nodes={nodes} />

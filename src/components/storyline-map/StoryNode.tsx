@@ -1,6 +1,7 @@
 import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { Trophy } from "lucide-react";
 
 export interface StoryNodeData {
   label: string;
@@ -130,7 +131,25 @@ function StoryNode({ data }: { data: StoryNodeData }) {
           </div>
         )}
         {data.note && (
-          <p className="text-xs italic text-muted-foreground">{data.note}</p>
+          <div className="space-y-1">
+            {data.note.split("\n").map((line, index) => {
+              if (line.includes("🏆")) {
+                return (
+                  <div key={index} className="flex items-start gap-1">
+                    <Trophy className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                      {line.replace("🏆 Achievement:", "").trim()}
+                    </p>
+                  </div>
+                );
+              }
+              return (
+                <p key={index} className="text-xs italic text-muted-foreground">
+                  {line}
+                </p>
+              );
+            })}
+          </div>
         )}
         {data.isIrreversible && (
           <span className="inline-block rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-500">
