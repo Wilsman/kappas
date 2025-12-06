@@ -95,9 +95,9 @@ const HideoutRequirementsView = lazy(() =>
     default: m.HideoutRequirementsView,
   }))
 );
-const StorylineMapView = lazy(() =>
+const StorylineContainer = lazy(() =>
   import("./components/storyline-map").then((m) => ({
-    default: m.StorylineMapView,
+    default: m.StorylineContainer,
   }))
 );
 import { CommandMenu } from "./components/CommandMenu";
@@ -802,25 +802,17 @@ function App() {
       }
       // Notify listeners so UI refreshes immediately
       window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
-      // Also reset player level filter state persisted in localStorage and notify listeners
-      try {
-        localStorage.setItem(
-          `taskTracker_playerLevel::${activeProfileId}`,
-          "1"
-        );
-        localStorage.setItem(
-          `taskTracker_enableLevelFilter::${activeProfileId}`,
-          "0"
-        );
-      } catch (e) {
-        console.warn("LocalStorage reset failed", e);
-      }
+      // Reset player level filter state in IndexedDB
+      await taskStorage.saveUserPreferences({
+        playerLevel: 1,
+        enableLevelFilter: false,
+      });
       window.dispatchEvent(new Event("taskTracker:reset"));
       console.debug("[Prestige] Reset:event dispatched");
     } catch (err) {
       console.error("Reset error", err);
     }
-  }, [activeProfileId]);
+  }, []);
 
   // Check if onboarding should be shown (only once)
   useEffect(() => {
@@ -1137,7 +1129,7 @@ function App() {
                       onNavigateToMap={() => setViewMode("storyline-map")}
                     />
                   ) : viewMode === "storyline-map" ? (
-                    <StorylineMapView
+                    <StorylineContainer
                       completedNodes={completedStorylineMapNodes}
                       onToggleNode={handleToggleStorylineMapNode}
                       onBack={() => setViewMode("storyline")}

@@ -1,17 +1,41 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useQueryState } from 'nuqs';
-import { Task } from '../types';
-import { Input } from './ui/input';
-import { Checkbox } from './ui/checkbox';
-import { Progress } from './ui/progress';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
-import { Button } from './ui/button';
-import { Link2, ChevronDown, ChevronUp, Award, ArrowRight, MapPin, UserCheck } from 'lucide-react';
-import { groupTasksByTrader } from '../utils/taskUtils';
-import { cn } from '@/lib/utils';
-import { Switch } from './ui/switch';
-import { Label } from './ui/label';
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+  useRef,
+} from "react";
+import { useQueryState } from "nuqs";
+import { Task } from "../types";
+import { Input } from "./ui/input";
+import { Checkbox } from "./ui/checkbox";
+import { Progress } from "./ui/progress";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "./ui/accordion";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "./ui/collapsible";
+import { Button } from "./ui/button";
+import {
+  Link2,
+  ChevronDown,
+  ChevronUp,
+  Award,
+  ArrowRight,
+  MapPin,
+  UserCheck,
+} from "lucide-react";
+import { groupTasksByTrader } from "../utils/taskUtils";
+import { cn } from "@/lib/utils";
+import { Switch } from "./ui/switch";
+import { Label } from "./ui/label";
+import { taskStorage } from "@/utils/indexedDB";
 
 interface CheckListViewProps {
   tasks: Task[];
@@ -22,8 +46,8 @@ interface CheckListViewProps {
   onToggleComplete: (taskId: string) => void;
   onTaskClick: (taskId: string) => void;
   mapFilter?: string | null;
-  groupBy: 'trader' | 'map';
-  onSetGroupBy: (mode: 'trader' | 'map') => void;
+  groupBy: "trader" | "map";
+  onSetGroupBy: (mode: "trader" | "map") => void;
   activeProfileId: string;
 }
 
@@ -42,87 +66,111 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 }) => {
   // Mark intentionally unused while preserving external API
   void _onTaskClick;
-  const [searchTerm, setSearchTerm] = useQueryState('tasksSearch', { defaultValue: '' });
+  const [searchTerm, setSearchTerm] = useQueryState("tasksSearch", {
+    defaultValue: "",
+  });
   // Start with all groups collapsed by default
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [enableLevelFilter, setEnableLevelFilter] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(`taskTracker_enableLevelFilter::${activeProfileId}`);
-      return stored != null ? stored === '1' : false;
-    } catch {
-      return false;
-    }
-  });
-  const [playerLevel, setPlayerLevel] = useState<number>(() => {
-    try {
-      const stored = localStorage.getItem(`taskTracker_playerLevel::${activeProfileId}`);
-      const lvl = Math.max(1, Number(stored) || 1);
-      return lvl;
-    } catch {
-      return 1;
-    }
-  });
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [enableLevelFilter, setEnableLevelFilter] = useState<boolean>(false);
+  const [playerLevel, setPlayerLevel] = useState<number>(1);
+  const [showCompleted, setShowCompleted] = useState<boolean>(true);
 
-  // Show/Hide completed tasks toggle (persisted)
-  const [showCompleted, setShowCompleted] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(`taskTracker_showCompleted::${activeProfileId}`);
-      return stored != null ? stored === '1' : true;
-    } catch {
-      return true;
-    }
-  });
-
-  // Reload persisted UI prefs when active profile changes
+  // Load UI prefs from IndexedDB (with migration from localStorage)
   useEffect(() => {
-    try {
-      const storedLvl = localStorage.getItem(`taskTracker_playerLevel::${activeProfileId}`);
-      setPlayerLevel(Math.max(1, Number(storedLvl) || 1));
-    } catch {
-      // Ignore localStorage errors
-    }
-    try {
-      const storedEnable = localStorage.getItem(`taskTracker_enableLevelFilter::${activeProfileId}`);
-      setEnableLevelFilter(storedEnable != null ? storedEnable === '1' : false);
-    } catch {
-      // Ignore localStorage errors
-    }
-    try {
-      const storedShow = localStorage.getItem(`taskTracker_showCompleted::${activeProfileId}`);
-      setShowCompleted(storedShow != null ? storedShow === '1' : true);
-    } catch {
-      // Ignore localStorage errors
-    }
+    const loadPrefs = async () => {
+      try {
+        const prefs = await taskStorage.loadUserPreferences();
+
+        // Check if we have IndexedDB data
+        const hasIndexedDBData =
+          prefs.playerLevel !== undefined ||
+          prefs.enableLevelFilter !== undefined ||
+          prefs.showCompleted !== undefined;
+
+        if (hasIndexedDBData) {
+          // Use IndexedDB values
+          if (prefs.playerLevel !== undefined)
+            setPlayerLevel(Math.max(1, prefs.playerLevel));
+          if (prefs.enableLevelFilter !== undefined)
+            setEnableLevelFilter(prefs.enableLevelFilter);
+          if (prefs.showCompleted !== undefined)
+            setShowCompleted(prefs.showCompleted);
+        } else {
+          // Migrate from localStorage if exists
+          const storedLvl = localStorage.getItem(
+            `taskTracker_playerLevel::${activeProfileId}`
+          );
+          const storedEnable = localStorage.getItem(
+            `taskTracker_enableLevelFilter::${activeProfileId}`
+          );
+          const storedShow = localStorage.getItem(
+            `taskTracker_showCompleted::${activeProfileId}`
+          );
+
+          const lvl = storedLvl ? Math.max(1, Number(storedLvl) || 1) : 1;
+          const enable = storedEnable != null ? storedEnable === "1" : false;
+          const show = storedShow != null ? storedShow === "1" : true;
+
+          setPlayerLevel(lvl);
+          setEnableLevelFilter(enable);
+          setShowCompleted(show);
+
+          // Migrate to IndexedDB
+          await taskStorage.saveUserPreferences({
+            playerLevel: lvl,
+            enableLevelFilter: enable,
+            showCompleted: show,
+          });
+
+          // Clean up localStorage
+          if (storedLvl)
+            localStorage.removeItem(
+              `taskTracker_playerLevel::${activeProfileId}`
+            );
+          if (storedEnable)
+            localStorage.removeItem(
+              `taskTracker_enableLevelFilter::${activeProfileId}`
+            );
+          if (storedShow)
+            localStorage.removeItem(
+              `taskTracker_showCompleted::${activeProfileId}`
+            );
+        }
+        setPrefsLoaded(true);
+      } catch {
+        setPrefsLoaded(true);
+      }
+    };
+
+    setPrefsLoaded(false);
+    loadPrefs();
   }, [activeProfileId]);
 
-  // (dependency map removed; checklist is always interactive)
-
-  // Persist player level and toggle
-
+  // Persist player level to IndexedDB
   useEffect(() => {
-    try {
-      localStorage.setItem(`taskTracker_playerLevel::${activeProfileId}`, String(playerLevel));
-    } catch (e) {
-      console.warn('Failed to persist player level', e);
-    }
-  }, [playerLevel, activeProfileId]);
+    if (!prefsLoaded) return;
+    taskStorage.saveUserPreferences({ playerLevel }).catch(() => {
+      // ignore
+    });
+  }, [playerLevel, prefsLoaded]);
 
+  // Persist enableLevelFilter to IndexedDB
   useEffect(() => {
-    try {
-      localStorage.setItem(`taskTracker_enableLevelFilter::${activeProfileId}`, enableLevelFilter ? '1' : '0');
-    } catch (e) {
-      console.warn('Failed to persist level filter toggle', e);
-    }
-  }, [enableLevelFilter, activeProfileId]);
+    if (!prefsLoaded) return;
+    taskStorage.saveUserPreferences({ enableLevelFilter }).catch(() => {
+      // ignore
+    });
+  }, [enableLevelFilter, prefsLoaded]);
 
+  // Persist showCompleted to IndexedDB
   useEffect(() => {
-    try {
-      localStorage.setItem(`taskTracker_showCompleted::${activeProfileId}`, showCompleted ? '1' : '0');
-    } catch (e) {
-      console.warn('Failed to persist show completed toggle', e);
-    }
-  }, [showCompleted, activeProfileId]);
+    if (!prefsLoaded) return;
+    taskStorage.saveUserPreferences({ showCompleted }).catch(() => {
+      // ignore
+    });
+  }, [showCompleted, prefsLoaded]);
 
   // Listen for global reset event to reset level to 1
   useEffect(() => {
@@ -130,8 +178,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       setPlayerLevel(1);
       setEnableLevelFilter(false);
     };
-    window.addEventListener('taskTracker:reset', handler);
-    return () => window.removeEventListener('taskTracker:reset', handler);
+    window.addEventListener("taskTracker:reset", handler);
+    return () => window.removeEventListener("taskTracker:reset", handler);
   }, []);
 
   // Map of taskId -> DOM element to scroll into view when selected
@@ -142,91 +190,112 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     if (!selectedTaskId) return;
     const el = itemRefs.current.get(selectedTaskId);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [selectedTaskId]);
 
   // Clicking a breadcrumb: expand proper group, select task (which opens its details)
-  const handleBreadcrumbClick = useCallback((taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    if (groupBy === 'trader') {
-      const groupName = task.trader.name;
-      setExpandedGroups(prev => (prev.includes(groupName) ? prev : [...prev, groupName]));
-    } else {
-      // For map grouping, expand all maps the task belongs to
-      if (task.maps && task.maps.length > 0) {
-        const mapNames = task.maps.map(m => m.name);
-        setExpandedGroups(prev => {
-          const newGroups = [...prev];
-          mapNames.forEach(name => {
-            if (!newGroups.includes(name)) newGroups.push(name);
-          });
-          return newGroups;
-        });
+  const handleBreadcrumbClick = useCallback(
+    (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+
+      if (groupBy === "trader") {
+        const groupName = task.trader.name;
+        setExpandedGroups((prev) =>
+          prev.includes(groupName) ? prev : [...prev, groupName]
+        );
       } else {
-        const groupName = task.map?.name || 'Anywhere';
-        setExpandedGroups(prev => (prev.includes(groupName) ? prev : [...prev, groupName]));
+        // For map grouping, expand all maps the task belongs to
+        if (task.maps && task.maps.length > 0) {
+          const mapNames = task.maps.map((m) => m.name);
+          setExpandedGroups((prev) => {
+            const newGroups = [...prev];
+            mapNames.forEach((name) => {
+              if (!newGroups.includes(name)) newGroups.push(name);
+            });
+            return newGroups;
+          });
+        } else {
+          const groupName = task.map?.name || "Anywhere";
+          setExpandedGroups((prev) =>
+            prev.includes(groupName) ? prev : [...prev, groupName]
+          );
+        }
       }
-    }
-    
-    setSelectedTaskId(taskId);
-    // Also reflect the clicked task in the search bar to filter the view
-    setSearchTerm(task.name);
-  }, [tasks, groupBy, setSearchTerm]);
+
+      setSelectedTaskId(taskId);
+      // Also reflect the clicked task in the search bar to filter the view
+      setSearchTerm(task.name);
+    },
+    [tasks, groupBy, setSearchTerm]
+  );
 
   // (moved global search listener below after allGroupNames is defined)
 
   // Apply filters
   const filteredTasks = useMemo(
-    () => tasks.filter(task => {
-      // Kappa/Lightkeeper filters
-      if (showKappa && showLightkeeper) {
-        if (!(task.kappaRequired || task.lightkeeperRequired)) return false;
-      } else if (showKappa && !task.kappaRequired) {
-        return false;
-      } else if (showLightkeeper && !task.lightkeeperRequired) {
-        return false;
-      }
-      // Map filter (from sidebar)
-      if (mapFilter) {
-        // Check if task has multiple maps
-        if (task.maps && task.maps.length > 0) {
-          if (!task.maps.some(m => m.name === mapFilter)) return false;
-        } else if (task.map?.name !== mapFilter) {
+    () =>
+      tasks.filter((task) => {
+        // Kappa/Lightkeeper filters
+        if (showKappa && showLightkeeper) {
+          if (!(task.kappaRequired || task.lightkeeperRequired)) return false;
+        } else if (showKappa && !task.kappaRequired) {
+          return false;
+        } else if (showLightkeeper && !task.lightkeeperRequired) {
           return false;
         }
-      }
-      // Trader filter
-      if (hiddenTraders.has(task.trader.name)) return false;
-      // Player level filter
-      if (enableLevelFilter) {
-        const lvl = Number.isFinite(playerLevel) ? playerLevel : 1;
-        if (task.minPlayerLevel > lvl) return false;
-      }
-      // Completed filter
-      if (!showCompleted && completedTasks.has(task.id)) return false;
-      // Search filter
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase();
-        const nameMatch = task.name.toLowerCase().includes(term);
-        const traderMatch = task.trader.name.toLowerCase().includes(term);
-        const singleMapMatch = task.map?.name.toLowerCase().includes(term);
-        const multiMapMatch = task.maps?.some(m => m.name.toLowerCase().includes(term));
-        
-        if (!nameMatch && !traderMatch && !singleMapMatch && !multiMapMatch) {
-          return false;
+        // Map filter (from sidebar)
+        if (mapFilter) {
+          // Check if task has multiple maps
+          if (task.maps && task.maps.length > 0) {
+            if (!task.maps.some((m) => m.name === mapFilter)) return false;
+          } else if (task.map?.name !== mapFilter) {
+            return false;
+          }
         }
-      }
-      return true;
-    }),
-    [tasks, showKappa, showLightkeeper, hiddenTraders, searchTerm, mapFilter, enableLevelFilter, playerLevel, showCompleted, completedTasks],
+        // Trader filter
+        if (hiddenTraders.has(task.trader.name)) return false;
+        // Player level filter
+        if (enableLevelFilter) {
+          const lvl = Number.isFinite(playerLevel) ? playerLevel : 1;
+          if (task.minPlayerLevel > lvl) return false;
+        }
+        // Completed filter
+        if (!showCompleted && completedTasks.has(task.id)) return false;
+        // Search filter
+        if (searchTerm.trim()) {
+          const term = searchTerm.toLowerCase();
+          const nameMatch = task.name.toLowerCase().includes(term);
+          const traderMatch = task.trader.name.toLowerCase().includes(term);
+          const singleMapMatch = task.map?.name.toLowerCase().includes(term);
+          const multiMapMatch = task.maps?.some((m) =>
+            m.name.toLowerCase().includes(term)
+          );
+
+          if (!nameMatch && !traderMatch && !singleMapMatch && !multiMapMatch) {
+            return false;
+          }
+        }
+        return true;
+      }),
+    [
+      tasks,
+      showKappa,
+      showLightkeeper,
+      hiddenTraders,
+      searchTerm,
+      mapFilter,
+      enableLevelFilter,
+      playerLevel,
+      showCompleted,
+      completedTasks,
+    ]
   );
 
   // Group tasks
   const tasksByGroup = useMemo(() => {
-    if (groupBy === 'trader') {
+    if (groupBy === "trader") {
       return groupTasksByTrader(filteredTasks);
     }
     // groupBy map - tasks with multiple maps appear under each map
@@ -234,12 +303,12 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       // Check if task has multiple maps
       if (task.maps && task.maps.length > 0) {
         // Add task to each map it belongs to
-        task.maps.forEach(map => {
+        task.maps.forEach((map) => {
           (acc[map.name] ||= []).push(task);
         });
       } else {
         // Fallback to single map or 'Anywhere'
-        const mapName = task.map?.name || 'Anywhere';
+        const mapName = task.map?.name || "Anywhere";
         (acc[mapName] ||= []).push(task);
       }
       return acc;
@@ -248,52 +317,75 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 
   const sortedGroups = useMemo(
     () => Object.entries(tasksByGroup).sort(([a], [b]) => a.localeCompare(b)),
-    [tasksByGroup],
+    [tasksByGroup]
   );
 
-  const allGroupNames = useMemo(() => sortedGroups.map(([name]) => name), [sortedGroups]);
+  const allGroupNames = useMemo(
+    () => sortedGroups.map(([name]) => name),
+    [sortedGroups]
+  );
   // Only use the explicitly expanded groups
   const finalExpandedGroups = expandedGroups;
   const areAllExpanded = finalExpandedGroups.length === allGroupNames.length;
 
   // Listen for global command search and apply to local search box (tasks scope)
   useEffect(() => {
-    type GlobalSearchDetail = { term?: string; scope?: 'tasks' | 'achievements' | 'items'; taskId?: string };
+    type GlobalSearchDetail = {
+      term?: string;
+      scope?: "tasks" | "achievements" | "items";
+      taskId?: string;
+    };
     const handler = (evt: Event) => {
       const detail = (evt as CustomEvent<GlobalSearchDetail>).detail;
-      if (!detail || detail.scope !== 'tasks' || typeof detail.term !== 'string') return;
+      if (
+        !detail ||
+        detail.scope !== "tasks" ||
+        typeof detail.term !== "string"
+      )
+        return;
       setSearchTerm(detail.term);
       // Keep current UX of expanding all groups so results are visible
       setExpandedGroups(allGroupNames);
       // If a specific task was chosen, open its details and ensure its group is expanded
       if (detail.taskId) {
-        const t = tasks.find(x => x.id === detail.taskId);
+        const t = tasks.find((x) => x.id === detail.taskId);
         if (t) {
-          if (groupBy === 'trader') {
+          if (groupBy === "trader") {
             const groupName = t.trader.name;
-            setExpandedGroups(prev => (prev.includes(groupName) ? prev : [...prev, groupName]));
+            setExpandedGroups((prev) =>
+              prev.includes(groupName) ? prev : [...prev, groupName]
+            );
           } else {
             // For map grouping, expand all maps the task belongs to
             if (t.maps && t.maps.length > 0) {
-              const mapNames = t.maps.map(m => m.name);
-              setExpandedGroups(prev => {
+              const mapNames = t.maps.map((m) => m.name);
+              setExpandedGroups((prev) => {
                 const newGroups = [...prev];
-                mapNames.forEach(name => {
+                mapNames.forEach((name) => {
                   if (!newGroups.includes(name)) newGroups.push(name);
                 });
                 return newGroups;
               });
             } else {
-              const groupName = t.map?.name || 'Anywhere';
-              setExpandedGroups(prev => (prev.includes(groupName) ? prev : [...prev, groupName]));
+              const groupName = t.map?.name || "Anywhere";
+              setExpandedGroups((prev) =>
+                prev.includes(groupName) ? prev : [...prev, groupName]
+              );
             }
           }
           setSelectedTaskId(detail.taskId);
         }
       }
     };
-    window.addEventListener('taskTracker:globalSearch', handler as EventListener);
-    return () => window.removeEventListener('taskTracker:globalSearch', handler as EventListener);
+    window.addEventListener(
+      "taskTracker:globalSearch",
+      handler as EventListener
+    );
+    return () =>
+      window.removeEventListener(
+        "taskTracker:globalSearch",
+        handler as EventListener
+      );
   }, [allGroupNames, setSearchTerm, tasks, groupBy]);
 
   const handleToggleAll = () => {

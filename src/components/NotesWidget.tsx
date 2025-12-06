@@ -2,9 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StickyNote, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getActiveProfileId, withProfileKey } from "@/utils/profile";
+import { taskStorage } from "@/utils/indexedDB";
 
 const BASE_STORAGE_KEY = "taskTracker_notes";
 
@@ -12,37 +18,57 @@ export function NotesWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [value, setValue] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const saveTimer = useRef<number | null>(null);
-  const [profileId, setProfileId] = useState<string>("");
-  const storageKey = useMemo(() => withProfileKey(BASE_STORAGE_KEY, profileId || getActiveProfileId()), [profileId]);
 
-  // Load once on mount
+  // Load once on mount (with migration from localStorage)
   useEffect(() => {
-    const load = () => {
+    const load = async () => {
       try {
         const id = getActiveProfileId();
-        setProfileId(id);
+
+        // Try loading from IndexedDB first
+        const prefs = await taskStorage.loadUserPreferences();
+        if (prefs.notes !== undefined) {
+          setValue(prefs.notes);
+          setIsLoaded(true);
+          return;
+        }
+
+        // Fallback: migrate from localStorage if exists
         const raw = localStorage.getItem(withProfileKey(BASE_STORAGE_KEY, id));
-        setValue(raw || "");
+        if (raw) {
+          setValue(raw);
+          // Migrate to IndexedDB
+          await taskStorage.saveUserPreferences({ notes: raw });
+          // Clean up localStorage
+          localStorage.removeItem(withProfileKey(BASE_STORAGE_KEY, id));
+        }
+        setIsLoaded(true);
       } catch {
-        // ignore
+        setIsLoaded(true);
       }
     };
     load();
-    const onProfile = () => load();
-    window.addEventListener('taskTracker:profileChanged', onProfile);
-    return () => window.removeEventListener('taskTracker:profileChanged', onProfile);
+    const onProfile = () => {
+      setIsLoaded(false);
+      load();
+    };
+    window.addEventListener("taskTracker:profileChanged", onProfile);
+    return () =>
+      window.removeEventListener("taskTracker:profileChanged", onProfile);
   }, []);
 
-  // Debounced auto-save
+  // Debounced auto-save to IndexedDB
   useEffect(() => {
+    if (!isLoaded) return; // Don't save until initial load completes
     if (!isOpen) return; // only show saving state when panel is open
 
     setIsSaving(true);
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
+    saveTimer.current = window.setTimeout(async () => {
       try {
-        localStorage.setItem(storageKey, value);
+        await taskStorage.saveUserPreferences({ notes: value });
       } catch {
         // ignore
       } finally {
@@ -53,7 +79,7 @@ export function NotesWidget() {
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [value, isOpen, storageKey]);
+  }, [value, isOpen, isLoaded]);
 
   const chars = useMemo(() => value.trim().length, [value]);
 
@@ -73,11 +99,21 @@ export function NotesWidget() {
               <div className="flex items-center gap-2 text-sm font-medium">
                 <StickyNote className="h-4 w-4 text-muted-foreground" />
                 Notes
-                <span className="ml-2 text-[10px] text-muted-foreground">{isSaving ? "Saving…" : "Saved"}</span>
+                <span className="ml-2 text-[10px] text-muted-foreground">
+                  {isSaving ? "Saving…" : "Saved"}
+                </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground">{chars} chars</span>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsOpen(false)} aria-label="Close notes">
+                <span className="text-[10px] text-muted-foreground">
+                  {chars} chars
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={() => setIsOpen(false)}
+                  aria-label="Close notes"
+                >
                   <X className="h-4 w-4" />
                 </Button>
               </div>

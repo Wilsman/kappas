@@ -1,16 +1,25 @@
-const DB_BASE_NAME = 'TarkovQuests';
-const DB_VERSION = 7;
-const TASKS_STORE = 'completedTasks';
-const COLLECTOR_STORE = 'completedCollectorItems';
-const PRESTIGE_STORE = 'prestigeProgress';
-const ACHIEVEMENTS_STORE = 'completedAchievements';
-const HIDEOUT_ITEMS_STORE = 'completedHideoutItems';
-const STORYLINE_OBJECTIVES_STORE = 'completedStorylineObjectives';
-const STORYLINE_MAP_NODES_STORE = 'completedStorylineMapNodes';
+const DB_BASE_NAME = "TarkovQuests";
+const DB_VERSION = 8;
+const TASKS_STORE = "completedTasks";
+const COLLECTOR_STORE = "completedCollectorItems";
+const PRESTIGE_STORE = "prestigeProgress";
+const ACHIEVEMENTS_STORE = "completedAchievements";
+const HIDEOUT_ITEMS_STORE = "completedHideoutItems";
+const STORYLINE_OBJECTIVES_STORE = "completedStorylineObjectives";
+const STORYLINE_MAP_NODES_STORE = "completedStorylineMapNodes";
+const USER_PREFS_STORE = "userPreferences";
+
+// User preferences interface for export/import
+export interface UserPreferences {
+  notes: string;
+  playerLevel: number;
+  enableLevelFilter: boolean;
+  showCompleted: boolean;
+}
 
 export class TaskStorage {
   private db: IDBDatabase | null = null;
-  private profileId: string = 'default';
+  private profileId: string = "default";
 
   setProfile(profileId: string) {
     if (this.profileId !== profileId) {
@@ -18,7 +27,7 @@ export class TaskStorage {
         this.db?.close();
       } catch {}
       this.db = null;
-      this.profileId = profileId || 'default';
+      this.profileId = profileId || "default";
     }
   }
 
@@ -29,35 +38,38 @@ export class TaskStorage {
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.getDbName(), DB_VERSION);
-      
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
         resolve();
       };
-      
+
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(TASKS_STORE)) {
-          db.createObjectStore(TASKS_STORE, { keyPath: 'id' });
+          db.createObjectStore(TASKS_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(COLLECTOR_STORE)) {
-          db.createObjectStore(COLLECTOR_STORE, { keyPath: 'id' });
+          db.createObjectStore(COLLECTOR_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(PRESTIGE_STORE)) {
-          db.createObjectStore(PRESTIGE_STORE, { keyPath: 'id' });
+          db.createObjectStore(PRESTIGE_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(ACHIEVEMENTS_STORE)) {
-          db.createObjectStore(ACHIEVEMENTS_STORE, { keyPath: 'id' });
+          db.createObjectStore(ACHIEVEMENTS_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(HIDEOUT_ITEMS_STORE)) {
-          db.createObjectStore(HIDEOUT_ITEMS_STORE, { keyPath: 'id' });
+          db.createObjectStore(HIDEOUT_ITEMS_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(STORYLINE_OBJECTIVES_STORE)) {
-          db.createObjectStore(STORYLINE_OBJECTIVES_STORE, { keyPath: 'id' });
+          db.createObjectStore(STORYLINE_OBJECTIVES_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(STORYLINE_MAP_NODES_STORE)) {
-          db.createObjectStore(STORYLINE_MAP_NODES_STORE, { keyPath: 'id' });
+          db.createObjectStore(STORYLINE_MAP_NODES_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(USER_PREFS_STORE)) {
+          db.createObjectStore(USER_PREFS_STORE, { keyPath: "id" });
         }
       };
     });
@@ -65,12 +77,12 @@ export class TaskStorage {
 
   async saveCompletedTasks(completedTasks: Set<string>): Promise<void> {
     if (!this.db) await this.init();
-    
-    const transaction = this.db!.transaction([TASKS_STORE], 'readwrite');
+
+    const transaction = this.db!.transaction([TASKS_STORE], "readwrite");
     const store = transaction.objectStore(TASKS_STORE);
-    
+
     await store.clear();
-    
+
     for (const taskId of completedTasks) {
       await store.add({ id: taskId, completed: true });
     }
@@ -78,12 +90,12 @@ export class TaskStorage {
 
   async loadCompletedTasks(): Promise<Set<string>> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([TASKS_STORE], 'readonly');
+      const transaction = this.db!.transaction([TASKS_STORE], "readonly");
       const store = transaction.objectStore(TASKS_STORE);
       const request = store.getAll();
-      
+
       request.onsuccess = () => {
         const completedTasks = new Set<string>();
         request.result.forEach((item: { id: string }) => {
@@ -91,19 +103,21 @@ export class TaskStorage {
         });
         resolve(completedTasks);
       };
-      
+
       request.onerror = () => reject(request.error);
     });
   }
 
-  async saveCompletedCollectorItems(completedItems: Set<string>): Promise<void> {
+  async saveCompletedCollectorItems(
+    completedItems: Set<string>
+  ): Promise<void> {
     if (!this.db) await this.init();
-    
-    const transaction = this.db!.transaction([COLLECTOR_STORE], 'readwrite');
+
+    const transaction = this.db!.transaction([COLLECTOR_STORE], "readwrite");
     const store = transaction.objectStore(COLLECTOR_STORE);
-    
+
     await store.clear();
-    
+
     for (const itemName of completedItems) {
       await store.add({ id: itemName, completed: true });
     }
@@ -111,12 +125,12 @@ export class TaskStorage {
 
   async loadCompletedCollectorItems(): Promise<Set<string>> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([COLLECTOR_STORE], 'readonly');
+      const transaction = this.db!.transaction([COLLECTOR_STORE], "readonly");
       const store = transaction.objectStore(COLLECTOR_STORE);
       const request = store.getAll();
-      
+
       request.onsuccess = () => {
         const completedItems = new Set<string>();
         request.result.forEach((item: { id: string }) => {
@@ -124,14 +138,14 @@ export class TaskStorage {
         });
         resolve(completedItems);
       };
-      
+
       request.onerror = () => reject(request.error);
     });
   }
 
   async savePrestigeProgress(id: string, data: unknown): Promise<void> {
     if (!this.db) await this.init();
-    const tx = this.db!.transaction([PRESTIGE_STORE], 'readwrite');
+    const tx = this.db!.transaction([PRESTIGE_STORE], "readwrite");
     const store = tx.objectStore(PRESTIGE_STORE);
     await store.put({ id, data });
   }
@@ -139,7 +153,7 @@ export class TaskStorage {
   async loadPrestigeProgress<T = unknown>(id: string): Promise<T | null> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction([PRESTIGE_STORE], 'readonly');
+      const tx = this.db!.transaction([PRESTIGE_STORE], "readonly");
       const store = tx.objectStore(PRESTIGE_STORE);
       const req = store.get(id);
       req.onsuccess = () => {
@@ -151,14 +165,14 @@ export class TaskStorage {
 
   async clearAllPrestigeProgress(): Promise<void> {
     if (!this.db) await this.init();
-    const tx = this.db!.transaction([PRESTIGE_STORE], 'readwrite');
+    const tx = this.db!.transaction([PRESTIGE_STORE], "readwrite");
     const store = tx.objectStore(PRESTIGE_STORE);
     await store.clear();
   }
 
   async saveCompletedAchievements(completed: Set<string>): Promise<void> {
     if (!this.db) await this.init();
-    const tx = this.db!.transaction([ACHIEVEMENTS_STORE], 'readwrite');
+    const tx = this.db!.transaction([ACHIEVEMENTS_STORE], "readwrite");
     const store = tx.objectStore(ACHIEVEMENTS_STORE);
     await store.clear();
     for (const id of completed) {
@@ -169,7 +183,7 @@ export class TaskStorage {
   async loadCompletedAchievements(): Promise<Set<string>> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction([ACHIEVEMENTS_STORE], 'readonly');
+      const tx = this.db!.transaction([ACHIEVEMENTS_STORE], "readonly");
       const store = tx.objectStore(ACHIEVEMENTS_STORE);
       const req = store.getAll();
       req.onsuccess = () => {
@@ -183,7 +197,7 @@ export class TaskStorage {
 
   async saveCompletedHideoutItems(completedItems: Set<string>): Promise<void> {
     if (!this.db) await this.init();
-    const tx = this.db!.transaction([HIDEOUT_ITEMS_STORE], 'readwrite');
+    const tx = this.db!.transaction([HIDEOUT_ITEMS_STORE], "readwrite");
     const store = tx.objectStore(HIDEOUT_ITEMS_STORE);
     await store.clear();
     for (const id of completedItems) {
@@ -194,7 +208,7 @@ export class TaskStorage {
   async loadCompletedHideoutItems(): Promise<Set<string>> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction([HIDEOUT_ITEMS_STORE], 'readonly');
+      const tx = this.db!.transaction([HIDEOUT_ITEMS_STORE], "readonly");
       const store = tx.objectStore(HIDEOUT_ITEMS_STORE);
       const req = store.getAll();
       req.onsuccess = () => {
@@ -208,14 +222,19 @@ export class TaskStorage {
     });
   }
 
-  async saveCompletedStorylineObjectives(completedObjectives: Set<string>): Promise<void> {
+  async saveCompletedStorylineObjectives(
+    completedObjectives: Set<string>
+  ): Promise<void> {
     if (!this.db) await this.init();
-    
-    const transaction = this.db!.transaction([STORYLINE_OBJECTIVES_STORE], 'readwrite');
+
+    const transaction = this.db!.transaction(
+      [STORYLINE_OBJECTIVES_STORE],
+      "readwrite"
+    );
     const store = transaction.objectStore(STORYLINE_OBJECTIVES_STORE);
-    
+
     await store.clear();
-    
+
     for (const objectiveId of completedObjectives) {
       await store.add({ id: objectiveId, completed: true });
     }
@@ -223,12 +242,15 @@ export class TaskStorage {
 
   async loadCompletedStorylineObjectives(): Promise<Set<string>> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORYLINE_OBJECTIVES_STORE], 'readonly');
+      const transaction = this.db!.transaction(
+        [STORYLINE_OBJECTIVES_STORE],
+        "readonly"
+      );
       const store = transaction.objectStore(STORYLINE_OBJECTIVES_STORE);
       const request = store.getAll();
-      
+
       request.onsuccess = () => {
         const completed = new Set<string>();
         request.result.forEach((item: { id: string }) => {
@@ -236,19 +258,24 @@ export class TaskStorage {
         });
         resolve(completed);
       };
-      
+
       request.onerror = () => reject(request.error);
     });
   }
 
-  async saveCompletedStorylineMapNodes(completedNodes: Set<string>): Promise<void> {
+  async saveCompletedStorylineMapNodes(
+    completedNodes: Set<string>
+  ): Promise<void> {
     if (!this.db) await this.init();
-    
-    const transaction = this.db!.transaction([STORYLINE_MAP_NODES_STORE], 'readwrite');
+
+    const transaction = this.db!.transaction(
+      [STORYLINE_MAP_NODES_STORE],
+      "readwrite"
+    );
     const store = transaction.objectStore(STORYLINE_MAP_NODES_STORE);
-    
+
     await store.clear();
-    
+
     for (const nodeId of completedNodes) {
       await store.add({ id: nodeId, completed: true });
     }
@@ -256,12 +283,15 @@ export class TaskStorage {
 
   async loadCompletedStorylineMapNodes(): Promise<Set<string>> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORYLINE_MAP_NODES_STORE], 'readonly');
+      const transaction = this.db!.transaction(
+        [STORYLINE_MAP_NODES_STORE],
+        "readonly"
+      );
       const store = transaction.objectStore(STORYLINE_MAP_NODES_STORE);
       const request = store.getAll();
-      
+
       request.onsuccess = () => {
         const completed = new Set<string>();
         request.result.forEach((item: { id: string }) => {
@@ -269,21 +299,65 @@ export class TaskStorage {
         });
         resolve(completed);
       };
-      
+
       request.onerror = () => reject(request.error);
     });
+  }
+
+  // User preferences (notes, player level, filters)
+  async saveUserPreferences(prefs: Partial<UserPreferences>): Promise<void> {
+    if (!this.db) await this.init();
+    const tx = this.db!.transaction([USER_PREFS_STORE], "readwrite");
+    const store = tx.objectStore(USER_PREFS_STORE);
+
+    // Save each preference as a separate entry for granular updates
+    for (const [key, value] of Object.entries(prefs)) {
+      await store.put({ id: key, value });
+    }
+  }
+
+  async loadUserPreferences(): Promise<Partial<UserPreferences>> {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction([USER_PREFS_STORE], "readonly");
+      const store = tx.objectStore(USER_PREFS_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const prefs: Partial<UserPreferences> = {};
+        req.result.forEach((item: { id: string; value: unknown }) => {
+          if (item.id === "notes") prefs.notes = item.value as string;
+          else if (item.id === "playerLevel")
+            prefs.playerLevel = item.value as number;
+          else if (item.id === "enableLevelFilter")
+            prefs.enableLevelFilter = item.value as boolean;
+          else if (item.id === "showCompleted")
+            prefs.showCompleted = item.value as boolean;
+        });
+        resolve(prefs);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async clearUserPreferences(): Promise<void> {
+    if (!this.db) await this.init();
+    const tx = this.db!.transaction([USER_PREFS_STORE], "readwrite");
+    const store = tx.objectStore(USER_PREFS_STORE);
+    await store.clear();
   }
 }
 
 export const taskStorage = new TaskStorage();
 
 // One-time migration from legacy single-DB (TarkovQuests) into the first profile DB
-const LEGACY_DB_NAME = 'TarkovQuests';
-const MIGRATION_FLAG = 'taskTracker_profile_migrated_v1';
+const LEGACY_DB_NAME = "TarkovQuests";
+const MIGRATION_FLAG = "taskTracker_profile_migrated_v1";
 
-export async function migrateLegacyDataIfNeeded(targetProfileId: string): Promise<void> {
+export async function migrateLegacyDataIfNeeded(
+  targetProfileId: string
+): Promise<void> {
   try {
-    if (localStorage.getItem(MIGRATION_FLAG) === '1') return;
+    if (localStorage.getItem(MIGRATION_FLAG) === "1") return;
   } catch {
     // continue
   }
@@ -303,40 +377,57 @@ export async function migrateLegacyDataIfNeeded(targetProfileId: string): Promis
     req.onerror = () => resolve(false);
   });
   if (!legacyExists) {
-    try { localStorage.setItem(MIGRATION_FLAG, '1'); } catch {}
+    try {
+      localStorage.setItem(MIGRATION_FLAG, "1");
+    } catch {}
     return;
   }
 
   // Open legacy and read stores, then write into profile-scoped DB
-  const readStoreAll = <T,>(db: IDBDatabase, storeName: string) => new Promise<T[]>((resolve, reject) => {
-    const tx = db.transaction([storeName], 'readonly');
-    const store = tx.objectStore(storeName);
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result as T[]);
-    req.onerror = () => reject(req.error);
-  });
+  const readStoreAll = <T>(db: IDBDatabase, storeName: string) =>
+    new Promise<T[]>((resolve, reject) => {
+      const tx = db.transaction([storeName], "readonly");
+      const store = tx.objectStore(storeName);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result as T[]);
+      req.onerror = () => reject(req.error);
+    });
 
   await new Promise<void>((resolve) => {
     const req = indexedDB.open(LEGACY_DB_NAME, DB_VERSION);
     req.onsuccess = async () => {
       const legacyDb = req.result;
       try {
-        const tasks = await readStoreAll<{ id: string }>(legacyDb, TASKS_STORE).catch(() => []);
-        const col = await readStoreAll<{ id: string }>(legacyDb, COLLECTOR_STORE).catch(() => []);
-        const ach = await readStoreAll<{ id: string }>(legacyDb, ACHIEVEMENTS_STORE).catch(() => []);
-        const pres = await readStoreAll<{ id: string; data: unknown }>(legacyDb, PRESTIGE_STORE).catch(() => []);
+        const tasks = await readStoreAll<{ id: string }>(
+          legacyDb,
+          TASKS_STORE
+        ).catch(() => []);
+        const col = await readStoreAll<{ id: string }>(
+          legacyDb,
+          COLLECTOR_STORE
+        ).catch(() => []);
+        const ach = await readStoreAll<{ id: string }>(
+          legacyDb,
+          ACHIEVEMENTS_STORE
+        ).catch(() => []);
+        const pres = await readStoreAll<{ id: string; data: unknown }>(
+          legacyDb,
+          PRESTIGE_STORE
+        ).catch(() => []);
 
         const t = new TaskStorage();
         t.setProfile(targetProfileId);
         await t.init();
-        await t.saveCompletedTasks(new Set(tasks.map(x => x.id)));
-        await t.saveCompletedCollectorItems(new Set(col.map(x => x.id)));
-        await t.saveCompletedAchievements(new Set(ach.map(x => x.id)));
+        await t.saveCompletedTasks(new Set(tasks.map((x) => x.id)));
+        await t.saveCompletedCollectorItems(new Set(col.map((x) => x.id)));
+        await t.saveCompletedAchievements(new Set(ach.map((x) => x.id)));
         for (const p of pres) {
           await t.savePrestigeProgress(p.id, p.data);
         }
 
-        try { localStorage.setItem(MIGRATION_FLAG, '1'); } catch {}
+        try {
+          localStorage.setItem(MIGRATION_FLAG, "1");
+        } catch {}
       } catch {
         // ignore migration errors; do not block app
       } finally {
