@@ -1,6 +1,7 @@
 export type Profile = {
   id: string;
   name: string;
+  faction?: "USEC" | "BEAR";
   createdAt: number;
 };
 
@@ -60,11 +61,12 @@ export function setActiveProfileId(id: string) {
   localStorage.setItem(ACTIVE_PROFILE_KEY, id);
 }
 
-export function createProfile(name: string): Profile {
+export function createProfile(name: string, faction?: "USEC" | "BEAR"): Profile {
   const list = loadProfiles();
   const p: Profile = {
     id: crypto.randomUUID(),
     name: name || "New Character",
+    faction,
     createdAt: Date.now(),
   };
   list.push(p);
@@ -109,6 +111,15 @@ export function renameProfile(id: string, name: string) {
   const idx = list.findIndex((p) => p.id === id);
   if (idx >= 0) {
     list[idx] = { ...list[idx], name };
+    saveProfiles(list);
+  }
+}
+
+export function updateProfileFaction(id: string, faction: "USEC" | "BEAR") {
+  const list = loadProfiles();
+  const idx = list.findIndex((p) => p.id === id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], faction };
     saveProfiles(list);
   }
 }

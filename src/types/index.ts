@@ -3,6 +3,7 @@ import { TraderName } from "../data/traders";
 export interface Task {
   id: string;
   minPlayerLevel: number;
+  factionName?: string | null;
   taskRequirements: TaskRequirement[];
   wikiLink: string;
   name: string;
@@ -85,7 +86,7 @@ export interface CollectorItemsData {
         }[];
       }[];
     };
-    
+
   };
 }
 

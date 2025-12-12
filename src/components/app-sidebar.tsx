@@ -99,11 +99,14 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSelectMap: (map: string | null) => void;
   collectorGroupBy: "collector" | "hideout-stations";
   onSetCollectorGroupBy: (mode: "collector" | "hideout-stations") => void;
+  playerLevel: number;
+  onSetPlayerLevel: (level: number) => void;
   profiles: Profile[];
   activeProfileId: string;
   onSwitchProfile: (id: string) => void;
   onCreateProfile: (name?: string) => void;
   onRenameProfile: (id: string, name: string) => void;
+  onUpdateFaction: (id: string, faction: "USEC" | "BEAR") => void;
   onDeleteProfile: (id: string) => void;
   onResetProfile: (options?: ResetOptions) => void;
   onImportComplete: () => void;
@@ -130,11 +133,14 @@ export function AppSidebar({
   onSelectMap,
   collectorGroupBy,
   onSetCollectorGroupBy,
+  playerLevel,
+  onSetPlayerLevel,
   profiles,
   activeProfileId,
   onSwitchProfile,
   onCreateProfile,
   onRenameProfile,
+  onUpdateFaction,
   onDeleteProfile,
   onResetProfile,
   onImportComplete,
@@ -213,6 +219,7 @@ export function AppSidebar({
                   ))}
                 </SelectContent>
               </Select>
+
               <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -276,100 +283,135 @@ export function AppSidebar({
                   </button>
                 </DropdownMenuContent>
               </DropdownMenu>
-              {/* Standalone delete confirmation outside the menu so it doesn't close instantly */}
-              <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete character?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This removes local progress for "{activeProfile?.name}".
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => {
-                        if (activeProfile) onDeleteProfile(activeProfile.id);
-                        setDeleteOpen(false);
-                      }}
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              {/* Export/Import dialog */}
-              <ExportImportDialog
-                open={exportImportOpen}
-                onOpenChange={setExportImportOpen}
-                profileName={activeProfile?.name || "Profile"}
-                profiles={profiles}
-                activeProfileId={activeProfileId}
-                onImportComplete={onImportComplete}
-                onImportAsNewProfile={onImportAsNewProfile}
-                onImportAllProfiles={onImportAllProfiles}
-              />
-              {/* Reset confirmation */}
-              <SelectiveResetDialog
-                open={resetOpen}
-                onOpenChange={setResetOpen}
-                profileName={activeProfile?.name || "Profile"}
-                onConfirm={(options) => {
-                  onResetProfile(options);
-                  setResetOpen(false);
-                }}
-              />
             </div>
 
-            {/* Create/Rename dialog */}
-            <Dialog
-              open={!!nameModalOpen}
-              onOpenChange={(o) => !o && setNameModalOpen(null)}
-            >
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>
-                    {nameModalOpen?.mode === "create"
-                      ? "New Character"
-                      : "Rename Character"}
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-2">
-                  <label className="text-sm">Name</label>
+            {/* Faction Toggle & PMC Level */}
+            {activeProfile && (
+              <div className="mt-2 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {(["USEC", "BEAR"] as const).map((faction) => (
+                    <button
+                      key={faction}
+                      onClick={() => onUpdateFaction(activeProfile.id, faction)}
+                      className={`flex items-center justify-center px-2 py-1 text-xs font-medium rounded-md border transition-all ${
+                        activeProfile.faction === faction
+                          ? faction === "USEC"
+                            ? "bg-blue-600/10 border-blue-600/50 text-blue-600"
+                            : "bg-red-600/10 border-red-600/50 text-red-600"
+                          : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      {faction}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="sidebar-player-level"
+                    className="text-[11px] text-muted-foreground whitespace-nowrap"
+                  >
+                    PMC Level
+                  </label>
                   <Input
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    placeholder="e.g. Hardcore Wipe"
+                    id="sidebar-player-level"
+                    type="number"
+                    min={1}
+                    value={Number.isFinite(playerLevel) ? playerLevel : ""}
+                    onChange={(e) =>
+                      onSetPlayerLevel(Math.max(1, Number(e.target.value) || 1))
+                    }
+                    className="h-7 w-16 text-xs"
                   />
                 </div>
-                <DialogFooter>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setNameModalOpen(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
+              </div>
+            )}
+            {/* Standalone delete confirmation outside the menu so it doesn't close instantly */}
+            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete character?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes local progress for "{activeProfile?.name}".
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
                     onClick={() => {
-                      const trimmed = nameInput.trim();
-                      if (!trimmed) return;
-                      // Close overlays immediately to avoid focus trap during async work
-                      closeAllOverlays();
-                      if (nameModalOpen?.mode === "create")
-                        onCreateProfile(trimmed);
-                      else if (
-                        nameModalOpen?.mode === "rename" &&
-                        activeProfile
-                      )
-                        onRenameProfile(activeProfile.id, trimmed);
+                      if (activeProfile) onDeleteProfile(activeProfile.id);
+                      setDeleteOpen(false);
                     }}
                   >
-                    {nameModalOpen?.mode === "create" ? "Create" : "Save"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            {/* Export/Import dialog */}
+            <ExportImportDialog
+              open={exportImportOpen}
+              onOpenChange={setExportImportOpen}
+              profileName={activeProfile?.name || "Profile"}
+              profiles={profiles}
+              activeProfileId={activeProfileId}
+              onImportComplete={onImportComplete}
+              onImportAsNewProfile={onImportAsNewProfile}
+              onImportAllProfiles={onImportAllProfiles}
+            />
+            {/* Reset confirmation */}
+            <SelectiveResetDialog
+              open={resetOpen}
+              onOpenChange={setResetOpen}
+              profileName={activeProfile?.name || "Profile"}
+              onConfirm={(options) => {
+                onResetProfile(options);
+                setResetOpen(false);
+              }}
+            />
           </div>
+
+          {/* Create/Rename dialog */}
+          <Dialog
+            open={!!nameModalOpen}
+            onOpenChange={(o) => !o && setNameModalOpen(null)}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {nameModalOpen?.mode === "create"
+                    ? "New Character"
+                    : "Rename Character"}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                <label className="text-sm">Name</label>
+                <Input
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="e.g. Hardcore Wipe"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setNameModalOpen(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    const trimmed = nameInput.trim();
+                    if (!trimmed) return;
+                    // Close overlays immediately to avoid focus trap during async work
+                    closeAllOverlays();
+                    if (nameModalOpen?.mode === "create")
+                      onCreateProfile(trimmed);
+                    else if (nameModalOpen?.mode === "rename" && activeProfile)
+                      onRenameProfile(activeProfile.id, trimmed);
+                  }}
+                >
+                  {nameModalOpen?.mode === "create" ? "Create" : "Save"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </SidebarHeader>
       <SidebarContent>

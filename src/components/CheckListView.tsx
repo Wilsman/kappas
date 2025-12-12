@@ -51,6 +51,7 @@ interface CheckListViewProps {
   groupBy: "trader" | "map";
   onSetGroupBy: (mode: "trader" | "map") => void;
   activeProfileId: string;
+  playerLevel: number;
   workingOnTasks?: Set<string>;
   onToggleWorkingOnTask?: (taskId: string) => void;
 }
@@ -67,6 +68,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   groupBy,
   onSetGroupBy,
   activeProfileId,
+  playerLevel,
   workingOnTasks = new Set(),
   onToggleWorkingOnTask,
 }) => {
@@ -80,7 +82,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [enableLevelFilter, setEnableLevelFilter] = useState<boolean>(false);
-  const [playerLevel, setPlayerLevel] = useState<number>(1);
   const [showCompleted, setShowCompleted] = useState<boolean>(true);
 
   // Load UI prefs from IndexedDB (with migration from localStorage)
@@ -91,23 +92,17 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 
         // Check if we have IndexedDB data
         const hasIndexedDBData =
-          prefs.playerLevel !== undefined ||
           prefs.enableLevelFilter !== undefined ||
           prefs.showCompleted !== undefined;
 
         if (hasIndexedDBData) {
           // Use IndexedDB values
-          if (prefs.playerLevel !== undefined)
-            setPlayerLevel(Math.max(1, prefs.playerLevel));
           if (prefs.enableLevelFilter !== undefined)
             setEnableLevelFilter(prefs.enableLevelFilter);
           if (prefs.showCompleted !== undefined)
             setShowCompleted(prefs.showCompleted);
         } else {
           // Migrate from localStorage if exists
-          const storedLvl = localStorage.getItem(
-            `taskTracker_playerLevel::${activeProfileId}`
-          );
           const storedEnable = localStorage.getItem(
             `taskTracker_enableLevelFilter::${activeProfileId}`
           );
@@ -115,26 +110,19 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             `taskTracker_showCompleted::${activeProfileId}`
           );
 
-          const lvl = storedLvl ? Math.max(1, Number(storedLvl) || 1) : 1;
           const enable = storedEnable != null ? storedEnable === "1" : false;
           const show = storedShow != null ? storedShow === "1" : true;
 
-          setPlayerLevel(lvl);
           setEnableLevelFilter(enable);
           setShowCompleted(show);
 
           // Migrate to IndexedDB
           await taskStorage.saveUserPreferences({
-            playerLevel: lvl,
             enableLevelFilter: enable,
             showCompleted: show,
           });
 
           // Clean up localStorage
-          if (storedLvl)
-            localStorage.removeItem(
-              `taskTracker_playerLevel::${activeProfileId}`
-            );
           if (storedEnable)
             localStorage.removeItem(
               `taskTracker_enableLevelFilter::${activeProfileId}`
@@ -154,14 +142,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     loadPrefs();
   }, [activeProfileId]);
 
-  // Persist player level to IndexedDB
-  useEffect(() => {
-    if (!prefsLoaded) return;
-    taskStorage.saveUserPreferences({ playerLevel }).catch(() => {
-      // ignore
-    });
-  }, [playerLevel, prefsLoaded]);
-
   // Persist enableLevelFilter to IndexedDB
   useEffect(() => {
     if (!prefsLoaded) return;
@@ -178,10 +158,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     });
   }, [showCompleted, prefsLoaded]);
 
-  // Listen for global reset event to reset level to 1
+  // Listen for global reset event to reset enableLevelFilter
   useEffect(() => {
     const handler = () => {
-      setPlayerLevel(1);
       setEnableLevelFilter(false);
     };
     window.addEventListener("taskTracker:reset", handler);
@@ -482,25 +461,10 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Label
-              htmlFor="player-level"
+              htmlFor="level-filter"
               className="text-sm text-muted-foreground"
             >
-              PMC Level
-            </Label>
-            <Input
-              id="player-level"
-              type="number"
-              min={1}
-              value={Number.isFinite(playerLevel) ? playerLevel : ""}
-              onChange={(e) =>
-                setPlayerLevel(Math.max(1, Number(e.target.value) || 1))
-              }
-              className="w-20 h-8"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="level-filter" className="text-sm">
-              Enable
+              Level Filter
             </Label>
             <Switch
               id="level-filter"

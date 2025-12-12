@@ -157,6 +157,7 @@ const COMBINED_QUERY = `
   tasks(lang: en) {
     id
     minPlayerLevel
+    factionName
     kappaRequired
     lightkeeperRequired
     map { name }

@@ -29,6 +29,7 @@ import {
   createProfile,
   renameProfile,
   deleteProfile,
+  updateProfileFaction,
   getUniqueProfileName,
   type Profile,
 } from "@/utils/profile";
@@ -109,7 +110,24 @@ import { STORYLINE_QUESTS } from "@/data/storylineQuests";
 function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string>("");
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeProfileFaction, setActiveProfileFaction] = useState<
+    "USEC" | "BEAR" | undefined
+  >(undefined);
+
+  useEffect(() => {
+    const nextFaction = profiles.find((p) => p.id === activeProfileId)?.faction;
+    setActiveProfileFaction(nextFaction);
+  }, [activeProfileId, profiles]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const tasks = useMemo(() => {
+    if (!activeProfileFaction) return allTasks;
+    return allTasks.filter(
+      (t) =>
+        !t.factionName ||
+        t.factionName === "Any" ||
+        t.factionName === activeProfileFaction
+    );
+  }, [allTasks, activeProfileFaction]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const [completedCollectorItems, setCompletedCollectorItems] = useState<
     Set<string>
@@ -140,7 +158,7 @@ function App() {
         achievements: achievementsData,
         hideoutStations,
       } = await fetchCombinedData();
-      setTasks(tasksData.data.tasks);
+      setAllTasks(tasksData.data.tasks);
       setApiCollectorItems(collectorData);
       setAchievements(achievementsData.data.achievements);
       setHideoutStations(hideoutStations.data.hideoutStations);
@@ -186,6 +204,7 @@ function App() {
     "collector" | "hideout-stations"
   >("collector");
   const [selectedMap, setSelectedMap] = useState<string | null>(null);
+  const [playerLevel, setPlayerLevel] = useState<number>(1);
   const isMobile = useIsMobile();
 
   // Always use checklist on mobile
@@ -451,6 +470,8 @@ function App() {
       if (!id || id === activeProfileId) return;
       setActiveProfileIdLS(id);
       setActiveProfileId(id);
+      const profile = getProfiles().find((p) => p.id === id);
+      setActiveProfileFaction(profile?.faction);
       try {
         try {
           (document.activeElement as HTMLElement | null)?.blur?.();
@@ -484,10 +505,26 @@ function App() {
         );
         setWorkingOnCollectorItems(savedWorkingOnItems.collectorItems);
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
+        // Load player level from user preferences
+        const savedPrefs = await taskStorage.loadUserPreferences();
+        if (savedPrefs.playerLevel !== undefined) {
+          setPlayerLevel(Math.max(1, savedPrefs.playerLevel));
+        }
         // Notify components like NotesWidget to update their per-profile state
         window.dispatchEvent(new Event("taskTracker:profileChanged"));
       } catch (e) {
         console.error("Switch profile error", e);
+      }
+    },
+    [activeProfileId]
+  );
+
+  const handleUpdateFaction = useCallback(
+    (id: string, faction: "USEC" | "BEAR") => {
+      updateProfileFaction(id, faction);
+      setProfiles(getProfiles());
+      if (id === activeProfileId) {
+        setActiveProfileFaction(faction);
       }
     },
     [activeProfileId]
@@ -627,11 +664,16 @@ function App() {
         );
         setWorkingOnCollectorItems(savedWorkingOnItems.collectorItems);
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
+        // Load player level from user preferences
+        const savedPrefs = await taskStorage.loadUserPreferences();
+        if (savedPrefs.playerLevel !== undefined) {
+          setPlayerLevel(Math.max(1, savedPrefs.playerLevel));
+        }
 
         // Load cached API data instantly if present
         const cached = loadCombinedCache();
         if (cached) {
-          setTasks(cached.tasks.data.tasks);
+          setAllTasks(cached.tasks.data.tasks);
           setApiCollectorItems(cached.collectorItems);
           setAchievements(cached.achievements.data.achievements);
           setHideoutStations(cached.hideoutStations.data.hideoutStations);
@@ -648,7 +690,7 @@ function App() {
               achievements: achievementsData,
               hideoutStations,
             } = await fetchCombinedData();
-            setTasks(tasksData.data.tasks);
+            setAllTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
             setHideoutStations(hideoutStations.data.hideoutStations);
@@ -656,7 +698,7 @@ function App() {
             console.error("API refresh error", err);
             if (!cached) {
               // No cache and API failed → empty state
-              setTasks([]);
+              setAllTasks([]);
               setApiCollectorItems(null);
               setAchievements([]);
             }
@@ -672,13 +714,13 @@ function App() {
               achievements: achievementsData,
               hideoutStations,
             } = await fetchCombinedData();
-            setTasks(tasksData.data.tasks);
+            setAllTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
             setHideoutStations(hideoutStations.data.hideoutStations);
           } catch (err) {
             console.error("API fetch error", err);
-            setTasks([]);
+            setAllTasks([]);
             setApiCollectorItems(null);
             setAchievements([]);
           } finally {
@@ -698,6 +740,14 @@ function App() {
     };
     void init();
   }, []);
+
+  // Persist playerLevel to IndexedDB when it changes
+  useEffect(() => {
+    if (!activeProfileId) return;
+    taskStorage.saveUserPreferences({ playerLevel }).catch(() => {
+      // ignore persistence errors
+    });
+  }, [playerLevel, activeProfileId]);
 
   // Compute "next" prestige progress (only one visible at a time)
   const [prestigeProgress, setPrestigeProgress] = useState<{
@@ -1263,6 +1313,7 @@ function App() {
           onSwitchProfile={handleSwitchProfile}
           onCreateProfile={handleCreateProfile}
           onRenameProfile={handleRenameProfile}
+          onUpdateFaction={handleUpdateFaction}
           onDeleteProfile={handleDeleteProfile}
           onResetProfile={handleResetProgress}
           onImportComplete={handleImportComplete}
@@ -1277,6 +1328,8 @@ function App() {
           onSelectMap={handleSelectMap}
           collectorGroupBy={collectorGroupBy}
           onSetCollectorGroupBy={setCollectorGroupBy}
+          playerLevel={playerLevel}
+          onSetPlayerLevel={setPlayerLevel}
           side="left"
         />
         <SidebarInset>
@@ -1441,6 +1494,9 @@ function App() {
                   >
                     {viewMode === "grouped" ? (
                       <CheckListView
+                        key={`${activeProfileId}:${
+                          activeProfileFaction ?? "none"
+                        }`}
                         tasks={tasks}
                         completedTasks={completedTasks}
                         hiddenTraders={hiddenTraders}
@@ -1452,6 +1508,7 @@ function App() {
                         groupBy={groupBy}
                         onSetGroupBy={setGroupBy}
                         activeProfileId={activeProfileId}
+                        playerLevel={playerLevel}
                         workingOnTasks={workingOnTasks}
                         onToggleWorkingOnTask={handleToggleWorkingOnTask}
                       />
