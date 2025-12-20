@@ -1,35 +1,42 @@
-# Escape from Tarkov Quest Tracker
-
 A comprehensive quest and progression tracker for Escape from Tarkov, featuring interactive visualizations, multiple profile support, and real-time data from the tarkov.dev API.
 
-## Features
+[![Discord](https://img.shields.io/discord/111111111111111111?color=7289da&label=discord&logo=discord&style=flat-square)](https://discord.gg/X6v7RVQAC8)
+
 
 ### Quest Tracking
 
 - **Checklist View** - Track all quests with trader/map grouping and filtering
-- **Dependency Visualization** - See quest prerequisites and unlock paths
+- **Dependency Visualization** - See quest prerequisites and unlock paths (Tree/Flow views)
 - **Smart Search** - Search quests with URL sync for shareable links
 - **Level Filtering** - Filter quests by your current PMC level
+- **Focus Modes** - Quick toggle for Kappa or Lightkeeper required tasks
 
 ### 1.0 Storyline
 
-- **Storyline Quests** - Track objectives for the 1.0 storyline questline
+- **Quest Objectives** - Track objectives for the 1.0 storyline questline
 - **Decision Map** - Interactive flowchart showing storyline branches and choices
-- **Path Highlighting** - Visualize your route through storyline decisions
+- **Ending Paths** - Visualize specific paths towards different game endings
+- **WIP Status** - Actively updated with new storyline data
 
 ### Progression Tracking
 
+- **Currently Working On** - Dedicated view for your active objectives and items [NEW]
 - **Prestige System** - Track prestige requirements with bulk completion
 - **Collector Items** - Track Found-in-Raid items for the Collector quest
 - **Achievements** - Monitor in-game achievement progress
-- **Hideout Requirements** - Track hideout upgrade prerequisites
+- **Hideout Requirements** - Track hideout upgrade prerequisites and station levels
 
-### Data Management
+### UX & Data Management
 
-- **Multiple Profiles** - Support for multiple characters/accounts
-- **Export/Import** - Backup and restore your progress
+- **Command Menu** - Quick navigation and actions via `Cmd+K` / `Ctrl+K`
+- **Character Profiles** - Support for multiple characters with USEC/BEAR faction toggles
+- **Personal Notes** - Persistent notes widget per profile
+- **Export/Import** - Backup and restore your progress (Individual or All profiles)
+- **Selective Reset** - Reset specific parts of your progress while keeping others
 - **Live API Data** - Toggle between static data and live tarkov.dev API
 - **Offline Support** - All data stored locally in IndexedDB
+- **Christmas Theme** - Seasonal theme toggle for some festive cheer
+
 
 ## Tarkov.dev API
 
@@ -84,17 +91,17 @@ Data is fetched from [tarkov.dev](https://tarkov.dev/) GraphQL API in a single c
 
 API responses are cached in localStorage for 30 minutes.
 
-## Tech Stack
-
 - **React 18** - UI framework
 - **TypeScript** - Type safety
 - **Vite** - Build tool and dev server
 - **Tailwind CSS** - Styling
-- **Shadcn UI / Radix** - UI components
+- **Framer Motion** - Smooth animations and transitions
+- **Shadcn UI / Radix** - Premium UI components
 - **React Flow** - Interactive flowcharts and decision maps
 - **IndexedDB** - Local data persistence
-- **nuqs** - URL state management
+- **nuqs** - Type-safe URL state management
 - **Vitest** - Testing framework
+
 
 ## Getting Started
 
