@@ -176,18 +176,46 @@ function App() {
   const [apiCollectorItems, setApiCollectorItems] =
     useState<CollectorItemsData | null>(null);
 
-  // Transform collector items data to match the expected structure (Live API only)
+
+
+  // Transform collector items data to match the expected structure (Live API + Static fallback)
   const collectorItems = useMemo(() => {
-    if (!apiCollectorItems)
-      return [] as { name: string; order: number; img: string; id: string }[];
-    return apiCollectorItems.data.task.objectives.flatMap((objective) =>
-      objective.items.map((item) => ({
-        name: item.name,
-        order: 0,
-        img: item.iconLink || "",
-        id: item.id,
-      }))
-    );
+    // Static collector items that may not be in the API yet
+    const staticCollectorItemsData = [
+      { name: "Nut Sack balaclava", order: 40, img: "https://assets.tarkov.dev/58ac60eb86f77401897560ff-icon.webp" },
+      { name: "Mazoni golden dumbbell", order: 41, img: "https://assets.tarkov.dev/placeholder-mazoni-icon.webp" },
+      { name: "Tigzresq splint", order: 42, img: "https://assets.tarkov.dev/placeholder-tigzresq-icon.webp" },
+      { name: "Domontovich ushanka hat", order: 43, img: "https://assets.tarkov.dev/placeholder-domontovich-icon.webp" }
+    ];
+    
+    // Try API data first
+    if (apiCollectorItems) {
+      const apiItems = apiCollectorItems.data.task.objectives.flatMap((objective) =>
+        objective.items.map((item) => ({
+          name: item.name,
+          order: 0,
+          img: item.iconLink || "",
+          id: item.id,
+        }))
+      );
+      
+      // Add missing static items to API data
+      const apiItemNames = new Set(apiItems.map(item => item.name));
+      const missingItems = staticCollectorItemsData
+        .filter(staticItem => !apiItemNames.has(staticItem.name))
+        .map(staticItem => ({
+          ...staticItem,
+          id: staticItem.name.toLowerCase().replace(/[^a-z0-9]/g, '-') // Generate ID from name
+        }));
+      
+      return [...apiItems, ...missingItems];
+    }
+    
+    // Fallback to static data if API fails
+    return staticCollectorItemsData.map(staticItem => ({
+      ...staticItem,
+      id: staticItem.name.toLowerCase().replace(/[^a-z0-9]/g, '-')
+    }));
   }, [apiCollectorItems]);
 
   const [viewMode, setViewMode] = useState<
