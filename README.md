@@ -1,6 +1,6 @@
 A comprehensive quest and progression tracker for Escape from Tarkov, featuring interactive visualizations, multiple profile support, and real-time data from the tarkov.dev API.
 
-[![Discord](https://img.shields.io/discord/111111111111111111?color=7289da&label=discord&logo=discord&style=flat-square)](https://discord.gg/X6v7RVQAC8)
+[![Discord](https://img.shields.io/discord/1298971881776611470?color=7289da&label=discord&logo=discord&style=flat-square)](https://discord.gg/X6v7RVQAC8)
 
 ### Quest Tracking
 
@@ -88,6 +88,28 @@ Data is fetched from [tarkov.dev](https://tarkov.dev/) GraphQL API in a single c
 ```
 
 API responses are cached in localStorage for 30 minutes.
+
+## Data Overlay System
+
+The tracker uses a community-maintained data overlay to correct and extend tarkov.dev API data. This handles cases where game updates outpace API updates.
+
+**How it works:**
+
+1. Fetches the latest overlay from [tarkov-data-overlay](https://github.com/tarkovtracker-org/tarkov-data-overlay)
+2. Merges corrections into API responses (task XP, objective counts, prerequisites, etc.)
+3. Falls back to a bundled local copy if the remote fetch fails
+
+**Current corrections include:**
+
+- Task experience values (e.g., Grenadier, A Shooter Born in Heaven)
+- Objective counts (e.g., Grenadier kills reduced from 8 to 5)
+- Missing task prerequisites
+- Task name/wiki link fixes
+- New Collector items (e.g., Nut Sack balaclava)
+
+See [`overlay-refs/`](overlay-refs/) for the local overlay reference and documentation.
+
+## Tech Stack
 
 - **React 18** - UI framework
 - **TypeScript** - Type safety
