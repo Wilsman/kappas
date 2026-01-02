@@ -1,16 +1,50 @@
-import { TaskData, CollectorItemsData, HideoutStationsData, AchievementsData, Overlay, Task } from '../types';
+import { TaskData, CollectorItemsData, HideoutStationsData, AchievementsData, Overlay, Task, TaskOverride, ObjectiveAdd, ObjectiveOverride } from '../types';
 import localOverlay from '../../overlay-refs/overlay.json';
 
 const TARKOV_API_URL = 'https://api.tarkov.dev/graphql';
 export const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json';
 
-export function applyTaskOverlay(baseTask: Task, overlay: Overlay): Task | null {
-  const taskOverride = overlay.tasks?.[baseTask.id];
+type TaskOverlayTarget = Task | CollectorItemsData['data']['task'];
+type TaskRequirement = Task['taskRequirements'][number];
+type RewardContainer = { items?: Array<{ item?: { id?: string } }> } & Record<string, unknown>;
+type ObjectiveItem = { id?: string; name: string; iconLink?: string };
+type ObjectiveWithId = (Task['objectives'] extends Array<infer O> ? O : never) & {
+  id?: string;
+  items?: ObjectiveItem[];
+};
+type ObjectiveLike = {
+  description?: string;
+  items?: ObjectiveItem[];
+  count?: number;
+  maps?: Array<{ id: string; name: string }>;
+};
+type TaskOverrideWithExtras = TaskOverride & {
+  taskRequirements?: Task['taskRequirements'];
+  startRewards?: Task['startRewards'];
+  finishRewards?: Task['finishRewards'];
+  objectives?: Record<string, ObjectiveOverride>;
+  objectivesAdd?: ObjectiveAdd[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isRewardContainer = (value: unknown): value is RewardContainer =>
+  isRecord(value);
+
+export function applyTaskOverlay<T extends TaskOverlayTarget>(baseTask: T, overlay: Overlay): T | null {
+  const taskOverride = overlay.tasks?.[baseTask.id] as TaskOverrideWithExtras | undefined;
   if (!taskOverride) return baseTask;
 
   if (taskOverride.disabled === true) return null;
 
-  const result = { ...baseTask };
+  const result = { ...baseTask } as T & Record<string, unknown>;
+  const buildIconLink = (id?: string) =>
+    id ? `https://assets.tarkov.dev/${id}-icon.webp` : "";
+  const withIconLink = (item: ObjectiveItem): ObjectiveItem => {
+    if (!item || item.iconLink || !item.id) return item;
+    return { ...item, iconLink: buildIconLink(item.id) };
+  };
 
   // Fields that need special merge handling (arrays that should append, not replace)
   const arrayMergeFields = ['taskRequirements'];
@@ -22,50 +56,83 @@ export function applyTaskOverlay(baseTask: Task, overlay: Overlay): Task | null 
 
     // Smart merge for taskRequirements (append new ones)
     if (arrayMergeFields.includes(key) && Array.isArray(value)) {
-      const existing = (result as any)[key] || [];
-      const existingIds = new Set(existing.map((r: any) => r.task?.id));
-      const newItems = (value as any[]).filter(item => !existingIds.has(item.task?.id));
-      (result as any)[key] = [...existing, ...newItems];
+      const existingValue = result[key];
+      const existing = Array.isArray(existingValue) ? (existingValue as TaskRequirement[]) : [];
+      const existingIds = new Set(existing.map((r) => r.task?.id));
+      const newItems = (value as TaskRequirement[]).filter(
+        (item) => !existingIds.has(item.task?.id)
+      );
+      result[key] = [...existing, ...newItems];
       continue;
     }
 
     // Smart merge for finishRewards/startRewards (append new items)
     if (nestedArrayMergeFields.includes(key) && typeof value === 'object' && value !== null) {
-      const existingRewards = (result as any)[key] || {};
-      const newRewards = value as any;
-
-      if (newRewards.items && Array.isArray(newRewards.items)) {
-        const existingItems = existingRewards.items || [];
-        const existingItemIds = new Set(existingItems.map((i: any) => i.item?.id));
-        const newItems = newRewards.items.filter((i: any) => !existingItemIds.has(i.item?.id));
-        (result as any)[key] = {
+      const existingRewards = isRewardContainer(result[key]) ? result[key] : {};
+      const newRewards = isRewardContainer(value) ? value : {};
+      const existingItems = Array.isArray(existingRewards.items)
+        ? existingRewards.items
+        : [];
+      const newItems = Array.isArray(newRewards.items)
+        ? newRewards.items.filter(
+            (i) => !new Set(existingItems.map((e) => e.item?.id)).has(i.item?.id)
+          )
+        : [];
+      if (newItems.length > 0) {
+        result[key] = {
           ...existingRewards,
+          ...newRewards,
           items: [...existingItems, ...newItems],
         };
       } else {
-        (result as any)[key] = { ...existingRewards, ...newRewards };
+        result[key] = { ...existingRewards, ...newRewards };
       }
       continue;
     }
 
     // Default: direct assignment
-    (result as any)[key] = value;
+    result[key] = value;
   }
 
   // Apply objective patches (ID-keyed object)
   if (taskOverride.objectives && typeof taskOverride.objectives === 'object') {
-    result.objectives = (baseTask.objectives || []).map(obj => {
-      const patch = (taskOverride.objectives as Record<string, any>)[(obj as any).id];
+    result.objectives = (baseTask.objectives || []).map((obj) => {
+      const objWithId = obj as ObjectiveWithId;
+      const patch = objWithId.id ? taskOverride.objectives?.[objWithId.id] : undefined;
       return patch ? { ...obj, ...patch } : obj;
     });
   }
 
+  const expandObjectiveItems = (objective: ObjectiveLike): ObjectiveLike[] => {
+    const items = objective.items?.map(withIconLink) || [];
+    if (
+      items.length > 0 &&
+      typeof objective.description === "string" &&
+      objective.description.includes("Collector items")
+    ) {
+      return items.map((item) => ({
+        ...objective,
+        description: `Hand over the found in raid item: ${item.name}`,
+        items: [item],
+      }));
+    }
+    return [{ ...objective, items }];
+  };
+
   // Append missing objectives
   if (taskOverride.objectivesAdd && Array.isArray(taskOverride.objectivesAdd)) {
+    const expanded = taskOverride.objectivesAdd.flatMap(expandObjectiveItems);
     result.objectives = [
       ...(result.objectives || []),
-      ...taskOverride.objectivesAdd,
-    ] as any;
+      ...expanded,
+    ];
+  }
+
+  if (result.objectives) {
+    result.objectives = result.objectives.map((objective) => ({
+      ...objective,
+      items: objective.items?.map(withIconLink),
+    }));
   }
 
   return result;
@@ -284,12 +351,23 @@ const COMBINED_QUERY = `
 }
 `;
 
-export async function fetchCombinedData(): Promise<{
+export type FetchStage =
+  | 'request'
+  | 'parse'
+  | 'overlay-fetch'
+  | 'overlay-apply'
+  | 'normalize'
+  | 'done';
+
+export async function fetchCombinedData(
+  onStage?: (stage: FetchStage) => void
+): Promise<{
   tasks: TaskData;
   collectorItems: CollectorItemsData;
   achievements: AchievementsData;
   hideoutStations: { data: HideoutStationsData };
 }> {
+  onStage?.('request');
   const response = await fetch(TARKOV_API_URL, {
     method: 'POST',
     headers: {
@@ -304,6 +382,7 @@ export async function fetchCombinedData(): Promise<{
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
+  onStage?.('parse');
   const result: CombinedApiData = await response.json();
 
   if (result.errors) {
@@ -315,11 +394,14 @@ export async function fetchCombinedData(): Promise<{
   const tasksWithOverrides = applyTaskRequirementOverrides(result.data.tasks);
 
   // Apply Overlay (Remote with Local Fallback)
+  onStage?.('overlay-fetch');
   const overlay = await fetchOverlay();
+  onStage?.('overlay-apply');
   const tasksWithOverlay = tasksWithOverrides
     .map(task => applyTaskOverlay(task, overlay))
     .filter((task): task is Task => task !== null);
 
+  onStage?.('normalize');
   const tasksWithMaps = tasksWithOverlay.map(task => {
     const mapsSet = new Set<string>();
 
@@ -347,7 +429,9 @@ export async function fetchCombinedData(): Promise<{
 
   const collectorItems: CollectorItemsData = {
     data: {
-      task: result.data.task ? (applyTaskOverlay(result.data.task as any, overlay) as any) : result.data.task
+      task: result.data.task
+        ? (applyTaskOverlay(result.data.task, overlay) as CollectorItemsData['data']['task'])
+        : result.data.task
     }
   };
 
@@ -366,6 +450,7 @@ export async function fetchCombinedData(): Promise<{
   const combined = { tasks, collectorItems, achievements, hideoutStations };
   // Save fresh data to cache for next startup
   saveCombinedCache(combined);
+  onStage?.('done');
   return combined;
 }
 

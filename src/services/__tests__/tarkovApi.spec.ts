@@ -106,12 +106,19 @@ describe('fetchCombinedData', () => {
     expect(result.achievements.data.achievements[0].id).toBe('a1');
     expect(result.hideoutStations.data.hideoutStations[0].name).toBe('Workbench');
 
-    // Ensure correct fetch call
+    // Ensure correct fetch calls
     const fetchSpy = globalThis.fetch as unknown as Mock;
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const call = fetchSpy.mock.calls[0] as [input: unknown, init?: unknown];
-    expect(call[0]).toContain('https://api.tarkov.dev/graphql');
-    const init = (call[1] ?? {}) as { body?: string };
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
+    const graphCall = calls.find((call) =>
+      String(call[0]).includes('https://api.tarkov.dev/graphql')
+    );
+    const overlayCall = calls.find((call) =>
+      String(call[0]).includes('tarkov-data-overlay')
+    );
+    expect(graphCall).toBeDefined();
+    expect(overlayCall).toBeDefined();
+    const init = (graphCall?.[1] ?? {}) as { body?: string };
     const body = JSON.parse(init.body ?? '{}') as { query?: string };
     expect(body.query).toContain('tasks');
     expect(body.query).toContain('achievements');
@@ -270,4 +277,3 @@ describe('Cache functionality', () => {
     expect(isCombinedCacheFresh()).toBe(false);
   });
 });
-

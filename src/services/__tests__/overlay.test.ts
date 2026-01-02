@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { applyTaskOverlay, fetchOverlay, OVERLAY_URL } from "../tarkovApi";
+import { describe, expect, test } from "vitest";
+import { applyTaskOverlay, fetchOverlay } from "../tarkovApi";
 import type { Task, Overlay } from "../../types";
 import localOverlay from "../../../overlay-refs/overlay.json";
 
@@ -30,7 +30,10 @@ describe("Overlay Integration", () => {
         map: { name: "Customs" },
         maps: [],
         trader: { name: "Prapor" },
-    } as any;
+        startRewards: { items: [] },
+        finishRewards: { items: [] },
+        objectives: [],
+    };
 
     test("should apply top-level field overrides", () => {
         const patched = applyTaskOverlay(baseTask, mockOverlay);
@@ -68,12 +71,12 @@ describe("Overlay Integration", () => {
             taskRequirements: [
                 { task: { id: "existing-req", name: "Existing Requirement" } }
             ]
-        } as any;
+        };
 
         const patched = applyTaskOverlay(taskWithExistingReqs, overlayWithReqs);
         expect(patched?.taskRequirements).toHaveLength(2);
-        expect(patched?.taskRequirements.map((r: any) => r.task.id)).toContain("existing-req");
-        expect(patched?.taskRequirements.map((r: any) => r.task.id)).toContain("new-req");
+        expect(patched?.taskRequirements.map((r) => r.task.id)).toContain("existing-req");
+        expect(patched?.taskRequirements.map((r) => r.task.id)).toContain("new-req");
     });
 
     describe("Collector Task (Nut Sack Overlay)", () => {
@@ -84,10 +87,18 @@ describe("Overlay Integration", () => {
             const baseCollectorTask: Task = {
                 id: collectorTaskId,
                 name: "Collector",
+                minPlayerLevel: 1,
+                taskRequirements: [],
+                wikiLink: "",
+                map: { name: "Customs" },
+                maps: [],
+                trader: { name: "Prapor" },
+                startRewards: { items: [] },
+                finishRewards: { items: [] },
                 objectives: [
                     { description: "Existing Objective", items: [{ id: "item1", name: "Existing Item" }] }
                 ]
-            } as any;
+            };
 
             const patched = applyTaskOverlay(baseCollectorTask, overlay);
 
@@ -97,9 +108,16 @@ describe("Overlay Integration", () => {
             expect(objectives.length).toBeGreaterThan(1);
 
             const nutSackObjective = objectives.find(obj =>
-                obj.items?.some(i => i.name === "Nut Sack balaclava")
+                obj.description === "Hand over the found in raid item: Nut Sack balaclava"
             );
             expect(nutSackObjective).toBeDefined();
+            const nutSackItem = nutSackObjective?.items?.find(
+                (item) => item.name === "Nut Sack balaclava"
+            );
+            expect(nutSackItem?.id).toBe("69398e94ca94fd2877039504");
+            expect(nutSackItem?.iconLink).toBe(
+                "https://assets.tarkov.dev/69398e94ca94fd2877039504-icon.webp"
+            );
         });
     });
 
@@ -122,7 +140,16 @@ describe("Overlay Integration", () => {
                 id: grenadierId,
                 name: "Grenadier",
                 experience: 10000, // Tarkov Dev API might say 10k
-            } as any;
+                minPlayerLevel: 1,
+                taskRequirements: [],
+                wikiLink: "",
+                map: { name: "Customs" },
+                maps: [],
+                trader: { name: "Prapor" },
+                startRewards: { items: [] },
+                finishRewards: { items: [] },
+                objectives: [],
+            };
 
             const overlayData = overlay.tasks?.[grenadierId];
             const result = applyTaskOverlay(apiData, overlay);
