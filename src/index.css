@@ -140,41 +140,6 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  .christmas {
-    /* Christmas theme - festive forest green and red palette */
-    --background: 150 15% 8%;
-    --foreground: 0 0% 95%;
-    --card: 150 15% 10%;
-    --card-foreground: 0 0% 95%;
-    --popover: 150 15% 10%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 0 84% 60%;
-    --primary-foreground: 0 0% 95%;
-    --secondary: 45 100% 85%;
-    --secondary-foreground: 150 15% 8%;
-    --muted: 150 15% 15%;
-    --muted-foreground: 0 0% 65%;
-    --accent: 150 50% 40%;
-    --accent-foreground: 0 0% 95%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 95%;
-    --border: 150 20% 20%;
-    --input: 150 15% 15%;
-    --ring: 0 84% 60%;
-    --chart-1: 0 84% 60%;
-    --chart-2: 150 50% 40%;
-    --chart-3: 45 100% 85%;
-    --chart-4: 280 100% 70%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 150 15% 10%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 0 84% 60%;
-    --sidebar-primary-foreground: 0 0% 95%;
-    --sidebar-accent: 150 15% 15%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 150 20% 20%;
-    --sidebar-ring: 0 84% 60%;
-  }
 }
 
 @layer base {
@@ -229,86 +194,6 @@
   html {
     color-scheme: dark;
   }
-}
-
-/* Christmas theme festive effects */
-.christmas {
-  /* Subtle falling snow animation */
-  position: relative;
-}
-
-/* Snow container */
-.christmas-snow {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 50;
-}
-
-/* Individual snowflakes */
-.christmas-snowflake {
-  position: absolute;
-  top: -20px;
-  color: rgba(255, 255, 255, 0.9);
-  user-select: none;
-  pointer-events: none;
-  animation: snowfall var(--fall-duration, 15s) linear infinite;
-  font-size: var(--size, 12px);
-  left: var(--left-position, 50%);
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
-  opacity: 0;
-  will-change: transform, opacity;
-}
-
-@keyframes snowfall {
-  0% {
-    transform: translateY(-20px) translateX(0);
-    opacity: 0;
-  }
-  5% {
-    opacity: 1;
-  }
-  25% {
-    transform: translateY(calc(25vh)) translateX(var(--sway-amount, 30px));
-  }
-  50% {
-    transform: translateY(calc(50vh)) translateX(0);
-  }
-  75% {
-    transform: translateY(calc(75vh))
-      translateX(calc(var(--sway-amount, 30px) * -1));
-  }
-  95% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(calc(100vh + 20px)) translateX(0);
-    opacity: 0;
-  }
-}
-
-/* Festive glow effects for interactive elements */
-.christmas button:hover {
-  box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
-}
-
-.christmas .bg-primary:hover {
-  box-shadow: 0 0 20px rgba(220, 38, 38, 0.4);
-}
-
-/* Candy cane progress bars */
-.christmas [role="progressbar"][style*="background: linear-gradient"] {
-  background: repeating-linear-gradient(
-    45deg,
-    hsl(var(--primary)),
-    hsl(var(--primary)) 10px,
-    hsl(var(--secondary)) 10px,
-    hsl(var(--secondary)) 20px
-  ) !important;
 }
 
 @layer base {
