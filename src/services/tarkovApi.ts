@@ -365,6 +365,7 @@ export async function fetchCombinedData(
   collectorItems: CollectorItemsData;
   achievements: AchievementsData;
   hideoutStations: { data: HideoutStationsData };
+  overlay: Overlay;
 }> {
   onStage?.('request');
   const response = await fetch(TARKOV_API_URL, {
@@ -450,7 +451,7 @@ export async function fetchCombinedData(
   // Save fresh data to cache for next startup
   saveCombinedCache(combined);
   onStage?.('done');
-  return combined;
+  return { ...combined, overlay };
 }
 
 export async function fetchHideoutStations(): Promise<{ data: HideoutStationsData }> {

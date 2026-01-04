@@ -11,7 +11,13 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { RotateCcw, BarChart3, Search } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { TextShimmerWave } from "@/components/ui/text-shimmer-wave";
-import { Task, CollectorItemsData, Achievement, HideoutStation } from "./types";
+import {
+  Task,
+  CollectorItemsData,
+  Achievement,
+  HideoutStation,
+  Overlay,
+} from "./types";
 import { QuestProgressPanel } from "./components/QuestProgressPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import SEO from "./components/SEO";
@@ -30,6 +36,7 @@ import {
   renameProfile,
   deleteProfile,
   updateProfileFaction,
+  updateProfileEdition,
   getUniqueProfileName,
   type Profile,
 } from "@/utils/profile";
@@ -41,6 +48,7 @@ import {
 import { buildTaskDependencyMap, getAllDependencies } from "./utils/taskUtils";
 import {
   fetchCombinedData,
+  fetchOverlay,
   loadCombinedCache,
   isCombinedCacheFresh,
   type FetchStage,
@@ -108,27 +116,127 @@ import { OnboardingModal } from "./components/OnboardingModal";
 import { LazyLoadErrorBoundary } from "./components/LazyLoadErrorBoundary";
 import { STORYLINE_QUESTS } from "@/data/storylineQuests";
 
+const LOADING_STAGES = {
+  boot: {
+    title: "INIT::QUEST-CORE v1.0",
+    detail: "BOOTSTRAP SEQUENCE...",
+    progress: 8,
+  },
+  profiles: {
+    title: "SYS::PROFILES",
+    detail: "LOADING USER CONTEXT...",
+    progress: 16,
+  },
+  local: {
+    title: "SYS::LOCAL",
+    detail: "RESTORING SAVED PROGRESS...",
+    progress: 28,
+  },
+  prefs: {
+    title: "SYS::PREFERENCES",
+    detail: "APPLYING USER SETTINGS...",
+    progress: 38,
+  },
+  cacheCheck: {
+    title: "CACHE::CHECK",
+    detail: "VERIFYING LOCAL SNAPSHOT...",
+    progress: 48,
+  },
+  cacheApply: {
+    title: "CACHE::APPLY",
+    detail: "HYDRATING UI FROM CACHE...",
+    progress: 58,
+  },
+  request: {
+    title: "NET::REQUEST",
+    detail: "REQUESTING QUEST PAYLOAD...",
+    progress: 68,
+  },
+  parse: {
+    title: "NET::PARSE",
+    detail: "DECODING API RESPONSE...",
+    progress: 74,
+  },
+  overlayFetch: {
+    title: "NET::OVERLAY",
+    detail: "FETCHING DATA OVERLAY...",
+    progress: 80,
+  },
+  overlayApply: {
+    title: "MERGE::OVERLAY",
+    detail: "APPLYING PATCHES...",
+    progress: 86,
+  },
+  normalize: {
+    title: "MAP::NORMALIZE",
+    detail: "BUILDING MAP INDEX...",
+    progress: 92,
+  },
+  finalize: {
+    title: "SYS::FINALIZE",
+    detail: "FINALIZING SESSION...",
+    progress: 97,
+  },
+} as const;
+
 function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string>("");
   const [activeProfileFaction, setActiveProfileFaction] = useState<
     "USEC" | "BEAR" | undefined
   >(undefined);
+  const [activeProfileEdition, setActiveProfileEdition] = useState<
+    string | undefined
+  >(undefined);
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
 
   useEffect(() => {
     const nextFaction = profiles.find((p) => p.id === activeProfileId)?.faction;
     setActiveProfileFaction(nextFaction);
   }, [activeProfileId, profiles]);
+  useEffect(() => {
+    const nextEdition = profiles.find((p) => p.id === activeProfileId)?.edition;
+    setActiveProfileEdition(nextEdition);
+  }, [activeProfileId, profiles]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const editionOptions = useMemo(() => {
+    const editions = overlay?.editions;
+    if (!editions) return [];
+    return Object.values(editions).sort((a, b) => a.value - b.value);
+  }, [overlay]);
   const tasks = useMemo(() => {
-    if (!activeProfileFaction) return allTasks;
-    return allTasks.filter(
-      (t) =>
-        !t.factionName ||
-        t.factionName === "Any" ||
-        t.factionName === activeProfileFaction
-    );
-  }, [allTasks, activeProfileFaction]);
+    let filtered = allTasks;
+    if (activeProfileFaction) {
+      filtered = filtered.filter(
+        (t) =>
+          !t.factionName ||
+          t.factionName === "Any" ||
+          t.factionName === activeProfileFaction
+      );
+    }
+
+    if (overlay?.editions && activeProfileEdition) {
+      const currentEdition = overlay.editions[activeProfileEdition];
+      if (currentEdition) {
+        const excluded = new Set(currentEdition.excludedTaskIds ?? []);
+        const exclusive = new Set(currentEdition.exclusiveTaskIds ?? []);
+        const allExclusive = new Set(
+          Object.values(overlay.editions).flatMap(
+            (edition) => edition.exclusiveTaskIds ?? []
+          )
+        );
+        filtered = filtered.filter((task) => {
+          if (excluded.has(task.id)) return false;
+          if (allExclusive.size > 0 && allExclusive.has(task.id)) {
+            return exclusive.has(task.id);
+          }
+          return true;
+        });
+      }
+    }
+
+    return filtered;
+  }, [allTasks, activeProfileFaction, activeProfileEdition, overlay]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const [completedCollectorItems, setCompletedCollectorItems] = useState<
     Set<string>
@@ -144,73 +252,16 @@ function App() {
   const [completedTaskObjectives, setCompletedTaskObjectives] = useState<
     Set<string>
   >(new Set());
+  const [taskObjectiveItemProgress, setTaskObjectiveItemProgress] = useState<
+    Record<string, number>
+  >({});
   // Show all traders by default (no hidden traders initially)
   const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const LOADING_STAGES = {
-    boot: {
-      title: "INIT::QUEST-CORE v1.0",
-      detail: "BOOTSTRAP SEQUENCE...",
-      progress: 8,
-    },
-    profiles: {
-      title: "SYS::PROFILES",
-      detail: "LOADING USER CONTEXT...",
-      progress: 16,
-    },
-    local: {
-      title: "SYS::LOCAL",
-      detail: "RESTORING SAVED PROGRESS...",
-      progress: 28,
-    },
-    prefs: {
-      title: "SYS::PREFERENCES",
-      detail: "APPLYING USER SETTINGS...",
-      progress: 38,
-    },
-    cacheCheck: {
-      title: "CACHE::CHECK",
-      detail: "VERIFYING LOCAL SNAPSHOT...",
-      progress: 48,
-    },
-    cacheApply: {
-      title: "CACHE::APPLY",
-      detail: "HYDRATING UI FROM CACHE...",
-      progress: 58,
-    },
-    request: {
-      title: "NET::REQUEST",
-      detail: "REQUESTING QUEST PAYLOAD...",
-      progress: 68,
-    },
-    parse: {
-      title: "NET::PARSE",
-      detail: "DECODING API RESPONSE...",
-      progress: 74,
-    },
-    overlayFetch: {
-      title: "NET::OVERLAY",
-      detail: "FETCHING DATA OVERLAY...",
-      progress: 80,
-    },
-    overlayApply: {
-      title: "MERGE::OVERLAY",
-      detail: "APPLYING PATCHES...",
-      progress: 86,
-    },
-    normalize: {
-      title: "MAP::NORMALIZE",
-      detail: "BUILDING MAP INDEX...",
-      progress: 92,
-    },
-    finalize: {
-      title: "SYS::FINALIZE",
-      detail: "FINALIZING SESSION...",
-      progress: 97,
-    },
-  } as const;
-  const [loadingStage, setLoadingStage] = useState(LOADING_STAGES.boot);
+  const [loadingStage, setLoadingStage] = useState<
+    (typeof LOADING_STAGES)[keyof typeof LOADING_STAGES]
+  >(LOADING_STAGES.boot);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   const handleRefresh = useCallback(async () => {
@@ -221,11 +272,13 @@ function App() {
         collectorItems: collectorData,
         achievements: achievementsData,
         hideoutStations,
+        overlay: overlayData,
       } = await fetchCombinedData();
       setAllTasks(tasksData.data.tasks);
       setApiCollectorItems(collectorData);
       setAchievements(achievementsData.data.achievements);
       setHideoutStations(hideoutStations.data.hideoutStations);
+      setOverlay(overlayData);
     } catch (err) {
       console.error("Manual refresh error", err);
     } finally {
@@ -587,6 +640,7 @@ function App() {
       setActiveProfileId(id);
       const profile = getProfiles().find((p) => p.id === id);
       setActiveProfileFaction(profile?.faction);
+      setActiveProfileEdition(profile?.edition);
       try {
         try {
           (document.activeElement as HTMLElement | null)?.blur?.();
@@ -606,6 +660,8 @@ function App() {
           await taskStorage.loadCompletedStorylineMapNodes();
         const savedTaskObjectives =
           await taskStorage.loadCompletedTaskObjectives();
+        const savedTaskObjectiveItemProgress =
+          await taskStorage.loadTaskObjectiveItemProgress();
         const savedWorkingOnItems = await taskStorage.loadWorkingOnItems();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
@@ -614,6 +670,7 @@ function App() {
         setCompletedStorylineObjectives(savedStorylineObjectives);
         setCompletedStorylineMapNodes(savedStorylineMapNodes);
         setCompletedTaskObjectives(savedTaskObjectives);
+        setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
         setWorkingOnTasks(savedWorkingOnItems.tasks);
         setWorkingOnStorylineObjectives(
           savedWorkingOnItems.storylineObjectives
@@ -643,6 +700,17 @@ function App() {
       setProfiles(getProfiles());
       if (id === activeProfileId) {
         setActiveProfileFaction(faction);
+      }
+    },
+    [activeProfileId]
+  );
+
+  const handleUpdateEdition = useCallback(
+    (id: string, edition: string) => {
+      updateProfileEdition(id, edition);
+      setProfiles(getProfiles());
+      if (id === activeProfileId) {
+        setActiveProfileEdition(edition);
       }
     },
     [activeProfileId]
@@ -704,6 +772,7 @@ function App() {
   useEffect(() => {
     const init = async () => {
       try {
+        let overlayLoaded = false;
         setLoadingStage(LOADING_STAGES.profiles);
         const ensured = ensureProfiles();
         setProfiles(ensured.profiles);
@@ -770,6 +839,8 @@ function App() {
           await taskStorage.loadCompletedStorylineMapNodes();
         const savedTaskObjectives =
           await taskStorage.loadCompletedTaskObjectives();
+        const savedTaskObjectiveItemProgress =
+          await taskStorage.loadTaskObjectiveItemProgress();
         const savedWorkingOnItems = await taskStorage.loadWorkingOnItems();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
@@ -778,6 +849,7 @@ function App() {
         setCompletedStorylineObjectives(savedStorylineObjectives);
         setCompletedStorylineMapNodes(savedStorylineMapNodes);
         setCompletedTaskObjectives(savedTaskObjectives);
+        setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
         setWorkingOnTasks(savedWorkingOnItems.tasks);
         setWorkingOnStorylineObjectives(
           savedWorkingOnItems.storylineObjectives
@@ -847,11 +919,14 @@ function App() {
               collectorItems: collectorData,
               achievements: achievementsData,
               hideoutStations,
+              overlay: overlayData,
             } = await fetchCombinedData(handleFetchStage);
             setAllTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
             setHideoutStations(hideoutStations.data.hideoutStations);
+            setOverlay(overlayData);
+            overlayLoaded = true;
           } catch (err) {
             console.error("API refresh error", err);
             if (!cached) {
@@ -871,11 +946,14 @@ function App() {
               collectorItems: collectorData,
               achievements: achievementsData,
               hideoutStations,
+              overlay: overlayData,
             } = await fetchCombinedData(handleFetchStage);
             setAllTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
             setHideoutStations(hideoutStations.data.hideoutStations);
+            setOverlay(overlayData);
+            overlayLoaded = true;
           } catch (err) {
             console.error("API fetch error", err);
             setAllTasks([]);
@@ -889,6 +967,14 @@ function App() {
         // If cache existed and was fresh, we're already rendered; nothing more to do.
         if (cached && !needsRefresh) {
           // noop
+        }
+        if (!overlayLoaded) {
+          try {
+            const overlayData = await fetchOverlay();
+            setOverlay(overlayData);
+          } catch (err) {
+            console.warn("Overlay fetch error", err);
+          }
         }
       } catch (err) {
         console.error("Init error", err);
@@ -1086,6 +1172,26 @@ function App() {
     [completedTaskObjectives, activeProfileId]
   );
 
+  const handleUpdateTaskObjectiveItemProgress = useCallback(
+    (objectiveItemKey: string, count: number) => {
+      if (!activeProfileId) return;
+      setTaskObjectiveItemProgress((prev) => {
+        const next = { ...prev };
+        if (count <= 0) delete next[objectiveItemKey];
+        else next[objectiveItemKey] = count;
+        taskStorage.setProfile(activeProfileId);
+        taskStorage
+          .init()
+          .then(() => taskStorage.saveTaskObjectiveItemProgress(next))
+          .catch((err) => {
+            console.error("Save task objective item progress error", err);
+          });
+        return next;
+      });
+    },
+    [activeProfileId]
+  );
+
   // Working on toggle handlers
   const handleToggleWorkingOnTask = useCallback(
     async (taskId: string) => {
@@ -1201,6 +1307,7 @@ function App() {
 
       // Reset state for selected areas
       if (resetNormalTasks) setCompletedTasks(new Set());
+      if (resetNormalTasks) setTaskObjectiveItemProgress({});
       if (resetCollectorItems) setCompletedCollectorItems(new Set());
       if (resetHideoutItems) setCompletedHideoutItems(new Set());
       if (resetAchievements) setCompletedAchievements(new Set());
@@ -1221,6 +1328,8 @@ function App() {
 
         // Save empty sets for selected areas
         if (resetNormalTasks) await taskStorage.saveCompletedTasks(new Set());
+        if (resetNormalTasks)
+          await taskStorage.saveTaskObjectiveItemProgress({});
         if (resetCollectorItems)
           await taskStorage.saveCompletedCollectorItems(new Set());
         if (resetHideoutItems)
@@ -1289,6 +1398,8 @@ function App() {
         await taskStorage.loadCompletedStorylineMapNodes();
       const savedTaskObjectives =
         await taskStorage.loadCompletedTaskObjectives();
+      const savedTaskObjectiveItemProgress =
+        await taskStorage.loadTaskObjectiveItemProgress();
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
       setCompletedHideoutItems(savedHideoutItems);
@@ -1296,6 +1407,7 @@ function App() {
       setCompletedStorylineObjectives(savedStorylineObjectives);
       setCompletedStorylineMapNodes(savedStorylineMapNodes);
       setCompletedTaskObjectives(savedTaskObjectives);
+      setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
       // Notify components like NotesWidget and PrestigesView to refresh
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
       window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
@@ -1332,6 +1444,8 @@ function App() {
         await taskStorage.loadCompletedStorylineMapNodes();
       const savedTaskObjectives =
         await taskStorage.loadCompletedTaskObjectives();
+      const savedTaskObjectiveItemProgress =
+        await taskStorage.loadTaskObjectiveItemProgress();
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
       setCompletedHideoutItems(savedHideoutItems);
@@ -1339,6 +1453,7 @@ function App() {
       setCompletedStorylineObjectives(savedStorylineObjectives);
       setCompletedStorylineMapNodes(savedStorylineMapNodes);
       setCompletedTaskObjectives(savedTaskObjectives);
+      setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
 
       // Notify components to refresh
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
@@ -1392,6 +1507,8 @@ function App() {
             await taskStorage.loadCompletedStorylineMapNodes();
           const savedTaskObjectives =
             await taskStorage.loadCompletedTaskObjectives();
+          const savedTaskObjectiveItemProgress =
+            await taskStorage.loadTaskObjectiveItemProgress();
           setCompletedTasks(savedTasks);
           setCompletedCollectorItems(savedCollectorItems);
           setCompletedHideoutItems(savedHideoutItems);
@@ -1399,6 +1516,7 @@ function App() {
           setCompletedStorylineObjectives(savedStorylineObjectives);
           setCompletedStorylineMapNodes(savedStorylineMapNodes);
           setCompletedTaskObjectives(savedTaskObjectives);
+          setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
         }
       }
 
@@ -1493,10 +1611,13 @@ function App() {
           focusMode={focusMode}
           profiles={profiles}
           activeProfileId={activeProfileId}
+          editions={editionOptions}
+          activeEditionId={activeProfileEdition}
           onSwitchProfile={handleSwitchProfile}
           onCreateProfile={handleCreateProfile}
           onRenameProfile={handleRenameProfile}
           onUpdateFaction={handleUpdateFaction}
+          onUpdateEdition={handleUpdateEdition}
           onDeleteProfile={handleDeleteProfile}
           onResetProfile={handleResetProgress}
           onImportComplete={handleImportComplete}
@@ -1699,6 +1820,10 @@ function App() {
                         playerLevel={playerLevel}
                         workingOnTasks={workingOnTasks}
                         onToggleWorkingOnTask={handleToggleWorkingOnTask}
+                        taskObjectiveItemProgress={taskObjectiveItemProgress}
+                        onUpdateTaskObjectiveItemProgress={
+                          handleUpdateTaskObjectiveItemProgress
+                        }
                       />
                     ) : viewMode === "collector" ? (
                       <CollectorView
@@ -1706,7 +1831,6 @@ function App() {
                         completedCollectorItems={completedCollectorItems}
                         onToggleCollectorItem={handleToggleCollectorItem}
                         completedHideoutItems={completedHideoutItems}
-                        onToggleHideoutItem={handleToggleHideoutItem}
                         onSetHideoutItems={handleSetHideoutItems}
                         groupBy={collectorGroupBy}
                         hideoutStations={hideoutStations}
@@ -1799,6 +1923,10 @@ function App() {
                         onToggleHideoutItem={handleToggleHideoutItem}
                         completedTaskObjectives={completedTaskObjectives}
                         onToggleTaskObjective={handleToggleTaskObjective}
+                        taskObjectiveItemProgress={taskObjectiveItemProgress}
+                        onUpdateTaskObjectiveItemProgress={
+                          handleUpdateTaskObjectiveItemProgress
+                        }
                       />
                     ) : viewMode === "flow" ? (
                       <FlowView

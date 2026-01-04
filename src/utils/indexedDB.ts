@@ -1,7 +1,7 @@
 import { isProfileDeleted } from "./profile";
 
 const DB_BASE_NAME = "TarkovQuests";
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 const TASKS_STORE = "completedTasks";
 const COLLECTOR_STORE = "completedCollectorItems";
 const PRESTIGE_STORE = "prestigeProgress";
@@ -12,6 +12,7 @@ const STORYLINE_MAP_NODES_STORE = "completedStorylineMapNodes";
 const USER_PREFS_STORE = "userPreferences";
 const WORKING_ON_STORE = "workingOnItems";
 const TASK_OBJECTIVES_STORE = "completedTaskObjectives";
+const TASK_OBJECTIVE_ITEM_PROGRESS_STORE = "taskObjectiveItemProgress";
 
 // User preferences interface for export/import
 export interface UserPreferences {
@@ -99,6 +100,13 @@ export class TaskStorage {
         }
         if (!db.objectStoreNames.contains(TASK_OBJECTIVES_STORE)) {
           db.createObjectStore(TASK_OBJECTIVES_STORE, { keyPath: "id" });
+        }
+        if (
+          !db.objectStoreNames.contains(TASK_OBJECTIVE_ITEM_PROGRESS_STORE)
+        ) {
+          db.createObjectStore(TASK_OBJECTIVE_ITEM_PROGRESS_STORE, {
+            keyPath: "id",
+          });
         }
       };
     });
@@ -396,6 +404,45 @@ export class TaskStorage {
     });
   }
 
+  async saveTaskObjectiveItemProgress(
+    progress: Record<string, number>
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    const tx = this.db!.transaction(
+      [TASK_OBJECTIVE_ITEM_PROGRESS_STORE],
+      "readwrite"
+    );
+    const store = tx.objectStore(TASK_OBJECTIVE_ITEM_PROGRESS_STORE);
+    await store.clear();
+    for (const [id, count] of Object.entries(progress)) {
+      if (!Number.isFinite(count) || count <= 0) continue;
+      await store.add({ id, count });
+    }
+  }
+
+  async loadTaskObjectiveItemProgress(): Promise<Record<string, number>> {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction(
+        [TASK_OBJECTIVE_ITEM_PROGRESS_STORE],
+        "readonly"
+      );
+      const store = tx.objectStore(TASK_OBJECTIVE_ITEM_PROGRESS_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const progress: Record<string, number> = {};
+        req.result.forEach((item: { id: string; count?: number }) => {
+          if (Number.isFinite(item.count)) {
+            progress[item.id] = Number(item.count);
+          }
+        });
+        resolve(progress);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   // User preferences (notes, player level, filters)
   async saveUserPreferences(prefs: Partial<UserPreferences>): Promise<void> {
     if (!this.db) await this.init();
@@ -550,6 +597,7 @@ export interface ExportData {
   completedAchievements: string[];
   completedStorylineObjectives: string[];
   completedStorylineMapNodes: string[];
+  taskObjectiveItemProgress?: Record<string, number>;
   prestigeProgress: Record<string, unknown>;
   userPreferences: Partial<UserPreferences>;
   workingOnItems?: {
@@ -590,6 +638,7 @@ export class ExportImportService {
       completedAchievements,
       completedStorylineObjectives,
       completedStorylineMapNodes,
+      taskObjectiveItemProgress,
       userPreferences,
       workingOnItems,
     ] = await Promise.all([
@@ -599,6 +648,7 @@ export class ExportImportService {
       taskStorage.loadCompletedAchievements(),
       taskStorage.loadCompletedStorylineObjectives(),
       taskStorage.loadCompletedStorylineMapNodes(),
+      taskStorage.loadTaskObjectiveItemProgress(),
       taskStorage.loadUserPreferences(),
       taskStorage.loadWorkingOnItems(),
     ]);
@@ -623,6 +673,7 @@ export class ExportImportService {
       completedAchievements: Array.from(completedAchievements),
       completedStorylineObjectives: Array.from(completedStorylineObjectives),
       completedStorylineMapNodes: Array.from(completedStorylineMapNodes),
+      taskObjectiveItemProgress,
       prestigeProgress,
       userPreferences,
       workingOnItems: {
@@ -670,6 +721,9 @@ export class ExportImportService {
       ),
       taskStorage.saveCompletedStorylineMapNodes(
         new Set(data.completedStorylineMapNodes || [])
+      ),
+      taskStorage.saveTaskObjectiveItemProgress(
+        data.taskObjectiveItemProgress || {}
       ),
     ]);
 

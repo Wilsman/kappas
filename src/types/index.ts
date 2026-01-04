@@ -208,4 +208,6 @@ export interface Edition {
   defaultStashLevel: number;
   defaultCultistCircleLevel: number;
   traderRepBonus: Record<string, number>;
+  exclusiveTaskIds?: string[];
+  excludedTaskIds?: string[];
 }

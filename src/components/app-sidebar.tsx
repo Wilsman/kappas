@@ -27,9 +27,11 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
+  SidebarSeparator,
   SidebarRail,
 } from "@/components/ui/sidebar";
 import type { Profile } from "@/utils/profile";
+import type { Edition } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -103,10 +105,13 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSetPlayerLevel: (level: number) => void;
   profiles: Profile[];
   activeProfileId: string;
+  editions: Edition[];
+  activeEditionId?: string;
   onSwitchProfile: (id: string) => void;
   onCreateProfile: (name?: string) => void;
   onRenameProfile: (id: string, name: string) => void;
   onUpdateFaction: (id: string, faction: "USEC" | "BEAR") => void;
+  onUpdateEdition: (id: string, edition: string) => void;
   onDeleteProfile: (id: string) => void;
   onResetProfile: (options?: ResetOptions) => void;
   onImportComplete: () => void;
@@ -137,10 +142,13 @@ export function AppSidebar({
   onSetPlayerLevel,
   profiles,
   activeProfileId,
+  editions,
+  activeEditionId,
   onSwitchProfile,
   onCreateProfile,
   onRenameProfile,
   onUpdateFaction,
+  onUpdateEdition,
   onDeleteProfile,
   onResetProfile,
   onImportComplete,
@@ -174,36 +182,34 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <div className="flex flex-col gap-2 px-2 py-1">
-          <div className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">
-              EFT Tracker
+        <div className="flex flex-col gap-3 px-2 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent/30 text-sidebar-foreground">
+                <Database className="h-4 w-4" />
+              </div>
+              <span className="text-sm font-semibold tracking-wide group-data-[collapsible=icon]:hidden">
+                EFT Tracker
+              </span>
+            </div>
+            <span className="rounded-full border border-sidebar-border/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
+              Beta
             </span>
           </div>
-          {/* Beta notice */}
-          <div className="group-data-[collapsible=icon]:hidden p-2 rounded-md bg-orange-600/10 border border-orange-600/20">
-            <div className="font-semibold text-orange-600 mb-1 text-xs">
-              ⚠️ BETA
-            </div>
-            <div className="text-[10px] leading-relaxed text-muted-foreground">
-              Report bugs on{" "}
-              <a
-                href="https://discord.gg/X6v7RVQAC8"
-                target="_blank"
-                rel="noreferrer"
-                className="underline hover:text-foreground font-medium"
-              >
-                Discord
-              </a>
-            </div>
+          <div className="group-data-[collapsible=icon]:hidden text-[11px] leading-relaxed text-muted-foreground">
+            Report bugs on{" "}
+            <a
+              href="https://discord.gg/X6v7RVQAC8"
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-foreground font-medium"
+            >
+              Discord
+            </a>
           </div>
           {/* Profile selector */}
-          <div className="group-data-[collapsible=icon]:hidden">
-            <label className="block text-[11px] text-muted-foreground mb-1">
-              Character
-            </label>
-            <div className="flex items-center gap-2">
+          <div className="group-data-[collapsible=icon]:hidden rounded-lg border border-sidebar-border/60 bg-sidebar-accent/10 p-2">
+            <div className="mb-1 flex items-center gap-2">
               <Select
                 value={activeProfileId}
                 onValueChange={(v) => onSwitchProfile(v)}
@@ -219,11 +225,10 @@ export function AppSidebar({
                   ))}
                 </SelectContent>
               </Select>
-
               <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="icon"
                     className="h-8 w-8"
                     aria-label="Character actions"
@@ -287,30 +292,60 @@ export function AppSidebar({
 
             {/* Faction Toggle & PMC Level */}
             {activeProfile && (
-              <div className="mt-2 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  {(["USEC", "BEAR"] as const).map((faction) => (
-                    <button
-                      key={faction}
-                      onClick={() => onUpdateFaction(activeProfile.id, faction)}
-                      className={`flex items-center justify-center px-2 py-1 text-xs font-medium rounded-md border transition-all ${
-                        activeProfile.faction === faction
-                          ? faction === "USEC"
-                            ? "bg-blue-600/10 border-blue-600/50 text-blue-600"
-                            : "bg-red-600/10 border-red-600/50 text-red-600"
-                          : "bg-muted/50 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      {faction}
-                    </button>
-                  ))}
+              <div className="space-y-2">
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["USEC", "BEAR"] as const).map((faction) => (
+                      <button
+                        key={faction}
+                        onClick={() =>
+                          onUpdateFaction(activeProfile.id, faction)
+                        }
+                        className={`flex items-center justify-center px-2 py-2 text-xs font-medium rounded-md border transition-all ${
+                          activeProfile.faction === faction
+                            ? faction === "USEC"
+                              ? "border-blue-600/60 text-blue-500"
+                              : "border-red-600/60 text-red-500"
+                            : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        {faction}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                {editions.length > 0 && (
+                  <div className="space-y-1">
+                    <Select
+                      value={
+                        activeEditionId ||
+                        activeProfile.edition ||
+                        editions[0]?.id ||
+                        ""
+                      }
+                      onValueChange={(v) =>
+                        onUpdateEdition(activeProfile.id, v)
+                      }
+                    >
+                      <SelectTrigger className="w-full h-8">
+                        <SelectValue placeholder="Select edition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {editions.map((edition) => (
+                          <SelectItem key={edition.id} value={edition.id}>
+                            {edition.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
                   <label
                     htmlFor="sidebar-player-level"
-                    className="text-[11px] text-muted-foreground whitespace-nowrap"
+                    className="text-[11px] text-muted-foreground"
                   >
-                    PMC Level
+                    Level
                   </label>
                   <Input
                     id="sidebar-player-level"
@@ -318,9 +353,11 @@ export function AppSidebar({
                     min={1}
                     value={Number.isFinite(playerLevel) ? playerLevel : ""}
                     onChange={(e) =>
-                      onSetPlayerLevel(Math.max(1, Number(e.target.value) || 1))
+                      onSetPlayerLevel(
+                        Math.max(1, Number(e.target.value) || 1)
+                      )
                     }
-                    className="h-7 w-16 text-xs"
+                    className="h-8 w-20 text-xs"
                   />
                 </div>
               </div>
@@ -414,10 +451,13 @@ export function AppSidebar({
           </Dialog>
         </div>
       </SidebarHeader>
+      <SidebarSeparator />
       <SidebarContent>
         {/* Navigate */}
         <SidebarGroup>
-          <SidebarGroupLabel>Navigate</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/60">
+            Navigate
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {/* Currently Working On */}
@@ -428,7 +468,7 @@ export function AppSidebar({
                 >
                   <Target />
                   <span>Currently Working On</span>
-                  <span className="ml-auto rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-green-500">
+                  <span className="ml-auto rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-400">
                     NEW
                   </span>
                 </SidebarMenuButton>
@@ -444,27 +484,18 @@ export function AppSidebar({
                 >
                   <Package />
                   <span>1.0 Storyline</span>
-                  <span className="ml-auto rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+                  <span className="ml-auto rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-amber-400">
                     WIP
                   </span>
                 </SidebarMenuButton>
-                <SidebarMenuSub className="relative pl-4">
-                  {/* Submenu guide line */}
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute left-2 top-2 bottom-2 border-l border-border/30"
-                  />
+                <SidebarMenuSub className="mt-1">
                   <li>
                     <SidebarMenuSubButton
                       asChild
                       isActive={viewMode === "storyline"}
                     >
                       <a
-                        className={`${
-                          viewMode === "storyline"
-                            ? "border-l-2 border-emerald-500 pl-6"
-                            : "pl-6"
-                        } cursor-pointer`}
+                        className="cursor-pointer"
                         onClick={() => onSetViewMode("storyline")}
                       >
                         <ListTodo />
@@ -478,11 +509,7 @@ export function AppSidebar({
                       isActive={viewMode === "storyline-map"}
                     >
                       <a
-                        className={`${
-                          viewMode === "storyline-map"
-                            ? "border-l-2 border-emerald-500 pl-6"
-                            : "pl-6"
-                        } cursor-pointer`}
+                        className="cursor-pointer"
                         onClick={() => {
                           // Navigate to the Choose Your Ending view specifically
                           if (typeof window !== "undefined") {
@@ -517,12 +544,7 @@ export function AppSidebar({
                   <span>Quests</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuSub className="relative pl-4">
-                {/* Submenu guide line */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute left-2 top-2 bottom-2 border-l border-border/30"
-                />
+              <SidebarMenuSub className="mt-1">
                 {/* Checklist view */}
                 <li>
                   <SidebarMenuSubButton
@@ -530,11 +552,7 @@ export function AppSidebar({
                     isActive={viewMode === "grouped" && focusMode === "all"}
                   >
                     <a
-                      className={`${
-                        viewMode === "grouped" && focusMode === "all"
-                          ? "border-l-2 border-emerald-500 pl-6"
-                          : "pl-6"
-                      } cursor-pointer`}
+                      className="cursor-pointer"
                       onClick={() => {
                         onSetViewMode("grouped");
                         onSetFocus("all");
@@ -552,11 +570,7 @@ export function AppSidebar({
                     isActive={viewMode === "grouped" && focusMode === "kappa"}
                   >
                     <a
-                      className={`${
-                        viewMode === "grouped" && focusMode === "kappa"
-                          ? "border-l-2 border-emerald-500 pl-6"
-                          : "pl-6"
-                      } cursor-pointer`}
+                      className="cursor-pointer"
                       onClick={() => {
                         onSetViewMode("grouped");
                         onSetFocus("kappa");
@@ -576,11 +590,7 @@ export function AppSidebar({
                     }
                   >
                     <a
-                      className={`${
-                        viewMode === "grouped" && focusMode === "lightkeeper"
-                          ? "border-l-2 border-emerald-500 pl-6"
-                          : "pl-6"
-                      } cursor-pointer`}
+                      className="cursor-pointer"
                       onClick={() => {
                         onSetViewMode("grouped");
                         onSetFocus("lightkeeper");
@@ -602,12 +612,7 @@ export function AppSidebar({
                   <Package />
                   <span>Items</span>
                 </SidebarMenuButton>
-                <SidebarMenuSub className="relative pl-4">
-                  {/* Submenu guide line */}
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute left-2 top-2 bottom-2 border-l border-border/30"
-                  />
+                <SidebarMenuSub className="mt-1">
                   <li>
                     <SidebarMenuSubButton
                       asChild
@@ -617,12 +622,7 @@ export function AppSidebar({
                       }
                     >
                       <a
-                        className={`${
-                          viewMode === "collector" &&
-                          collectorGroupBy === "collector"
-                            ? "border-l-2 border-emerald-500 pl-6"
-                            : "pl-6"
-                        } cursor-pointer`}
+                        className="cursor-pointer"
                         onClick={() => {
                           onSetCollectorGroupBy("collector");
                           onSetViewMode("collector");
@@ -642,12 +642,7 @@ export function AppSidebar({
                       }
                     >
                       <a
-                        className={`${
-                          viewMode === "collector" &&
-                          collectorGroupBy === "hideout-stations"
-                            ? "border-l-2 border-emerald-500 pl-6"
-                            : "pl-6"
-                        } cursor-pointer`}
+                        className="cursor-pointer"
                         onClick={() => {
                           onSetCollectorGroupBy("hideout-stations");
                           onSetViewMode("collector");
@@ -664,11 +659,7 @@ export function AppSidebar({
                       isActive={viewMode === "hideout-requirements"}
                     >
                       <a
-                        className={`${
-                          viewMode === "hideout-requirements"
-                            ? "border-l-2 border-emerald-500 pl-6"
-                            : "pl-6"
-                        } cursor-pointer`}
+                        className="cursor-pointer"
                         onClick={() => onSetViewMode("hideout-requirements")}
                       >
                         <Home />
@@ -702,7 +693,9 @@ export function AppSidebar({
 
         {/* Filters */}
         <SidebarGroup>
-          <SidebarGroupLabel>Filters</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/60">
+            Filters
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {/* Per Trader */}

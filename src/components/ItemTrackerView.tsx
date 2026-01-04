@@ -32,7 +32,6 @@ interface CollectorViewProps {
   completedCollectorItems: Set<string>;
   onToggleCollectorItem: (itemName: string) => void;
   completedHideoutItems: Set<string>;
-  onToggleHideoutItem: (itemKey: string) => void;
   onSetHideoutItems: (items: Set<string>) => void;
   groupBy: GroupBy;
   hideoutStations: HideoutStation[];
@@ -47,7 +46,6 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   completedCollectorItems,
   onToggleCollectorItem,
   completedHideoutItems,
-  onToggleHideoutItem,
   onSetHideoutItems,
   groupBy,
   hideoutStations,

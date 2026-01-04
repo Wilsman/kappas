@@ -38,6 +38,8 @@ import {
   UserCheck,
   Target,
   Search,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { groupTasksByTrader } from "../utils/taskUtils";
 import { cn } from "@/lib/utils";
@@ -68,6 +70,11 @@ interface CheckListViewProps {
   playerLevel: number;
   workingOnTasks?: Set<string>;
   onToggleWorkingOnTask?: (taskId: string) => void;
+  taskObjectiveItemProgress: Record<string, number>;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number
+  ) => void;
 }
 
 export const CheckListView: React.FC<CheckListViewProps> = ({
@@ -85,6 +92,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   playerLevel,
   workingOnTasks = new Set(),
   onToggleWorkingOnTask,
+  taskObjectiveItemProgress,
+  onUpdateTaskObjectiveItemProgress,
 }) => {
   // Mark intentionally unused while preserving external API
   void _onTaskClick;
@@ -239,6 +248,21 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       setSearchTerm(task.name);
     },
     [tasks, groupBy, setSearchTerm]
+  );
+
+  const buildObjectiveItemKey = useCallback(
+    (taskId: string, objectiveIndex: number, itemKey: string) =>
+      `${taskId}::${objectiveIndex}::${itemKey}`,
+    []
+  );
+
+  const handleObjectiveItemDelta = useCallback(
+    (objectiveItemKey: string, delta: number, maxCount: number) => {
+      const current = taskObjectiveItemProgress[objectiveItemKey] || 0;
+      const next = Math.max(0, Math.min(maxCount, current + delta));
+      onUpdateTaskObjectiveItemProgress(objectiveItemKey, next);
+    },
+    [onUpdateTaskObjectiveItemProgress, taskObjectiveItemProgress]
   );
 
   // (moved global search listener below after allGroupNames is defined)
@@ -981,14 +1005,13 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                     </Tooltip>
                                                   </TooltipProvider>
                                                 )}
-                                                {"playerLevel" in objective
+                                              {"playerLevel" in objective
                                                   ? `Reach level ${objective.playerLevel}`
                                                   : objective.description}
                                               </span>
                                               {objective.items &&
-                                                objective.items.length > 0 &&
-                                                !showInlineIcon && (
-                                                  <div className="mt-1 flex flex-wrap gap-2">
+                                                objective.items.length > 0 && (
+                                                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
                                                     {objective.items.map(
                                                       (item) => {
                                                         const iconLink =
@@ -996,10 +1019,35 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                           (item.id
                                                             ? `https://assets.tarkov.dev/${item.id}-icon.webp`
                                                             : "");
+                                                        const requiredCount =
+                                                          Math.max(
+                                                            1,
+                                                            objective.count ?? 1
+                                                          );
+                                                        const itemKey = buildObjectiveItemKey(
+                                                          task.id,
+                                                          index,
+                                                          item.id || item.name
+                                                        );
+                                                        const currentCount = Math.min(
+                                                          requiredCount,
+                                                          taskObjectiveItemProgress[
+                                                            itemKey
+                                                          ] || 0
+                                                        );
+                                                        const remaining = Math.max(
+                                                          0,
+                                                          requiredCount - currentCount
+                                                        );
+                                                        const isComplete =
+                                                          currentCount >= requiredCount;
                                                         return (
-                                                          <span
+                                                          <div
                                                             key={item.id || item.name}
-                                                            className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                                                            className={cn(
+                                                              "flex items-center gap-2 rounded-md border bg-background/40 p-2",
+                                                              isComplete && "opacity-60"
+                                                            )}
                                                           >
                                                             {iconLink ? (
                                                               <TooltipProvider delayDuration={150}>
@@ -1008,7 +1056,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                     <img
                                                                       src={iconLink}
                                                                       alt={item.name}
-                                                                      className="h-4 w-4 object-contain"
+                                                                      className="h-8 w-8 object-contain"
                                                                       loading="lazy"
                                                                     />
                                                                   </TooltipTrigger>
@@ -1030,9 +1078,64 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                 </Tooltip>
                                                               </TooltipProvider>
                                                             ) : (
-                                                              item.name
+                                                              <div className="h-8 w-8 rounded bg-muted" />
                                                             )}
-                                                          </span>
+                                                            <div className="min-w-0 flex-1">
+                                                              <div className="text-xs font-medium text-foreground/90 truncate">
+                                                                {item.name}
+                                                              </div>
+                                                              <div className="text-[11px] text-muted-foreground">
+                                                                {remaining === 0
+                                                                  ? "Complete"
+                                                                  : `${remaining} remaining`}
+                                                              </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                              <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  handleObjectiveItemDelta(
+                                                                    itemKey,
+                                                                    -1,
+                                                                    requiredCount
+                                                                  );
+                                                                }}
+                                                                className={cn(
+                                                                  "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                                  currentCount <= 0 &&
+                                                                    "opacity-50 cursor-not-allowed"
+                                                                )}
+                                                                disabled={currentCount <= 0}
+                                                                aria-label={`Decrease ${item.name}`}
+                                                              >
+                                                                <Minus className="h-3 w-3 mx-auto" />
+                                                              </button>
+                                                              <span className="w-12 text-center text-xs tabular-nums">
+                                                                {currentCount}/{requiredCount}
+                                                              </span>
+                                                              <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  handleObjectiveItemDelta(
+                                                                    itemKey,
+                                                                    1,
+                                                                    requiredCount
+                                                                  );
+                                                                }}
+                                                                className={cn(
+                                                                  "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                                  currentCount >= requiredCount &&
+                                                                    "opacity-50 cursor-not-allowed"
+                                                                )}
+                                                                disabled={currentCount >= requiredCount}
+                                                                aria-label={`Increase ${item.name}`}
+                                                              >
+                                                                <Plus className="h-3 w-3 mx-auto" />
+                                                              </button>
+                                                            </div>
+                                                          </div>
                                                         );
                                                       }
                                                     )}

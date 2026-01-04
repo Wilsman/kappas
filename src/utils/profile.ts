@@ -3,9 +3,11 @@ export type Profile = {
   name: string;
   faction?: "USEC" | "BEAR";
   level?: number;
+  edition?: string;
   createdAt: number;
 };
 
+const DEFAULT_EDITION_ID = "standard";
 const PROFILES_KEY = "taskTracker_profiles_v1";
 const ACTIVE_PROFILE_KEY = "taskTracker_activeProfile_v1";
 const DELETED_PROFILES_KEY = "taskTracker_deletedProfiles_v1";
@@ -30,8 +32,14 @@ export function ensureProfiles(): { profiles: Profile[]; activeId: string } {
   let profiles = loadProfiles();
 
   const normalizedProfiles = profiles.map((profile) => {
-    if (profile.faction) return profile;
-    return { ...profile, faction: "USEC" as const };
+    const needsFaction = !profile.faction;
+    const needsEdition = !profile.edition;
+    if (!needsFaction && !needsEdition) return profile;
+    return {
+      ...profile,
+      faction: profile.faction ?? "USEC",
+      edition: profile.edition ?? DEFAULT_EDITION_ID,
+    };
   });
 
   if (normalizedProfiles.some((p, idx) => p !== profiles[idx])) {
@@ -46,6 +54,7 @@ export function ensureProfiles(): { profiles: Profile[]; activeId: string } {
       name: "Default",
       faction: "USEC",
       level: 1,
+      edition: DEFAULT_EDITION_ID,
       createdAt: Date.now(),
     };
     profiles = [def];
@@ -78,7 +87,8 @@ export function setActiveProfileId(id: string) {
 export function createProfile(
   name: string,
   faction?: "USEC" | "BEAR",
-  level?: number
+  level?: number,
+  edition?: string
 ): Profile {
   const list = loadProfiles();
   const p: Profile = {
@@ -86,6 +96,7 @@ export function createProfile(
     name: name || "New Character",
     faction: faction || "USEC",
     level: level || 1,
+    edition: edition || DEFAULT_EDITION_ID,
     createdAt: Date.now(),
   };
   list.push(p);
@@ -143,11 +154,20 @@ export function updateProfileFaction(id: string, faction: "USEC" | "BEAR") {
   }
 }
 
-export function updateProfileLevel(id: string, level: number){
+export function updateProfileLevel(id: string, level: number) {
   const list = loadProfiles();
   const idx = list.findIndex((p) => p.id === id);
   if (idx >= 0) {
     list[idx] = { ...list[idx], level };
+    saveProfiles(list);
+  }
+}
+
+export function updateProfileEdition(id: string, edition: string) {
+  const list = loadProfiles();
+  const idx = list.findIndex((p) => p.id === id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], edition };
     saveProfiles(list);
   }
 }

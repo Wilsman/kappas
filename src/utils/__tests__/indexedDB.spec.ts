@@ -121,6 +121,29 @@ describe("TaskStorage - Storyline Objectives", () => {
   });
 });
 
+describe("TaskStorage - Task Objective Item Progress", () => {
+  let storage: TaskStorage;
+
+  beforeEach(async () => {
+    storage = new TaskStorage();
+    storage.setProfile("test-profile");
+    await storage.init();
+  });
+
+  it("should save and load task objective item progress", async () => {
+    const progress = {
+      "task-1::0::item-a": 2,
+      "task-1::1::item-b": 5,
+    };
+
+    await storage.saveTaskObjectiveItemProgress(progress);
+    const loaded = await storage.loadTaskObjectiveItemProgress();
+
+    expect(loaded["task-1::0::item-a"]).toBe(2);
+    expect(loaded["task-1::1::item-b"]).toBe(5);
+  });
+});
+
 describe("TaskStorage - Achievements", () => {
   let storage: TaskStorage;
 
@@ -464,6 +487,9 @@ describe("ExportImportService - Single Profile", () => {
     await taskStorage.saveCompletedHideoutItems(new Set(["hideout-1"]));
     await taskStorage.saveCompletedAchievements(new Set(["ach-1"]));
     await taskStorage.saveCompletedStorylineObjectives(new Set(["obj-1"]));
+    await taskStorage.saveTaskObjectiveItemProgress({
+      "task-1::0::item-a": 2,
+    });
     await taskStorage.savePrestigeProgress("prestige-1", { level: 3 });
     await taskStorage.saveUserPreferences({ notes: "Test notes" });
   });
@@ -480,6 +506,7 @@ describe("ExportImportService - Single Profile", () => {
     expect(exported.completedHideoutItems).toContain("hideout-1");
     expect(exported.completedAchievements).toContain("ach-1");
     expect(exported.completedStorylineObjectives).toContain("obj-1");
+    expect(exported.taskObjectiveItemProgress?.["task-1::0::item-a"]).toBe(2);
     expect(exported.prestigeProgress["prestige-1"]).toEqual({ level: 3 });
     expect(exported.userPreferences.notes).toBe("Test notes");
   });
@@ -494,6 +521,7 @@ describe("ExportImportService - Single Profile", () => {
       completedAchievements: ["ach-a"],
       completedStorylineObjectives: ["obj-a"],
       completedStorylineMapNodes: ["node-a"],
+      taskObjectiveItemProgress: { "task-b::1::item-c": 1 },
       prestigeProgress: { "prestige-2": { level: 5 } },
       userPreferences: { notes: "Imported notes", playerLevel: 20 },
     };
@@ -502,12 +530,14 @@ describe("ExportImportService - Single Profile", () => {
 
     const tasks = await taskStorage.loadCompletedTasks();
     const items = await taskStorage.loadCompletedCollectorItems();
+    const progress = await taskStorage.loadTaskObjectiveItemProgress();
     const prefs = await taskStorage.loadUserPreferences();
     const prestige = await taskStorage.loadPrestigeProgress("prestige-2");
 
     expect(tasks.has("task-a")).toBe(true);
     expect(tasks.has("task-b")).toBe(true);
     expect(items.has("item-a")).toBe(true);
+    expect(progress["task-b::1::item-c"]).toBe(1);
     expect(prefs.notes).toBe("Imported notes");
     expect(prefs.playerLevel).toBe(20);
     expect(prestige).toEqual({ level: 5 });
