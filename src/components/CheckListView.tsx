@@ -970,6 +970,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                               : "");
                                           const showInlineIcon =
                                             inlineIconLink &&
+                                            inlineItem &&
                                             objective.description?.includes(
                                               inlineItem.name
                                             );
@@ -977,7 +978,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                             <li key={index}>
                                               <span className="inline-flex items-center gap-2">
                                                 {showInlineIcon && (
-                                                  <TooltipProvider delayDuration={150}>
+                                                  <TooltipProvider
+                                                    delayDuration={150}
+                                                  >
                                                     <Tooltip>
                                                       <TooltipTrigger asChild>
                                                         <img
@@ -995,17 +998,21 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                         <div className="flex flex-col items-center gap-1">
                                                           <img
                                                             src={inlineIconLink}
-                                                            alt={inlineItem?.name}
+                                                            alt={
+                                                              inlineItem?.name
+                                                            }
                                                             className="h-16 w-16 object-contain"
                                                             loading="lazy"
                                                           />
-                                                          <span className="text-xs">{inlineItem?.name}</span>
+                                                          <span className="text-xs">
+                                                            {inlineItem?.name}
+                                                          </span>
                                                         </div>
                                                       </TooltipContent>
                                                     </Tooltip>
                                                   </TooltipProvider>
                                                 )}
-                                              {"playerLevel" in objective
+                                                {"playerLevel" in objective
                                                   ? `Reach level ${objective.playerLevel}`
                                                   : objective.description}
                                               </span>
@@ -1024,38 +1031,57 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                             1,
                                                             objective.count ?? 1
                                                           );
-                                                        const itemKey = buildObjectiveItemKey(
-                                                          task.id,
-                                                          index,
-                                                          item.id || item.name
-                                                        );
-                                                        const currentCount = Math.min(
-                                                          requiredCount,
-                                                          taskObjectiveItemProgress[
-                                                            itemKey
-                                                          ] || 0
-                                                        );
-                                                        const remaining = Math.max(
-                                                          0,
-                                                          requiredCount - currentCount
-                                                        );
+                                                        const itemKey =
+                                                          buildObjectiveItemKey(
+                                                            task.id,
+                                                            index,
+                                                            item.id || item.name
+                                                          );
+                                                        const currentCount =
+                                                          Math.min(
+                                                            requiredCount,
+                                                            taskObjectiveItemProgress[
+                                                              itemKey
+                                                            ] || 0
+                                                          );
+                                                        const remaining =
+                                                          Math.max(
+                                                            0,
+                                                            requiredCount -
+                                                              currentCount
+                                                          );
                                                         const isComplete =
-                                                          currentCount >= requiredCount;
+                                                          currentCount >=
+                                                          requiredCount;
                                                         return (
                                                           <div
-                                                            key={item.id || item.name}
+                                                            key={
+                                                              item.id ||
+                                                              item.name
+                                                            }
                                                             className={cn(
                                                               "flex items-center gap-2 rounded-md border bg-background/40 p-2",
-                                                              isComplete && "opacity-60"
+                                                              isComplete &&
+                                                                "opacity-60"
                                                             )}
                                                           >
                                                             {iconLink ? (
-                                                              <TooltipProvider delayDuration={150}>
+                                                              <TooltipProvider
+                                                                delayDuration={
+                                                                  150
+                                                                }
+                                                              >
                                                                 <Tooltip>
-                                                                  <TooltipTrigger asChild>
+                                                                  <TooltipTrigger
+                                                                    asChild
+                                                                  >
                                                                     <img
-                                                                      src={iconLink}
-                                                                      alt={item.name}
+                                                                      src={
+                                                                        iconLink
+                                                                      }
+                                                                      alt={
+                                                                        item.name
+                                                                      }
                                                                       className="h-8 w-8 object-contain"
                                                                       loading="lazy"
                                                                     />
@@ -1067,12 +1093,20 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                   >
                                                                     <div className="flex flex-col items-center gap-1">
                                                                       <img
-                                                                        src={iconLink}
-                                                                        alt={item.name}
+                                                                        src={
+                                                                          iconLink
+                                                                        }
+                                                                        alt={
+                                                                          item.name
+                                                                        }
                                                                         className="h-16 w-16 object-contain"
                                                                         loading="lazy"
                                                                       />
-                                                                      <span className="text-xs">{item.name}</span>
+                                                                      <span className="text-xs">
+                                                                        {
+                                                                          item.name
+                                                                        }
+                                                                      </span>
                                                                     </div>
                                                                   </TooltipContent>
                                                                 </Tooltip>
@@ -1093,7 +1127,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                             <div className="flex items-center gap-1">
                                                               <button
                                                                 type="button"
-                                                                onClick={(e) => {
+                                                                onClick={(
+                                                                  e
+                                                                ) => {
                                                                   e.stopPropagation();
                                                                   handleObjectiveItemDelta(
                                                                     itemKey,
@@ -1103,20 +1139,27 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                 }}
                                                                 className={cn(
                                                                   "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
-                                                                  currentCount <= 0 &&
+                                                                  currentCount <=
+                                                                    0 &&
                                                                     "opacity-50 cursor-not-allowed"
                                                                 )}
-                                                                disabled={currentCount <= 0}
+                                                                disabled={
+                                                                  currentCount <=
+                                                                  0
+                                                                }
                                                                 aria-label={`Decrease ${item.name}`}
                                                               >
                                                                 <Minus className="h-3 w-3 mx-auto" />
                                                               </button>
                                                               <span className="w-12 text-center text-xs tabular-nums">
-                                                                {currentCount}/{requiredCount}
+                                                                {currentCount}/
+                                                                {requiredCount}
                                                               </span>
                                                               <button
                                                                 type="button"
-                                                                onClick={(e) => {
+                                                                onClick={(
+                                                                  e
+                                                                ) => {
                                                                   e.stopPropagation();
                                                                   handleObjectiveItemDelta(
                                                                     itemKey,
@@ -1126,10 +1169,14 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                 }}
                                                                 className={cn(
                                                                   "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
-                                                                  currentCount >= requiredCount &&
+                                                                  currentCount >=
+                                                                    requiredCount &&
                                                                     "opacity-50 cursor-not-allowed"
                                                                 )}
-                                                                disabled={currentCount >= requiredCount}
+                                                                disabled={
+                                                                  currentCount >=
+                                                                  requiredCount
+                                                                }
                                                                 aria-label={`Increase ${item.name}`}
                                                               >
                                                                 <Plus className="h-3 w-3 mx-auto" />
@@ -1166,7 +1213,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                       <li key={index}>
                                         <span className="inline-flex items-center gap-1">
                                           {reward.item.iconLink && (
-                                            <TooltipProvider delayDuration={150}>
+                                            <TooltipProvider
+                                              delayDuration={150}
+                                            >
                                               <Tooltip>
                                                 <TooltipTrigger asChild>
                                                   <img
@@ -1188,7 +1237,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                       className="h-16 w-16 object-contain"
                                                       loading="lazy"
                                                     />
-                                                    <span className="text-xs">{reward.item.name}</span>
+                                                    <span className="text-xs">
+                                                      {reward.item.name}
+                                                    </span>
                                                   </div>
                                                 </TooltipContent>
                                               </Tooltip>
