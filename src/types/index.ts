@@ -19,6 +19,7 @@ export interface Task {
   };
   kappaRequired?: boolean;
   lightkeeperRequired?: boolean;
+  isEvent?: boolean;
   objectives?: TaskObjective[];
   startRewards?: {
     items: RewardItem[];
@@ -162,6 +163,7 @@ export interface AchievementsData {
 // Data Overlay Types
 export interface Overlay {
   tasks?: Record<string, TaskOverride>;
+  tasksAdd?: Record<string, TaskAdd>;
   items?: Record<string, ItemOverride>;
   editions?: Record<string, Edition>;
   $meta: {
@@ -199,6 +201,43 @@ export interface ObjectiveAdd {
   description?: string;
   maps?: Array<{ id: string; name: string }>;
   items?: Array<{ id?: string; name: string }>;
+}
+
+export interface TaskAdd {
+  id: string;
+  name: string;
+  wikiLink?: string;
+  trader: {
+    id?: string;
+    name: TraderName;
+  };
+  maps?: Array<{ id: string; name: string }>;
+  kappaRequired?: boolean;
+  taskRequirements?: TaskRequirement[];
+  objectives?: TaskAddObjective[];
+  experience?: number;
+  finishRewards?: {
+    items?: TaskAddRewardItem[];
+    traderStanding?: Array<{
+      trader?: { id?: string; name?: TraderName };
+      standing?: number;
+    }>;
+  };
+}
+
+export interface TaskAddObjective {
+  id?: string;
+  description?: string;
+  maps?: Array<{ id: string; name: string }>;
+  item?: { id?: string; name: string; shortName?: string };
+  markerItem?: { id?: string; name: string; shortName?: string };
+  items?: Array<{ id?: string; name: string; shortName?: string }>;
+  count?: number;
+}
+
+export interface TaskAddRewardItem {
+  item: { id?: string; name: string; shortName?: string };
+  count: number;
 }
 
 export interface Edition {

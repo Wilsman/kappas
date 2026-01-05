@@ -52,6 +52,7 @@ import {
   loadCombinedCache,
   isCombinedCacheFresh,
   type FetchStage,
+  buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
 import { Button } from "./components/ui/button";
@@ -226,6 +227,7 @@ function App() {
           )
         );
         filtered = filtered.filter((task) => {
+          if (task.isEvent) return true;
           if (excluded.has(task.id)) return false;
           if (allExclusive.size > 0 && allExclusive.has(task.id)) {
             return exclusive.has(task.id);
@@ -238,6 +240,36 @@ function App() {
     return filtered;
   }, [allTasks, activeProfileFaction, activeProfileEdition, overlay]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
+  const traderImageByName = useMemo(() => {
+    const map = new Map<string, string>();
+    allTasks.forEach((task) => {
+      if (task.trader?.name && task.trader.imageLink) {
+        if (!map.has(task.trader.name)) {
+          map.set(task.trader.name, task.trader.imageLink);
+        }
+      }
+    });
+    return map;
+  }, [allTasks]);
+  const eventTasks = useMemo(() => {
+    if (!overlay) return [];
+    return buildEventTasksFromOverlay(overlay).map((task) => ({
+      ...task,
+      trader: {
+        ...task.trader,
+        imageLink: traderImageByName.get(task.trader.name),
+      },
+    }));
+  }, [overlay, traderImageByName]);
+  const tasksWithEvents = useMemo(
+    () => {
+      const baseIds = new Set(tasks.map((task) => task.id));
+      const uniqueEvents = eventTasks.filter((task) => !baseIds.has(task.id));
+      return [...tasks, ...uniqueEvents];
+    },
+    [tasks, eventTasks]
+  );
+  const baseTasks = useMemo(() => tasks.filter((task) => !task.isEvent), [tasks]);
   const [completedCollectorItems, setCompletedCollectorItems] = useState<
     Set<string>
   >(new Set());
@@ -569,8 +601,10 @@ function App() {
     [completedStorylineMapNodes, activeProfileId]
   );
 
-  const totalQuests = tasks.length;
-  const completedQuests = completedTasks.size;
+  const totalQuests = baseTasks.length;
+  const completedQuests = baseTasks.filter((task) =>
+    completedTasks.has(task.id)
+  ).length;
 
   // Calculate storyline objectives (only main objectives count towards progress)
   const { totalStorylineObjectives, completedStorylineCount } = useMemo(() => {
@@ -604,7 +638,7 @@ function App() {
       ])
     ) as Record<keyof typeof TRADER_COLORS, TP>;
 
-    tasks.forEach(({ trader: { name, imageLink }, id }) => {
+    baseTasks.forEach(({ trader: { name, imageLink }, id }) => {
       if (map[name]) {
         map[name].total++;
         if (completedTasks.has(id)) {
@@ -627,7 +661,7 @@ function App() {
         imageLink,
       })
     );
-  }, [tasks, completedTasks]);
+  }, [baseTasks, completedTasks]);
 
   // Derived lists for sidebar
   const traderList = useMemo(() => Object.keys(TRADER_COLORS), []);
@@ -743,9 +777,14 @@ function App() {
   );
   const mapList = useMemo(() => {
     const set = new Set<string>();
-    tasks.forEach((t) => t.map?.name && set.add(t.map.name));
+    tasksWithEvents.forEach((t) => {
+      if (t.map?.name) set.add(t.map.name);
+      t.maps?.forEach((map) => {
+        if (map.name) set.add(map.name);
+      });
+    });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [tasks]);
+  }, [tasksWithEvents]);
 
   // Calculate Kappa and Lightkeeper task totals
   const {
@@ -754,8 +793,8 @@ function App() {
     totalLightkeeperTasks,
     completedLightkeeperTasks,
   } = useMemo(() => {
-    const kappaTasks = tasks.filter((task) => task.kappaRequired);
-    const lightkeeperTasks = tasks.filter((task) => task.lightkeeperRequired);
+    const kappaTasks = baseTasks.filter((task) => task.kappaRequired);
+    const lightkeeperTasks = baseTasks.filter((task) => task.lightkeeperRequired);
 
     return {
       totalKappaTasks: kappaTasks.length,
@@ -767,7 +806,7 @@ function App() {
         completedTasks.has(task.id)
       ).length,
     };
-  }, [tasks, completedTasks]);
+  }, [baseTasks, completedTasks]);
 
   useEffect(() => {
     const init = async () => {
@@ -1034,7 +1073,7 @@ function App() {
       if (next.has(taskId)) {
         next.delete(taskId);
       } else {
-        const depMap = buildTaskDependencyMap(tasks);
+        const depMap = buildTaskDependencyMap(tasksWithEvents);
         const deps = getAllDependencies(taskId, depMap);
         next.add(taskId);
         deps.forEach((id) => next.add(id));
@@ -1049,7 +1088,7 @@ function App() {
         console.error("Save error", err);
       }
     },
-    [completedTasks, tasks, activeProfileId]
+    [completedTasks, tasksWithEvents, activeProfileId]
   );
 
   // Sidebar trader filter: multi-select toggle
@@ -1806,7 +1845,7 @@ function App() {
                         key={`${activeProfileId}:${
                           activeProfileFaction ?? "none"
                         }`}
-                        tasks={tasks}
+                        tasks={tasksWithEvents}
                         completedTasks={completedTasks}
                         hiddenTraders={hiddenTraders}
                         showKappa={showKappa}
@@ -2001,7 +2040,7 @@ function App() {
         hiddenTraders={hiddenTraders}
         maps={mapList}
         selectedMap={selectedMap}
-        tasks={tasks}
+        tasks={tasksWithEvents}
         achievements={achievements}
         collectorItems={collectorItems}
         hideoutStations={hideoutStations}

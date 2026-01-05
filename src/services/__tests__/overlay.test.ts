@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { applyTaskOverlay, fetchOverlay } from "../tarkovApi";
+import { applyTaskOverlay, fetchOverlay, buildEventTasksFromOverlay } from "../tarkovApi";
 import type { Task, Overlay } from "../../types";
 import localOverlay from "../../../overlay-refs/overlay.json";
 
@@ -77,6 +77,55 @@ describe("Overlay Integration", () => {
         expect(patched?.taskRequirements).toHaveLength(2);
         expect(patched?.taskRequirements.map((r) => r.task.id)).toContain("existing-req");
         expect(patched?.taskRequirements.map((r) => r.task.id)).toContain("new-req");
+    });
+
+    test("should build seasonal event tasks from overlay tasksAdd", () => {
+        const overlayWithEvents: Overlay = {
+            tasksAdd: {
+                winter_event_01: {
+                    id: "winter_event_01",
+                    name: "Missing in Action",
+                    wikiLink: "https://example.com",
+                    trader: { id: "trader-1", name: "Prapor" },
+                    maps: [{ id: "map-woods", name: "Woods" }],
+                    taskRequirements: [],
+                    objectives: [
+                        {
+                            id: "obj-1",
+                            description: "Stash buckwheat",
+                            maps: [{ id: "map-woods", name: "Woods" }],
+                            item: { id: "item-1", name: "Buckwheat" },
+                            count: 1,
+                        },
+                    ],
+                    finishRewards: {
+                        items: [
+                            {
+                                count: 1,
+                                item: { id: "reward-1", name: "Roubles" },
+                            },
+                        ],
+                    },
+                },
+            },
+            $meta: {
+                version: "1.0.0",
+                generated: new Date().toISOString(),
+            },
+        };
+
+        const tasks = buildEventTasksFromOverlay(overlayWithEvents);
+        expect(tasks).toHaveLength(1);
+        const eventTask = tasks[0];
+        expect(eventTask.isEvent).toBe(true);
+        expect(eventTask.name).toBe("Missing in Action");
+        expect(eventTask.maps.map((m) => m.name)).toContain("Woods");
+        expect(eventTask.objectives?.[0].items?.[0].iconLink).toBe(
+            "https://assets.tarkov.dev/item-1-icon.webp"
+        );
+        expect(eventTask.finishRewards?.items?.[0].item.iconLink).toBe(
+            "https://assets.tarkov.dev/reward-1-icon.webp"
+        );
     });
 
     describe("Collector Task (Nut Sack Overlay)", () => {

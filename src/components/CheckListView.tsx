@@ -40,10 +40,11 @@ import {
   Search,
   Minus,
   Plus,
+  Snowflake,
+  SlidersHorizontal,
 } from "lucide-react";
 import { groupTasksByTrader } from "../utils/taskUtils";
 import { cn } from "@/lib/utils";
-import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { taskStorage } from "@/utils/indexedDB";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
@@ -54,6 +55,15 @@ import {
   SelectContent,
   SelectItem,
 } from "./ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 interface CheckListViewProps {
   tasks: Task[];
@@ -107,6 +117,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const [enableLevelFilter, setEnableLevelFilter] = useState<boolean>(false);
   const [showCompleted, setShowCompleted] = useState<boolean>(true);
   const [showNextOnly, setShowNextOnly] = useState<boolean>(false);
+  const [showEvents, setShowEvents] = useState<boolean>(false);
   const [sortMode, setSortMode] = useState<
     | "name-asc"
     | "level-asc"
@@ -219,6 +230,15 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       const task = tasks.find((t) => t.id === taskId);
       if (!task) return;
 
+      if (task.isEvent) {
+        setExpandedGroups((prev) =>
+          prev.includes("Seasonal Events") ? prev : [...prev, "Seasonal Events"]
+        );
+        setSelectedTaskId(taskId);
+        setSearchTerm(task.name);
+        return;
+      }
+
       if (groupBy === "trader") {
         const groupName = task.trader.name;
         setExpandedGroups((prev) =>
@@ -267,29 +287,51 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 
   // (moved global search listener below after allGroupNames is defined)
 
-  // Apply filters
-  const nextQuestIds = useMemo(() => {
-    const completed = completedTasks;
-    const level = Number.isFinite(playerLevel) ? playerLevel : 1;
-    return new Set(
-      tasks
-        .filter((task) => {
-          if (completed.has(task.id)) return false;
-          if (task.minPlayerLevel > level) return false;
-          if (task.taskRequirements?.length > 0) {
-            return task.taskRequirements.every((req) =>
-              completed.has(req.task.id)
-            );
-          }
-          return true;
-        })
-        .map((task) => task.id)
-    );
-  }, [tasks, completedTasks, playerLevel]);
+  const baseTasks = useMemo(
+    () => tasks.filter((task) => !task.isEvent),
+    [tasks]
+  );
+  const eventTasks = useMemo(
+    () => tasks.filter((task) => task.isEvent),
+    [tasks]
+  );
+  const hasEventTasks = eventTasks.length > 0;
 
-  const filteredTasks = useMemo(
-    () =>
-      tasks.filter((task) => {
+  const buildNextQuestIds = useCallback(
+    (taskList: Task[]) => {
+      const completed = completedTasks;
+      const level = Number.isFinite(playerLevel) ? playerLevel : 1;
+      return new Set(
+        taskList
+          .filter((task) => {
+            if (completed.has(task.id)) return false;
+            if (task.minPlayerLevel > level) return false;
+            if (task.taskRequirements?.length > 0) {
+              return task.taskRequirements.every((req) =>
+                completed.has(req.task.id)
+              );
+            }
+            return true;
+          })
+          .map((task) => task.id)
+      );
+    },
+    [completedTasks, playerLevel]
+  );
+
+  // Apply filters
+  const nextQuestIds = useMemo(
+    () => buildNextQuestIds(baseTasks),
+    [baseTasks, buildNextQuestIds]
+  );
+  const nextEventQuestIds = useMemo(
+    () => buildNextQuestIds(eventTasks),
+    [eventTasks, buildNextQuestIds]
+  );
+
+  const filterTasks = useCallback(
+    (taskList: Task[], nextIds: Set<string>) =>
+      taskList.filter((task) => {
         // Kappa/Lightkeeper filters
         if (showKappa && showLightkeeper) {
           if (!(task.kappaRequired || task.lightkeeperRequired)) return false;
@@ -317,7 +359,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         // Completed filter
         if (!showCompleted && completedTasks.has(task.id)) return false;
         // Next quests filter (only immediate successors)
-        if (showNextOnly && !nextQuestIds.has(task.id)) return false;
+        if (showNextOnly && !nextIds.has(task.id)) return false;
         // Search filter
         if (searchTerm.trim()) {
           const term = searchTerm.toLowerCase();
@@ -335,7 +377,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         return true;
       }),
     [
-      tasks,
       showKappa,
       showLightkeeper,
       hiddenTraders,
@@ -346,8 +387,17 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       showCompleted,
       completedTasks,
       showNextOnly,
-      nextQuestIds,
     ]
+  );
+
+  const filteredTasks = useMemo(
+    () => filterTasks(baseTasks, nextQuestIds),
+    [baseTasks, filterTasks, nextQuestIds]
+  );
+  const filteredEventTasks = useMemo(
+    () =>
+      showEvents ? filterTasks(eventTasks, nextEventQuestIds) : ([] as Task[]),
+    [showEvents, filterTasks, eventTasks, nextEventQuestIds]
   );
 
   // Group tasks
@@ -373,14 +423,22 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     }, {});
   }, [filteredTasks, groupBy]);
 
-  const sortedGroups = useMemo(
-    () => Object.entries(tasksByGroup).sort(([a], [b]) => a.localeCompare(b)),
+  type GroupEntry = [string, Task[]];
+  const sortedGroups = useMemo<GroupEntry[]>(
+    () =>
+      Object.entries(tasksByGroup)
+        .map(([name, groupTasks]) => [name, groupTasks] as GroupEntry)
+        .sort(([a], [b]) => a.localeCompare(b)),
     [tasksByGroup]
   );
+  const groupsWithEvents = useMemo<GroupEntry[]>(() => {
+    if (!hasEventTasks || filteredEventTasks.length === 0) return sortedGroups;
+    return [["Seasonal Events", filteredEventTasks], ...sortedGroups];
+  }, [sortedGroups, hasEventTasks, filteredEventTasks]);
 
   const allGroupNames = useMemo(
-    () => sortedGroups.map(([name]) => name),
-    [sortedGroups]
+    () => groupsWithEvents.map(([name]) => name),
+    [groupsWithEvents]
   );
   // Only use the explicitly expanded groups
   const finalExpandedGroups = expandedGroups;
@@ -408,6 +466,15 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       if (detail.taskId) {
         const t = tasks.find((x) => x.id === detail.taskId);
         if (t) {
+          if (t.isEvent) {
+            setExpandedGroups((prev) =>
+              prev.includes("Seasonal Events")
+                ? prev
+                : [...prev, "Seasonal Events"]
+            );
+            setSelectedTaskId(detail.taskId);
+            return;
+          }
           if (groupBy === "trader") {
             const groupName = t.trader.name;
             setExpandedGroups((prev) =>
@@ -517,129 +584,147 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 
       {/* Search and Controls */}
       <div className="sticky top-0 z-20 -mx-4 mb-4 border-b bg-background px-4 py-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9"
-          />
-        </div>
-      </div>
-
-      <div className="mb-4 flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground">Sort</Label>
-          <Select
-            value={sortMode}
-            onValueChange={(v) => setSortMode(v as typeof sortMode)}
-          >
-            <SelectTrigger className="h-8 w-[180px]">
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-              <SelectItem value="level-asc">Min level (low-high)</SelectItem>
-              <SelectItem value="level-desc">Min level (high-low)</SelectItem>
-              <SelectItem value="incomplete-first">Incomplete first</SelectItem>
-              <SelectItem value="complete-first">Completed first</SelectItem>
-              <SelectItem value="working-on-first">Working on first</SelectItem>
-              <SelectItem value="has-prereqs-first">
-                Has prerequisites first
-              </SelectItem>
-              <SelectItem value="kappa-first">Kappa required first</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {/* Show/Hide Completed toggle */}
-        <div className="flex items-center gap-2">
-          <Label htmlFor="show-completed" className="text-sm">
-            Show Completed
-          </Label>
-          <Switch
-            id="show-completed"
-            checked={showCompleted}
-            onCheckedChange={setShowCompleted}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="show-next" className="text-sm">
-            Next Only
-          </Label>
-          <Switch
-            id="show-next"
-            checked={showNextOnly}
-            onCheckedChange={setShowNextOnly}
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleToggleAll}
-          className="flex items-center gap-2"
-        >
-          {areAllExpanded ? (
-            <>
-              <ChevronUp className="h-4 w-4" />
-              Collapse All
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-4 w-4" />
-              Expand All
-            </>
-          )}
-        </Button>
-        {/* Group By controls moved here from sidebar */}
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground">Group by</Label>
-          <ToggleGroup
-            type="single"
-            value={groupBy}
-            onValueChange={(value) => {
-              if (value === "trader" || value === "map") onSetGroupBy(value);
-            }}
-            className="rounded-xl border bg-card/70 shadow-sm px-1.5 py-1 text-muted-foreground"
-          >
-            <ToggleGroupItem
-              value="trader"
-              aria-label="Group by Trader"
-              className="gap-2 rounded-lg px-2 data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:shadow-sm"
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex w-full items-center gap-3 lg:max-w-3xl">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleToggleAll}
+              aria-label={areAllExpanded ? "Collapse all" : "Expand all"}
+              className="shrink-0"
             >
-              <UserCheck className="h-4 w-4" />
-              <span className="text-xs sm:text-sm font-medium leading-none">
-                Trader
-              </span>
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="map"
-              aria-label="Group by Map"
-              className="gap-2 rounded-lg px-2 data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:shadow-sm"
+              {areAllExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search tasks..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9"
+              />
+            </div>
+            <Select
+              value={sortMode}
+              onValueChange={(v) => setSortMode(v as typeof sortMode)}
             >
-              <MapPin className="h-4 w-4" />
-              <span className="text-xs sm:text-sm font-medium leading-none">
-                Map
-              </span>
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Label
-              htmlFor="level-filter"
-              className="text-sm text-muted-foreground"
-            >
-              Level Filter
-            </Label>
-            <Switch
-              id="level-filter"
-              checked={enableLevelFilter}
-              onCheckedChange={setEnableLevelFilter}
-            />
+              <SelectTrigger className="h-8 w-[150px]">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                <SelectItem value="level-asc">Min level (low-high)</SelectItem>
+                <SelectItem value="level-desc">Min level (high-low)</SelectItem>
+                <SelectItem value="incomplete-first">
+                  Incomplete first
+                </SelectItem>
+                <SelectItem value="complete-first">Completed first</SelectItem>
+                <SelectItem value="working-on-first">
+                  Working on first
+                </SelectItem>
+                <SelectItem value="has-prereqs-first">
+                  Has prerequisites first
+                </SelectItem>
+                <SelectItem value="kappa-first">
+                  Kappa required first
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 lg:ml-auto">
+            {/* Group By controls moved here from sidebar */}
+            <div className="flex items-center gap-2">
+              <Label className="text-sm text-muted-foreground">Group by</Label>
+              <ToggleGroup
+                type="single"
+                value={groupBy}
+                onValueChange={(value) => {
+                  if (value === "trader" || value === "map") onSetGroupBy(value);
+                }}
+                className="rounded-lg border bg-card/70 shadow-sm px-1 py-0.5 text-muted-foreground"
+              >
+                <ToggleGroupItem
+                  value="trader"
+                  aria-label="Group by Trader"
+                  className="gap-2 rounded-md px-2 py-1 text-xs data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:shadow-sm"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  <span className="text-xs sm:text-sm font-medium leading-none">
+                    Trader
+                  </span>
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="map"
+                  aria-label="Group by Map"
+                  className="gap-2 rounded-md px-2 py-1 text-xs data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:shadow-sm"
+                >
+                  <MapPin className="h-4 w-4" />
+                  <span className="text-xs sm:text-sm font-medium leading-none">
+                    Map
+                  </span>
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Filters</DropdownMenuLabel>
+                <DropdownMenuCheckboxItem
+                  checked={showCompleted}
+                  onCheckedChange={(checked) => setShowCompleted(!!checked)}
+                >
+                  Show Completed
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={showNextOnly}
+                  onCheckedChange={(checked) => setShowNextOnly(!!checked)}
+                >
+                  Next Only
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={enableLevelFilter}
+                  onCheckedChange={(checked) => setEnableLevelFilter(!!checked)}
+                >
+                  Level Filter
+                </DropdownMenuCheckboxItem>
+                {hasEventTasks && (
+                  <DropdownMenuCheckboxItem
+                    checked={showEvents}
+                    onCheckedChange={(checked) => setShowEvents(!!checked)}
+                  >
+                    Show Seasonal Events
+                  </DropdownMenuCheckboxItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={handleToggleAll}>
+                  {areAllExpanded ? "Collapse All" : "Expand All"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
+
+      {hasEventTasks && showEvents && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border bg-gradient-to-r from-slate-900/60 via-slate-900/40 to-slate-800/40 px-4 py-2 text-foreground shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+              <Snowflake className="h-4 w-4" />
+            </div>
+            <div className="text-sm font-semibold">Seasonal Events Available</div>
+          </div>
+        </div>
+      )}
 
       {/* Selected Task Breadcrumb - shows all predecessors and successors */}
       {selectedTaskId && (
@@ -752,7 +837,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         value={finalExpandedGroups}
         onValueChange={setExpandedGroups}
       >
-        {sortedGroups.map(([groupName, groupTasks]) => {
+        {groupsWithEvents.map(([groupName, groupTasks]) => {
           const sortedGroupTasks = getSortedTasks(groupTasks);
           const completedCount = groupTasks.filter((t) =>
             completedTasks.has(t.id)
@@ -760,26 +845,39 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           const totalCount = groupTasks.length;
           const progress =
             totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+          const isEventGroup = groupName === "Seasonal Events";
 
           return (
             <AccordionItem
               key={groupName}
               value={groupName}
-              className="border rounded-lg bg-card"
+              className={cn(
+                "border rounded-lg bg-card",
+                isEventGroup && "border-amber-500/40 bg-amber-500/5"
+              )}
             >
               <AccordionTrigger className="px-4 py-2 hover:no-underline">
                 <div className="flex items-center justify-between w-full">
                   <span className="text-lg font-semibold flex items-center gap-2">
-                    {groupBy === "trader" &&
-                      groupTasks[0]?.trader?.imageLink && (
-                        <img
-                          src={groupTasks[0].trader.imageLink}
-                          alt={groupName}
-                          loading="lazy"
-                          className="h-5 w-5 rounded-full object-cover"
-                        />
-                      )}
-                    {groupName}
+                    {isEventGroup ? (
+                      <span className="inline-flex items-center gap-2 text-amber-500">
+                        <Snowflake className="h-4 w-4" />
+                        {groupName}
+                      </span>
+                    ) : (
+                      <>
+                        {groupBy === "trader" &&
+                          groupTasks[0]?.trader?.imageLink && (
+                            <img
+                              src={groupTasks[0].trader.imageLink}
+                              alt={groupName}
+                              loading="lazy"
+                              className="h-5 w-5 rounded-full object-cover"
+                            />
+                          )}
+                        {groupName}
+                      </>
+                    )}
                   </span>
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-muted-foreground">
@@ -887,6 +985,11 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                   >
                                     {task.name}
                                   </span>
+                                  {task.isEvent && (
+                                    <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500">
+                                      Event
+                                    </span>
+                                  )}
                                 </span>
 
                                 {/* Right-side compact info */}

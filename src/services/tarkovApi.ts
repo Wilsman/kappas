@@ -1,8 +1,23 @@
-import { TaskData, TaskObjective, CollectorItemsData, HideoutStationsData, AchievementsData, Overlay, Task, TaskOverride, ObjectiveAdd, ObjectiveOverride } from '../types';
+import {
+  TaskData,
+  TaskObjective,
+  CollectorItemsData,
+  HideoutStationsData,
+  AchievementsData,
+  Overlay,
+  Task,
+  TaskOverride,
+  ObjectiveAdd,
+  ObjectiveOverride,
+  TaskAddObjective,
+  TaskAddRewardItem
+} from '../types';
+import { TraderName } from '../data/traders';
 import localOverlay from '../../overlay-refs/overlay.json';
 
 const TARKOV_API_URL = 'https://api.tarkov.dev/graphql';
 export const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json';
+const USE_LOCAL_OVERLAY = import.meta.env.VITE_USE_LOCAL_OVERLAY === 'true';
 
 type TaskOverlayTarget = Task | CollectorItemsData['data']['task'];
 type TaskRequirement = Task['taskRequirements'][number];
@@ -31,6 +46,40 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isRewardContainer = (value: unknown): value is RewardContainer =>
   isRecord(value);
 
+const buildIconLink = (id?: string) =>
+  id ? `https://assets.tarkov.dev/${id}-icon.webp` : "";
+
+const toTraderName = (name?: string): TraderName =>
+  (name as TraderName) ?? "Prapor";
+
+const normalizeObjectiveItems = (objective: TaskAddObjective): ObjectiveItem[] => {
+  const items: ObjectiveItem[] = [];
+  if (objective.item) {
+    items.push({
+      id: objective.item.id,
+      name: objective.item.name,
+      iconLink: buildIconLink(objective.item.id),
+    });
+  }
+  if (objective.markerItem) {
+    items.push({
+      id: objective.markerItem.id,
+      name: objective.markerItem.name,
+      iconLink: buildIconLink(objective.markerItem.id),
+    });
+  }
+  if (objective.items && objective.items.length > 0) {
+    objective.items.forEach((item) => {
+      items.push({
+        id: item.id,
+        name: item.name,
+        iconLink: buildIconLink(item.id),
+      });
+    });
+  }
+  return items;
+};
+
 export function applyTaskOverlay<T extends TaskOverlayTarget>(baseTask: T, overlay: Overlay): T | null {
   const taskOverride = overlay.tasks?.[baseTask.id] as TaskOverrideWithExtras | undefined;
   if (!taskOverride) return baseTask;
@@ -38,8 +87,6 @@ export function applyTaskOverlay<T extends TaskOverlayTarget>(baseTask: T, overl
   if (taskOverride.disabled === true) return null;
 
   const result = { ...baseTask } as T & Record<string, unknown>;
-  const buildIconLink = (id?: string) =>
-    id ? `https://assets.tarkov.dev/${id}-icon.webp` : "";
   const withIconLink = (item: ObjectiveItem): ObjectiveItem => {
     if (!item || item.iconLink || !item.id) return item;
     return { ...item, iconLink: buildIconLink(item.id) };
@@ -137,7 +184,62 @@ export function applyTaskOverlay<T extends TaskOverlayTarget>(baseTask: T, overl
   return result;
 }
 
+export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
+  if (!overlay.tasksAdd) return [];
+
+  return Object.values(overlay.tasksAdd).map((task) => {
+    const objectiveList = (task.objectives || []).map((objective) => {
+      const items = normalizeObjectiveItems(objective);
+      return {
+        description: objective.description,
+        maps: objective.maps?.map((map) => ({ name: map.name })),
+        items: items.length > 0 ? items : undefined,
+        count: objective.count,
+      } satisfies TaskObjective;
+    });
+
+    const mapNames = new Set<string>();
+    task.maps?.forEach((map) => mapNames.add(map.name));
+    task.objectives?.forEach((objective) => {
+      objective.maps?.forEach((map) => mapNames.add(map.name));
+    });
+
+    const rewardItems = (task.finishRewards?.items || [])
+      .filter((reward): reward is TaskAddRewardItem => !!reward?.item?.name)
+      .map((reward) => ({
+        count: reward.count,
+        item: {
+          name: reward.item.name,
+          iconLink: buildIconLink(reward.item.id),
+        },
+      }));
+
+    return {
+      id: task.id,
+      name: task.name,
+      wikiLink: task.wikiLink ?? "",
+      minPlayerLevel: 1,
+      factionName: null,
+      taskRequirements: task.taskRequirements ?? [],
+      map: null,
+      maps: Array.from(mapNames).map((name) => ({ name })),
+      trader: {
+        name: toTraderName(task.trader?.name),
+      },
+      kappaRequired: task.kappaRequired,
+      lightkeeperRequired: false,
+      objectives: objectiveList.length > 0 ? objectiveList : undefined,
+      finishRewards: rewardItems.length > 0 ? { items: rewardItems } : undefined,
+      isEvent: true,
+    };
+  });
+}
+
 export async function fetchOverlay(): Promise<Overlay> {
+  if (USE_LOCAL_OVERLAY) {
+    console.log('[Overlay] Using local overlay (VITE_USE_LOCAL_OVERLAY=true).');
+    return localOverlay as Overlay;
+  }
   try {
     const response = await fetch(OVERLAY_URL);
     if (!response.ok) throw new Error(`Overlay fetch failed: ${response.status}`);

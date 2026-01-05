@@ -683,6 +683,26 @@ export function CommandMenu(props: CommandMenuProps) {
         label: `${r.item.name}${r.count > 1 ? ` x${r.count}` : ""}`,
         icon: r.item.iconLink,
       }));
+      const renderObjectiveItem = (
+        item: { label: string; icon?: string },
+        key: React.Key
+      ) => (
+        <div
+          key={key}
+          className="flex items-center gap-3 p-2 rounded-lg bg-secondary/20 border border-border/30 hover:bg-secondary/40 transition-colors group/item"
+        >
+          <div className="h-8 w-8 rounded-md bg-black/20 flex items-center justify-center p-1 border border-border/20 group-hover/item:border-border/40">
+            {item.icon ? (
+              <img src={item.icon} alt="" className="h-full w-full object-contain" />
+            ) : (
+              <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+            )}
+          </div>
+          <span className="text-xs font-medium text-foreground/80 line-clamp-1">
+            {item.label}
+          </span>
+        </div>
+      );
 
       return (
         <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-2 duration-300">
@@ -765,62 +785,86 @@ export function CommandMenu(props: CommandMenuProps) {
                 </div>
 
                 <div className="space-y-4">
-                  {combinedObjectiveGroups
-                    .filter(
-                      (group) =>
-                        group.items.length > 0 || group.descriptions.length > 0
-                    )
-                    .map((group, gIdx) => (
-                      <div key={gIdx} className="space-y-2">
-                        <div className="flex items-center gap-2 px-1">
-                          <span className="text-xs font-bold text-foreground/90">
-                            {group.action}
-                          </span>
-                          {group.firRequired && (
-                            <ContextChip
-                              label="FiR"
-                              tone="info"
-                              className="text-[8px] px-1 py-0 h-4"
-                            />
+                  {task.isEvent ? (
+                    objectiveGroups
+                      .filter(
+                        (group) =>
+                          (group.description && group.description.length > 0) ||
+                          group.items.length > 0
+                      )
+                      .map((group, gIdx) => (
+                        <div key={gIdx} className="space-y-2">
+                          {group.description && (
+                            <div className="flex items-center gap-2 px-1 text-xs text-foreground/90">
+                              <span className="font-semibold">
+                                {group.description}
+                              </span>
+                              {group.firRequired && (
+                                <ContextChip
+                                  label="FiR"
+                                  tone="info"
+                                  className="text-[8px] px-1 py-0 h-4"
+                                />
+                              )}
+                            </div>
                           )}
-                        </div>
-                        <div className="grid gap-2">
-                          {group.items.length > 0
-                            ? group.items.map((item, iIdx) => (
-                                <div
-                                  key={iIdx}
-                                  className="flex items-center gap-3 p-2 rounded-lg bg-secondary/20 border border-border/30 hover:bg-secondary/40 transition-colors group/item"
-                                >
-                                  <div className="h-8 w-8 rounded-md bg-black/20 flex items-center justify-center p-1 border border-border/20 group-hover/item:border-border/40">
-                                    {item.icon ? (
-                                      <img
-                                        src={item.icon}
-                                        alt=""
-                                        className="h-full w-full object-contain"
-                                      />
-                                    ) : (
-                                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
-                                    )}
+                          <div className="grid gap-2">
+                            {group.items.length > 0
+                              ? group.items.map((item, iIdx) =>
+                                  renderObjectiveItem(item, iIdx)
+                                )
+                              : group.description && (
+                                  <div className="p-3 rounded-lg bg-secondary/10 border border-border/20 flex items-start gap-3">
+                                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
+                                    <span className="text-xs text-muted-foreground italic font-medium leading-relaxed">
+                                      {group.description}
+                                    </span>
                                   </div>
-                                  <span className="text-xs font-medium text-foreground/80 line-clamp-1">
-                                    {item.label}
-                                  </span>
-                                </div>
-                              ))
-                            : group.descriptions.map((desc, dIdx) => (
-                                <div
-                                  key={dIdx}
-                                  className="p-3 rounded-lg bg-secondary/10 border border-border/20 flex items-start gap-3"
-                                >
-                                  <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
-                                  <span className="text-xs text-muted-foreground italic font-medium leading-relaxed">
-                                    {desc}
-                                  </span>
-                                </div>
-                              ))}
+                                )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                  ) : (
+                    combinedObjectiveGroups
+                      .filter(
+                        (group) =>
+                          group.items.length > 0 ||
+                          group.descriptions.length > 0
+                      )
+                      .map((group, gIdx) => (
+                        <div key={gIdx} className="space-y-2">
+                          <div className="flex items-center gap-2 px-1">
+                            <span className="text-xs font-bold text-foreground/90">
+                              {group.action}
+                            </span>
+                            {group.firRequired && (
+                              <ContextChip
+                                label="FiR"
+                                tone="info"
+                                className="text-[8px] px-1 py-0 h-4"
+                              />
+                            )}
+                          </div>
+                          <div className="grid gap-2">
+                            {group.items.length > 0
+                              ? group.items.map((item, iIdx) =>
+                                  renderObjectiveItem(item, iIdx)
+                                )
+                              : group.descriptions.map((desc, dIdx) => (
+                                  <div
+                                    key={dIdx}
+                                    className="p-3 rounded-lg bg-secondary/10 border border-border/20 flex items-start gap-3"
+                                  >
+                                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
+                                    <span className="text-xs text-muted-foreground italic font-medium leading-relaxed">
+                                      {desc}
+                                    </span>
+                                  </div>
+                                ))}
+                          </div>
+                        </div>
+                      ))
+                  )}
                 </div>
               </div>
             )}
@@ -1192,13 +1236,19 @@ export function CommandMenu(props: CommandMenuProps) {
                             }, 0);
                             setOpen(false);
                           }}
-                          className="py-3"
+                          className={cn(
+                            "py-3",
+                            t.isEvent && "bg-amber-500/10 hover:bg-amber-500/15"
+                          )}
                         >
                           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="font-bold text-sm truncate">
                                 {renderHighlighted(t.name)}
                               </span>
+                              {t.isEvent && (
+                                <ContextChip label="Event" tone="warning" />
+                              )}
                               <div className="flex gap-1 ml-auto shrink-0">
                                 {kappaLabel && (
                                   <div
