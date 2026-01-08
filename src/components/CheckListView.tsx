@@ -138,7 +138,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         // Check if we have IndexedDB data
         const hasIndexedDBData =
           prefs.enableLevelFilter !== undefined ||
-          prefs.showCompleted !== undefined;
+          prefs.showCompleted !== undefined ||
+          prefs.showEvents !== undefined;
 
         if (hasIndexedDBData) {
           // Use IndexedDB values
@@ -146,6 +147,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             setEnableLevelFilter(prefs.enableLevelFilter);
           if (prefs.showCompleted !== undefined)
             setShowCompleted(prefs.showCompleted);
+          if (prefs.showEvents !== undefined) setShowEvents(prefs.showEvents);
         } else {
           // Migrate from localStorage if exists
           const storedEnable = localStorage.getItem(
@@ -165,6 +167,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           await taskStorage.saveUserPreferences({
             enableLevelFilter: enable,
             showCompleted: show,
+            showEvents: false,
           });
 
           // Clean up localStorage
@@ -202,6 +205,14 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       // ignore
     });
   }, [showCompleted, prefsLoaded]);
+
+  // Persist showEvents to IndexedDB
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    taskStorage.saveUserPreferences({ showEvents }).catch(() => {
+      // ignore
+    });
+  }, [showEvents, prefsLoaded]);
 
   // Listen for global reset event to reset enableLevelFilter
   useEffect(() => {
@@ -643,7 +654,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                 type="single"
                 value={groupBy}
                 onValueChange={(value) => {
-                  if (value === "trader" || value === "map") onSetGroupBy(value);
+                  if (value === "trader" || value === "map")
+                    onSetGroupBy(value);
                 }}
                 className="rounded-lg border bg-card/70 shadow-sm px-1 py-0.5 text-muted-foreground"
               >
@@ -721,7 +733,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
               <Snowflake className="h-4 w-4" />
             </div>
-            <div className="text-sm font-semibold">Seasonal Events Available</div>
+            <div className="text-sm font-semibold">
+              Seasonal Events Available
+            </div>
           </div>
         </div>
       )}

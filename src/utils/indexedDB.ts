@@ -20,6 +20,7 @@ export interface UserPreferences {
   playerLevel: number;
   enableLevelFilter: boolean;
   showCompleted: boolean;
+  showEvents: boolean;
 }
 
 export class TaskStorage {
@@ -101,9 +102,7 @@ export class TaskStorage {
         if (!db.objectStoreNames.contains(TASK_OBJECTIVES_STORE)) {
           db.createObjectStore(TASK_OBJECTIVES_STORE, { keyPath: "id" });
         }
-        if (
-          !db.objectStoreNames.contains(TASK_OBJECTIVE_ITEM_PROGRESS_STORE)
-        ) {
+        if (!db.objectStoreNames.contains(TASK_OBJECTIVE_ITEM_PROGRESS_STORE)) {
           db.createObjectStore(TASK_OBJECTIVE_ITEM_PROGRESS_STORE, {
             keyPath: "id",
           });
@@ -476,6 +475,8 @@ export class TaskStorage {
             prefs.enableLevelFilter = item.value as boolean;
           else if (item.id === "showCompleted")
             prefs.showCompleted = item.value as boolean;
+          else if (item.id === "showEvents")
+            prefs.showEvents = item.value as boolean;
         });
         resolve(prefs);
       };
