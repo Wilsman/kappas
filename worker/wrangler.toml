@@ -8,4 +8,4 @@ CLERK_JWT_PUBLIC_KEY = ""
 [[d1_databases]]
 binding = "DB"
 database_name = "tarkov-tracker-sync"
-database_id = "" # Fill in after running: wrangler d1 create tarkov-tracker-sync
+database_id = "426a6bb8-055f-4e68-9280-f97460d8891c"
