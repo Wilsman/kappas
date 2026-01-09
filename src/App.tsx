@@ -54,6 +54,12 @@ import {
   type FetchStage,
   buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
+import { useAuth } from "@clerk/clerk-react";
+import {
+  syncProfile,
+  saveSyncTimestamp,
+  getSyncTimestamp,
+} from "./services/cloudSync";
 import { cn } from "@/lib/utils";
 import { Button } from "./components/ui/button";
 import { TRADER_COLORS } from "./data/traders";
@@ -181,11 +187,70 @@ const LOADING_STAGES = {
 } as const;
 
 function App() {
+  const { isSignedIn, userId } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string>("");
   const [activeProfileFaction, setActiveProfileFaction] = useState<
     "USEC" | "BEAR" | undefined
   >(undefined);
+
+  // Cloud sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Load last sync timestamp on mount
+  useEffect(() => {
+    if (userId) {
+      setLastSyncedAt(getSyncTimestamp(userId));
+    }
+  }, [userId]);
+
+  const handleSync = useCallback(async () => {
+    if (!isSignedIn || !userId || !activeProfileId) return;
+
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      const result = await syncProfile(activeProfileId, userId, "auto");
+      if (result.success) {
+        const now = Date.now();
+        setLastSyncedAt(now);
+        saveSyncTimestamp(userId, now);
+        // Reload data after sync
+        taskStorage.setProfile(activeProfileId);
+        await taskStorage.init();
+        const [
+          tasks,
+          collector,
+          achievements,
+          hideout,
+          storylineObj,
+          storylineMap,
+        ] = await Promise.all([
+          taskStorage.loadCompletedTasks(),
+          taskStorage.loadCompletedCollectorItems(),
+          taskStorage.loadCompletedAchievements(),
+          taskStorage.loadCompletedHideoutItems(),
+          taskStorage.loadCompletedStorylineObjectives(),
+          taskStorage.loadCompletedStorylineMapNodes(),
+        ]);
+        setCompletedTasks(tasks);
+        setCompletedCollectorItems(collector);
+        setCompletedAchievements(achievements);
+        setCompletedHideoutItems(hideout);
+        setCompletedStorylineObjectives(storylineObj);
+        setCompletedStorylineMapNodes(storylineMap);
+      } else {
+        setSyncError(result.error || "Sync failed");
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSignedIn, userId, activeProfileId]);
   const [activeProfileEdition, setActiveProfileEdition] = useState<
     string | undefined
   >(undefined);
@@ -261,15 +326,15 @@ function App() {
       },
     }));
   }, [overlay, traderImageByName]);
-  const tasksWithEvents = useMemo(
-    () => {
-      const baseIds = new Set(tasks.map((task) => task.id));
-      const uniqueEvents = eventTasks.filter((task) => !baseIds.has(task.id));
-      return [...tasks, ...uniqueEvents];
-    },
-    [tasks, eventTasks]
+  const tasksWithEvents = useMemo(() => {
+    const baseIds = new Set(tasks.map((task) => task.id));
+    const uniqueEvents = eventTasks.filter((task) => !baseIds.has(task.id));
+    return [...tasks, ...uniqueEvents];
+  }, [tasks, eventTasks]);
+  const baseTasks = useMemo(
+    () => tasks.filter((task) => !task.isEvent),
+    [tasks]
   );
-  const baseTasks = useMemo(() => tasks.filter((task) => !task.isEvent), [tasks]);
   const [completedCollectorItems, setCompletedCollectorItems] = useState<
     Set<string>
   >(new Set());
@@ -794,7 +859,9 @@ function App() {
     completedLightkeeperTasks,
   } = useMemo(() => {
     const kappaTasks = baseTasks.filter((task) => task.kappaRequired);
-    const lightkeeperTasks = baseTasks.filter((task) => task.lightkeeperRequired);
+    const lightkeeperTasks = baseTasks.filter(
+      (task) => task.lightkeeperRequired
+    );
 
     return {
       totalKappaTasks: kappaTasks.length,
@@ -1673,6 +1740,10 @@ function App() {
           onSetCollectorGroupBy={setCollectorGroupBy}
           playerLevel={playerLevel}
           onSetPlayerLevel={handleSetPlayerLevel}
+          onSyncClick={handleSync}
+          isSyncing={isSyncing}
+          lastSyncedAt={lastSyncedAt}
+          syncError={syncError}
           side="left"
         />
         <SidebarInset>

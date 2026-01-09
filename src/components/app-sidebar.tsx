@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useAuth } from "@clerk/clerk-react";
 import {
   ListChecks,
   Package,
@@ -13,6 +14,7 @@ import {
   Map,
   Target,
 } from "lucide-react";
+import { UserButton } from "@/components/auth";
 
 import {
   Sidebar,
@@ -122,6 +124,10 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onImportAllProfiles: (
     data: import("@/utils/indexedDB").AllProfilesExportData
   ) => Promise<void>;
+  onSyncClick?: () => void;
+  isSyncing?: boolean;
+  lastSyncedAt?: number | null;
+  syncError?: string | null;
 }
 
 export function AppSidebar({
@@ -154,8 +160,13 @@ export function AppSidebar({
   onImportComplete,
   onImportAsNewProfile,
   onImportAllProfiles,
+  onSyncClick,
+  isSyncing,
+  lastSyncedAt,
+  syncError,
   ...props
 }: AppSidebarProps) {
+  const { isSignedIn } = useAuth();
   const [perTraderOpen, setPerTraderOpen] = React.useState(false);
   const [exportImportOpen, setExportImportOpen] = React.useState(false);
   const [perMapOpen, setPerMapOpen] = React.useState(false);
@@ -353,9 +364,7 @@ export function AppSidebar({
                     min={1}
                     value={Number.isFinite(playerLevel) ? playerLevel : ""}
                     onChange={(e) =>
-                      onSetPlayerLevel(
-                        Math.max(1, Number(e.target.value) || 1)
-                      )
+                      onSetPlayerLevel(Math.max(1, Number(e.target.value) || 1))
                     }
                     className="h-8 w-20 text-xs"
                   />
@@ -792,6 +801,17 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        {/* User Auth Button */}
+        {isSignedIn !== undefined && (
+          <div className="px-2 py-2 group-data-[collapsible=icon]:hidden">
+            <UserButton
+              onSyncClick={onSyncClick}
+              isSyncing={isSyncing}
+              lastSyncedAt={lastSyncedAt}
+              syncError={syncError}
+            />
+          </div>
+        )}
         {/* Discord Button */}
         <div className="flex items-center justify-center group-data-[collapsible=icon]:hidden">
           <a

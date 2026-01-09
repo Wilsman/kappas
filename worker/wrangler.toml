@@ -1,0 +1,11 @@
+name = "tarkov-tracker-sync"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+CLERK_JWT_PUBLIC_KEY = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tarkov-tracker-sync"
+database_id = "" # Fill in after running: wrangler d1 create tarkov-tracker-sync

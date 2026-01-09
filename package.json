@@ -15,6 +15,7 @@
     "deploy:dev": "bun run build && wrangler pages deploy dist --project-name=kappas --branch=dev --commit-dirty=true"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.59.3",
     "@hookform/resolvers": "^5.1.1",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
