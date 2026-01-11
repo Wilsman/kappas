@@ -261,15 +261,15 @@ function App() {
       },
     }));
   }, [overlay, traderImageByName]);
-  const tasksWithEvents = useMemo(
-    () => {
-      const baseIds = new Set(tasks.map((task) => task.id));
-      const uniqueEvents = eventTasks.filter((task) => !baseIds.has(task.id));
-      return [...tasks, ...uniqueEvents];
-    },
-    [tasks, eventTasks]
+  const tasksWithEvents = useMemo(() => {
+    const baseIds = new Set(tasks.map((task) => task.id));
+    const uniqueEvents = eventTasks.filter((task) => !baseIds.has(task.id));
+    return [...tasks, ...uniqueEvents];
+  }, [tasks, eventTasks]);
+  const baseTasks = useMemo(
+    () => tasks.filter((task) => !task.isEvent),
+    [tasks]
   );
-  const baseTasks = useMemo(() => tasks.filter((task) => !task.isEvent), [tasks]);
   const [completedCollectorItems, setCompletedCollectorItems] = useState<
     Set<string>
   >(new Set());
@@ -285,6 +285,9 @@ function App() {
     Set<string>
   >(new Set());
   const [taskObjectiveItemProgress, setTaskObjectiveItemProgress] = useState<
+    Record<string, number>
+  >({});
+  const [hideoutItemQuantities, setHideoutItemQuantities] = useState<
     Record<string, number>
   >({});
   // Show all traders by default (no hidden traders initially)
@@ -696,6 +699,8 @@ function App() {
           await taskStorage.loadCompletedTaskObjectives();
         const savedTaskObjectiveItemProgress =
           await taskStorage.loadTaskObjectiveItemProgress();
+        const savedHideoutItemQuantities =
+          await taskStorage.loadHideoutItemQuantities();
         const savedWorkingOnItems = await taskStorage.loadWorkingOnItems();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
@@ -705,6 +710,7 @@ function App() {
         setCompletedStorylineMapNodes(savedStorylineMapNodes);
         setCompletedTaskObjectives(savedTaskObjectives);
         setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+        setHideoutItemQuantities(savedHideoutItemQuantities);
         setWorkingOnTasks(savedWorkingOnItems.tasks);
         setWorkingOnStorylineObjectives(
           savedWorkingOnItems.storylineObjectives
@@ -794,7 +800,9 @@ function App() {
     completedLightkeeperTasks,
   } = useMemo(() => {
     const kappaTasks = baseTasks.filter((task) => task.kappaRequired);
-    const lightkeeperTasks = baseTasks.filter((task) => task.lightkeeperRequired);
+    const lightkeeperTasks = baseTasks.filter(
+      (task) => task.lightkeeperRequired
+    );
 
     return {
       totalKappaTasks: kappaTasks.length,
@@ -880,6 +888,8 @@ function App() {
           await taskStorage.loadCompletedTaskObjectives();
         const savedTaskObjectiveItemProgress =
           await taskStorage.loadTaskObjectiveItemProgress();
+        const savedHideoutItemQuantities =
+          await taskStorage.loadHideoutItemQuantities();
         const savedWorkingOnItems = await taskStorage.loadWorkingOnItems();
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
@@ -889,6 +899,7 @@ function App() {
         setCompletedStorylineMapNodes(savedStorylineMapNodes);
         setCompletedTaskObjectives(savedTaskObjectives);
         setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+        setHideoutItemQuantities(savedHideoutItemQuantities);
         setWorkingOnTasks(savedWorkingOnItems.tasks);
         setWorkingOnStorylineObjectives(
           savedWorkingOnItems.storylineObjectives
@@ -1224,6 +1235,26 @@ function App() {
           .then(() => taskStorage.saveTaskObjectiveItemProgress(next))
           .catch((err) => {
             console.error("Save task objective item progress error", err);
+          });
+        return next;
+      });
+    },
+    [activeProfileId]
+  );
+
+  const handleUpdateHideoutItemQuantity = useCallback(
+    (itemKey: string, count: number) => {
+      if (!activeProfileId) return;
+      setHideoutItemQuantities((prev) => {
+        const next = { ...prev };
+        if (count <= 0) delete next[itemKey];
+        else next[itemKey] = count;
+        taskStorage.setProfile(activeProfileId);
+        taskStorage
+          .init()
+          .then(() => taskStorage.saveHideoutItemQuantities(next))
+          .catch((err) => {
+            console.error("Save hideout item quantities error", err);
           });
         return next;
       });
@@ -1877,6 +1908,10 @@ function App() {
                         onToggleWorkingOnHideoutStation={
                           handleToggleWorkingOnHideoutStation
                         }
+                        hideoutItemQuantities={hideoutItemQuantities}
+                        onUpdateHideoutItemQuantity={
+                          handleUpdateHideoutItemQuantity
+                        }
                       />
                     ) : viewMode === "prestiges" ? (
                       <PrestigesView />
@@ -1965,6 +2000,10 @@ function App() {
                         taskObjectiveItemProgress={taskObjectiveItemProgress}
                         onUpdateTaskObjectiveItemProgress={
                           handleUpdateTaskObjectiveItemProgress
+                        }
+                        hideoutItemQuantities={hideoutItemQuantities}
+                        onUpdateHideoutItemQuantity={
+                          handleUpdateHideoutItemQuantity
                         }
                       />
                     ) : viewMode === "flow" ? (

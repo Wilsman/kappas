@@ -1,12 +1,13 @@
 import { isProfileDeleted } from "./profile";
 
 const DB_BASE_NAME = "TarkovQuests";
-const DB_VERSION = 11;
+const DB_VERSION = 12;
 const TASKS_STORE = "completedTasks";
 const COLLECTOR_STORE = "completedCollectorItems";
 const PRESTIGE_STORE = "prestigeProgress";
 const ACHIEVEMENTS_STORE = "completedAchievements";
 const HIDEOUT_ITEMS_STORE = "completedHideoutItems";
+const HIDEOUT_ITEM_QUANTITIES_STORE = "hideoutItemQuantities";
 const STORYLINE_OBJECTIVES_STORE = "completedStorylineObjectives";
 const STORYLINE_MAP_NODES_STORE = "completedStorylineMapNodes";
 const USER_PREFS_STORE = "userPreferences";
@@ -104,6 +105,11 @@ export class TaskStorage {
         }
         if (!db.objectStoreNames.contains(TASK_OBJECTIVE_ITEM_PROGRESS_STORE)) {
           db.createObjectStore(TASK_OBJECTIVE_ITEM_PROGRESS_STORE, {
+            keyPath: "id",
+          });
+        }
+        if (!db.objectStoreNames.contains(HIDEOUT_ITEM_QUANTITIES_STORE)) {
+          db.createObjectStore(HIDEOUT_ITEM_QUANTITIES_STORE, {
             keyPath: "id",
           });
         }
@@ -442,6 +448,59 @@ export class TaskStorage {
     });
   }
 
+  async saveHideoutItemQuantities(
+    quantities: Record<string, number>
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Skip if the store doesn't exist yet (backwards compatibility)
+    if (!this.db!.objectStoreNames.contains(HIDEOUT_ITEM_QUANTITIES_STORE)) {
+      console.warn(
+        "[Storage] HIDEOUT_ITEM_QUANTITIES_STORE not found, skipping save. Database may need upgrade."
+      );
+      return;
+    }
+
+    const tx = this.db!.transaction(
+      [HIDEOUT_ITEM_QUANTITIES_STORE],
+      "readwrite"
+    );
+    const store = tx.objectStore(HIDEOUT_ITEM_QUANTITIES_STORE);
+    await store.clear();
+    for (const [id, count] of Object.entries(quantities)) {
+      if (!Number.isFinite(count) || count <= 0) continue;
+      await store.add({ id, count });
+    }
+  }
+
+  async loadHideoutItemQuantities(): Promise<Record<string, number>> {
+    if (!this.db) await this.init();
+
+    // Return empty object if the store doesn't exist yet (backwards compatibility)
+    if (!this.db!.objectStoreNames.contains(HIDEOUT_ITEM_QUANTITIES_STORE)) {
+      return {};
+    }
+
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction(
+        [HIDEOUT_ITEM_QUANTITIES_STORE],
+        "readonly"
+      );
+      const store = tx.objectStore(HIDEOUT_ITEM_QUANTITIES_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const quantities: Record<string, number> = {};
+        req.result.forEach((item: { id: string; count?: number }) => {
+          if (Number.isFinite(item.count)) {
+            quantities[item.id] = Number(item.count);
+          }
+        });
+        resolve(quantities);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   // User preferences (notes, player level, filters)
   async saveUserPreferences(prefs: Partial<UserPreferences>): Promise<void> {
     if (!this.db) await this.init();
@@ -599,6 +658,7 @@ export interface ExportData {
   completedStorylineObjectives: string[];
   completedStorylineMapNodes: string[];
   taskObjectiveItemProgress?: Record<string, number>;
+  hideoutItemQuantities?: Record<string, number>;
   prestigeProgress: Record<string, unknown>;
   userPreferences: Partial<UserPreferences>;
   workingOnItems?: {
@@ -640,6 +700,7 @@ export class ExportImportService {
       completedStorylineObjectives,
       completedStorylineMapNodes,
       taskObjectiveItemProgress,
+      hideoutItemQuantities,
       userPreferences,
       workingOnItems,
     ] = await Promise.all([
@@ -650,6 +711,7 @@ export class ExportImportService {
       taskStorage.loadCompletedStorylineObjectives(),
       taskStorage.loadCompletedStorylineMapNodes(),
       taskStorage.loadTaskObjectiveItemProgress(),
+      taskStorage.loadHideoutItemQuantities(),
       taskStorage.loadUserPreferences(),
       taskStorage.loadWorkingOnItems(),
     ]);
@@ -675,6 +737,7 @@ export class ExportImportService {
       completedStorylineObjectives: Array.from(completedStorylineObjectives),
       completedStorylineMapNodes: Array.from(completedStorylineMapNodes),
       taskObjectiveItemProgress,
+      hideoutItemQuantities,
       prestigeProgress,
       userPreferences,
       workingOnItems: {
@@ -726,6 +789,7 @@ export class ExportImportService {
       taskStorage.saveTaskObjectiveItemProgress(
         data.taskObjectiveItemProgress || {}
       ),
+      taskStorage.saveHideoutItemQuantities(data.hideoutItemQuantities || {}),
     ]);
 
     // Import working on items (backward compatible)

@@ -62,6 +62,8 @@ interface CurrentlyWorkingOnViewProps {
     objectiveItemKey: string,
     count: number
   ) => void;
+  hideoutItemQuantities: Record<string, number>;
+  onUpdateHideoutItemQuantity: (itemKey: string, count: number) => void;
 }
 
 export function CurrentlyWorkingOnView({
@@ -87,6 +89,8 @@ export function CurrentlyWorkingOnView({
   onToggleTaskObjective,
   taskObjectiveItemProgress,
   onUpdateTaskObjectiveItemProgress,
+  hideoutItemQuantities,
+  onUpdateHideoutItemQuantity,
 }: CurrentlyWorkingOnViewProps) {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [expandedHideout, setExpandedHideout] = useState<Set<string>>(
@@ -127,6 +131,24 @@ export function CurrentlyWorkingOnView({
     const next = Math.max(0, Math.min(maxCount, current + delta));
     onUpdateTaskObjectiveItemProgress(objectiveItemKey, next);
   };
+
+  const handleHideoutItemDelta = (
+    itemKey: string,
+    delta: number,
+    maxCount: number,
+    isCompleted: boolean
+  ) => {
+    const current = hideoutItemQuantities[itemKey] || 0;
+    const next = Math.max(0, Math.min(maxCount, current + delta));
+    onUpdateHideoutItemQuantity(itemKey, next);
+    if (next >= maxCount && !isCompleted) {
+      onToggleHideoutItem(itemKey);
+    }
+    if (next < maxCount && isCompleted) {
+      onToggleHideoutItem(itemKey);
+    }
+  };
+
 
   // Filter tasks that are marked as working on
   const activeTasks = useMemo(() => {
@@ -954,19 +976,30 @@ export function CurrentlyWorkingOnView({
                         const itemKey = `${station.name}-${level.level}-${req.item.name}`;
                         const isItemCompleted =
                           completedHideoutItems.has(itemKey);
+                        const currentCount = hideoutItemQuantities[itemKey] || 0;
                         return (
                           <div
                             key={idx}
                             className={cn(
-                              "flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors",
+                              "flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors group",
                               isItemCompleted && "opacity-60"
                             )}
                           >
                             <Checkbox
                               checked={isItemCompleted}
-                              onCheckedChange={() =>
-                                onToggleHideoutItem(itemKey)
-                              }
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  onUpdateHideoutItemQuantity(itemKey, req.count);
+                                  if (!isItemCompleted) {
+                                    onToggleHideoutItem(itemKey);
+                                  }
+                                } else {
+                                  onUpdateHideoutItemQuantity(itemKey, 0);
+                                  if (isItemCompleted) {
+                                    onToggleHideoutItem(itemKey);
+                                  }
+                                }
+                              }}
                               className="h-4 w-4"
                             />
                             {req.item.iconLink && (
@@ -978,16 +1011,53 @@ export function CurrentlyWorkingOnView({
                             )}
                             <span
                               className={cn(
-                                "text-sm flex-1",
+                                "text-sm",
                                 isItemCompleted &&
                                   "line-through text-muted-foreground"
                               )}
                             >
-                              {req.count}x {req.item.name}
+                              {currentCount}/{req.count}x {req.item.name}
                             </span>
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleHideoutItemDelta(
+                                    itemKey,
+                                    -1,
+                                    req.count,
+                                    isItemCompleted
+                                  );
+                                }}
+                                disabled={currentCount <= 0}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleHideoutItemDelta(
+                                    itemKey,
+                                    1,
+                                    req.count,
+                                    isItemCompleted
+                                  );
+                                }}
+                                disabled={currentCount >= req.count}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         );
                       })}
+
                     </div>
                   )}
                 </div>

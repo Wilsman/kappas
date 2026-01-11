@@ -37,6 +37,8 @@ interface CollectorViewProps {
   hideoutStations: HideoutStation[];
   workingOnHideoutStations?: Set<string>;
   onToggleWorkingOnHideoutStation?: (stationKey: string) => void;
+  hideoutItemQuantities?: Record<string, number>;
+  onUpdateHideoutItemQuantity?: (itemKey: string, count: number) => void;
 }
 
 type GroupBy = "collector" | "hideout-stations";
@@ -51,6 +53,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   hideoutStations,
   workingOnHideoutStations = new Set(),
   onToggleWorkingOnHideoutStation,
+  hideoutItemQuantities = {},
+  onUpdateHideoutItemQuantity,
 }) => {
   const [searchTerm, setSearchTerm] = useQueryState("itemsSearch", {
     defaultValue: "",
@@ -100,28 +104,25 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       })
       .filter(Boolean) as HideoutStation[];
   }, [hideoutStations, searchTerm]);
-  const [itemQuantities, setItemQuantities] = useState<Record<string, number>>(
-    {}
-  );
-
   // Handle quantity changes for items
   const handleQuantityChange = (
     itemKey: string,
     delta: number,
     maxQuantity: number
   ) => {
-    setItemQuantities((prev) => {
-      const nextQty = Math.max(
-        0,
-        Math.min(maxQuantity, (prev[itemKey] || 0) + delta)
-      );
-      const nextQuantities = { ...prev, [itemKey]: nextQty };
-      const nextCompleted = new Set(completedHideoutItems);
-      if (nextQty >= maxQuantity) nextCompleted.add(itemKey);
-      else nextCompleted.delete(itemKey);
-      onSetHideoutItems(nextCompleted);
-      return nextQuantities;
-    });
+    const currentQty = hideoutItemQuantities[itemKey] || 0;
+    const nextQty = Math.max(0, Math.min(maxQuantity, currentQty + delta));
+
+    // Update via prop callback
+    if (onUpdateHideoutItemQuantity) {
+      onUpdateHideoutItemQuantity(itemKey, nextQty);
+    }
+
+    // Update completed status
+    const nextCompleted = new Set(completedHideoutItems);
+    if (nextQty >= maxQuantity) nextCompleted.add(itemKey);
+    else nextCompleted.delete(itemKey);
+    onSetHideoutItems(nextCompleted);
   };
 
   // Check if an item is a currency (Roubles, Euros, Dollars)
@@ -136,7 +137,6 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     level: { itemRequirements: { count: number; item: { name: string } }[] }
   ) => {
     const next = new Set(completedHideoutItems);
-    const nextQuantities: Record<string, number> = {};
     const levelItemKeys = level.itemRequirements.map(
       (req) => `${stationName}-${levelNum}-${req.item.name}`
     );
@@ -146,17 +146,20 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       level.itemRequirements.forEach((req) => {
         const itemKey = `${stationName}-${levelNum}-${req.item.name}`;
         next.delete(itemKey);
-        nextQuantities[itemKey] = 0;
+        if (onUpdateHideoutItemQuantity) {
+          onUpdateHideoutItemQuantity(itemKey, 0);
+        }
       });
     } else {
       level.itemRequirements.forEach((req) => {
         const itemKey = `${stationName}-${levelNum}-${req.item.name}`;
         next.add(itemKey);
-        nextQuantities[itemKey] = req.count;
+        if (onUpdateHideoutItemQuantity) {
+          onUpdateHideoutItemQuantity(itemKey, req.count);
+        }
       });
     }
 
-    setItemQuantities((prev) => ({ ...prev, ...nextQuantities }));
     onSetHideoutItems(next);
   };
 
@@ -487,7 +490,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                 const isCurrency = isCurrencyItem(
                                   req.item.name
                                 );
-                                const currentQty = itemQuantities[itemKey] || 0;
+                                const currentQty =
+                                  hideoutItemQuantities[itemKey] || 0;
                                 const isCompleted =
                                   completedHideoutItems.has(itemKey) ||
                                   (!isCurrency && currentQty >= req.count);
@@ -509,12 +513,12 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                         checked={isCompleted}
                                         onCheckedChange={(checked) => {
                                           const isChecked = Boolean(checked);
-                                          setItemQuantities((prev) => ({
-                                            ...prev,
-                                            [itemKey]: isChecked
-                                              ? req.count
-                                              : 0,
-                                          }));
+                                          if (onUpdateHideoutItemQuantity) {
+                                            onUpdateHideoutItemQuantity(
+                                              itemKey,
+                                              isChecked ? req.count : 0
+                                            );
+                                          }
                                           const nextCompleted = new Set(
                                             completedHideoutItems
                                           );
