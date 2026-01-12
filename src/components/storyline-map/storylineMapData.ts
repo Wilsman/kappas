@@ -79,10 +79,10 @@ const storylineNodePositions = {
   "tg-48b": { x: 746, y: 2271 },
   trusted: { x: 716, y: 2374 },
   "fence-4": { x: 716, y: 2474 },
-  pvp: { x: 613, y: 2596 },
+  pvp: { x: 613, y: 2601 },
   pve: { x: 882, y: 2603 },
-  "kill-5-no-scav": { x: 584, y: 2709 },
-  coop: { x: 870, y: 2719 },
+  "kill-5-no-scav": { x: 852, y: 2705 },
+  coop: { x: 600, y: 2705 },
   "btr-04": { x: 733, y: 2872 },
   "warn-btr": { x: -424, y: 2577 },
   "solar-savior": { x: 749, y: 3039 },
@@ -592,7 +592,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     type: "story",
     data: {
       label: "PVP",
-      description: "Combat path",
+      description: "PVP Path",
     },
   },
   {
@@ -600,7 +600,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     type: "story",
     data: {
       label: "PVE",
-      description: "Cooperative path",
+      description: "PVE Path",
     },
   },
   {
@@ -1328,15 +1328,15 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#22c55e" },
   },
   {
-    id: "e-pvp-kill5",
+    id: "e-pvp-coop",
     source: "pvp",
-    target: "kill-5-no-scav",
+    target: "coop",
     style: { stroke: "#22c55e" },
   },
   {
-    id: "e-pve-coop",
+    id: "e-pve-kill5",
     source: "pve",
-    target: "coop",
+    target: "kill-5-no-scav",
     style: { stroke: "#22c55e" },
   },
   {
