@@ -83,16 +83,19 @@ export function QuestProgressPanel({
 
   return (
     <div
-      className={cn("bg-card border rounded-lg p-4 shadow-sm w-72", className)}
+      className={cn(
+        "bg-card border rounded-lg p-3 sm:p-4 shadow-sm w-full md:w-72",
+        className
+      )}
     >
       {/* Overview card */}
-      <div className="rounded-lg border bg-muted/10 p-4 mb-4">
+      <div className="rounded-lg border bg-muted/10 p-3 sm:p-4 mb-3 sm:mb-4">
         <div className="flex items-center gap-2 text-foreground mb-2">
           <TrendingUp className="h-4 w-4 text-yellow-500" />
-          <h2 className="text-base font-semibold">{progressTitle}</h2>
+          <h2 className="text-sm sm:text-base font-semibold">{progressTitle}</h2>
         </div>
         <div className="text-center">
-          <div className="text-3xl font-bold leading-tight">
+          <div className="text-2xl sm:text-3xl font-bold leading-tight">
             {Math.floor(progress)}%
           </div>
           <div className="text-sm text-muted-foreground">
@@ -110,13 +113,15 @@ export function QuestProgressPanel({
 
       {/* Storyline Progress Overview */}
       {totalStorylineObjectives > 0 && (
-        <div className="rounded-lg border bg-purple-500/10 p-4 mb-4">
+        <div className="rounded-lg border bg-purple-500/10 p-3 sm:p-4 mb-3 sm:mb-4">
           <div className="flex items-center gap-2 text-foreground mb-2">
             <BookOpen className="h-4 w-4 text-purple-500" />
-            <h2 className="text-base font-semibold">Storyline Progress</h2>
+            <h2 className="text-sm sm:text-base font-semibold">
+              Storyline Progress
+            </h2>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold leading-tight">
+            <div className="text-2xl sm:text-3xl font-bold leading-tight">
               {Math.floor(storylineProgress)}%
             </div>
             <div className="text-sm text-muted-foreground">
@@ -135,20 +140,22 @@ export function QuestProgressPanel({
       )}
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="rounded-lg border bg-muted/10 p-3 text-center">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <div className="rounded-lg border bg-muted/10 p-2.5 sm:p-3 text-center">
           <div className="flex items-center justify-center gap-2 text-yellow-600 mb-1">
             <Target className="h-4 w-4" />
             <span className="text-xs">Completed</span>
           </div>
-          <div className="text-2xl font-semibold">{completedQuests}</div>
+          <div className="text-xl sm:text-2xl font-semibold">
+            {completedQuests}
+          </div>
         </div>
-        <div className="rounded-lg border bg-muted/10 p-3 text-center">
+        <div className="rounded-lg border bg-muted/10 p-2.5 sm:p-3 text-center">
           <div className="flex items-center justify-center gap-2 text-orange-600 mb-1">
             <Award className="h-4 w-4" />
             <span className="text-xs">Remaining</span>
           </div>
-          <div className="text-2xl font-semibold">
+          <div className="text-xl sm:text-2xl font-semibold">
             {Math.max(totalQuests - completedQuests, 0)}
           </div>
         </div>
@@ -160,14 +167,14 @@ export function QuestProgressPanel({
         totalCollectorItems > 0 ||
         totalAchievements > 0 ||
         totalPrestigeSteps > 0) && (
-        <div className="rounded-lg border bg-muted/5 p-3 mb-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">
+        <div className="rounded-lg border bg-muted/5 p-3 mb-3 sm:mb-4">
+          <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2">
             Focused Tasks
           </h3>
 
           {totalKappaTasks > 0 && (
             <div className="space-y-2 mb-3">
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
                 <span>🎯 Kappa Required</span>
                 <span>
                   {completedKappaTasks}/{totalKappaTasks}
@@ -183,7 +190,7 @@ export function QuestProgressPanel({
 
           {totalCollectorItems > 0 && (
             <div className="space-y-2 mb-3">
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
                 <span>🧩 Collector Items</span>
                 <span>
                   {completedCollectorItems}/{totalCollectorItems}
@@ -201,7 +208,7 @@ export function QuestProgressPanel({
             // divider line
             <div className="space-y-2 mb-3">
               <div className="h-px bg-muted/50 my-4" />
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
                 <span>💡 Lightkeeper Required</span>
                 <span>
                   {completedLightkeeperTasks}/{totalLightkeeperTasks}
@@ -218,7 +225,7 @@ export function QuestProgressPanel({
           {totalAchievements > 0 && (
             <div className="space-y-2 mb-3">
               <div className="h-px bg-muted/50 my-4" />
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
                 <span>🏆 Achievements</span>
                 <span>
                   {completedAchievements}/{totalAchievements}
@@ -234,7 +241,7 @@ export function QuestProgressPanel({
 
           {totalPrestigeSteps > 0 && (
             <div className="space-y-2">
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
                 <span>🜲 {prestigeLabel}</span>
                 <span>
                   {completedPrestigeSteps}/{totalPrestigeSteps}
@@ -252,13 +259,13 @@ export function QuestProgressPanel({
       {/* Overall section (BOTTOM) */}
       <div className="rounded-lg border bg-muted/10 p-3 space-y-4">
         <div className="mt-0">
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">
+          <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2">
             All Tasks
           </h3>
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-2 max-h-100 overflow-y-auto pr-2">
+          <div className="space-y-2 md:max-h-100 md:overflow-y-auto md:pr-2">
             {traders.map((trader) => {
               const traderProgress =
                 trader.total > 0 ? (trader.completed / trader.total) * 100 : 0;

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -218,6 +219,10 @@ export function EndingSelector({
                 </>
               )}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Detailed list of rewards for the {rewardsDialogEnding?.label}{" "}
+              ending.
+            </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] pr-4">
             <div className="space-y-2">

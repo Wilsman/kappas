@@ -49,6 +49,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -117,10 +118,10 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onImportComplete: () => void;
   onImportAsNewProfile: (
     name: string,
-    data: import("@/utils/indexedDB").ExportData
+    data: import("@/utils/indexedDB").ExportData,
   ) => Promise<void>;
   onImportAllProfiles: (
-    data: import("@/utils/indexedDB").AllProfilesExportData
+    data: import("@/utils/indexedDB").AllProfilesExportData,
   ) => Promise<void>;
 }
 
@@ -165,7 +166,7 @@ export function AppSidebar({
   const [nameInput, setNameInput] = React.useState("");
   const activeProfile = React.useMemo(
     () => profiles.find((p) => p.id === activeProfileId) || null,
-    [profiles, activeProfileId]
+    [profiles, activeProfileId],
   );
   const [menuOpen, setMenuOpen] = React.useState(false);
   const closeAllOverlays = React.useCallback(() => {
@@ -353,9 +354,7 @@ export function AppSidebar({
                     min={1}
                     value={Number.isFinite(playerLevel) ? playerLevel : ""}
                     onChange={(e) =>
-                      onSetPlayerLevel(
-                        Math.max(1, Number(e.target.value) || 1)
-                      )
+                      onSetPlayerLevel(Math.max(1, Number(e.target.value) || 1))
                     }
                     className="h-8 w-20 text-xs"
                   />
@@ -419,6 +418,11 @@ export function AppSidebar({
                     ? "New Character"
                     : "Rename Character"}
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  {nameModalOpen?.mode === "create"
+                    ? "Create a new character profile to track your progress separately."
+                    : "Change the name of your current character profile."}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-2">
                 <label className="text-sm">Name</label>
@@ -516,7 +520,7 @@ export function AppSidebar({
                             window.history.pushState(
                               null,
                               "",
-                              "/Storyline/Choose-Ending"
+                              "/Storyline/Choose-Ending",
                             );
                             window.dispatchEvent(new PopStateEvent("popstate"));
                           }

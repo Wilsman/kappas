@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { applyTaskOverlay, fetchOverlay, buildEventTasksFromOverlay } from "../tarkovApi";
 import type { Task, Overlay } from "../../types";
-import localOverlay from "../../../overlay-refs/overlay.json";
 
 describe("Overlay Integration", () => {
     const mockOverlay: Overlay = {
@@ -128,9 +127,21 @@ describe("Overlay Integration", () => {
         );
     });
 
-    describe("Collector Task (Nut Sack Overlay)", () => {
-        test("should work with real local overlay data", () => {
-            const overlay = localOverlay as Overlay;
+    describe("Collector Task (Mock Overlay)", () => {
+        test("should work with mock overlay data", () => {
+            const overlay: Overlay = {
+                tasks: {
+                    "5c51aac186f77432ea65c552": {
+                        objectivesAdd: [
+                            {
+                                description: "Hand over the found in raid item: Nut Sack balaclava",
+                                items: [{ id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" }]
+                            }
+                        ]
+                    }
+                },
+                $meta: { version: "1.0.0", generated: new Date().toISOString() }
+            };
             const collectorTaskId = "5c51aac186f77432ea65c552";
 
             const baseCollectorTask: Task = {
@@ -182,7 +193,14 @@ describe("Overlay Integration", () => {
 
     describe("Data Comparison (Showcase)", () => {
         test("demonstrate merge: Grenadier experience", () => {
-            const overlay = localOverlay as Overlay;
+            const overlay: Overlay = {
+                tasks: {
+                    "5c0d190cd09282029f5390d8": {
+                        experience: 12500
+                    }
+                },
+                $meta: { version: "1.0.0", generated: new Date().toISOString() }
+            };
             const grenadierId = "5c0d190cd09282029f5390d8";
 
             const apiData: Task = {

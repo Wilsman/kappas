@@ -6,6 +6,7 @@ import { PanelLeft, PanelRight } from "lucide-react";
 interface SidebarProps {
   position: 'left' | 'right';
   header?: ReactNode;
+  headerIcon?: ReactNode;
   children: ReactNode;
   className?: string;
   defaultCollapsed?: boolean;
@@ -17,6 +18,7 @@ interface SidebarProps {
 export function Sidebar({
   position = 'left',
   header,
+  headerIcon,
   children,
   className,
   defaultCollapsed = false,
@@ -33,11 +35,12 @@ export function Sidebar({
   };
 
   const CollapseButton = position === 'left' ? PanelLeft : PanelRight;
+  const headerContent = collapsed && headerIcon ? headerIcon : header;
 
   return (
     <aside
       className={cn(
-        'h-full flex flex-col bg-card border-r border-border transition-all duration-200 overflow-hidden',
+        'relative h-full flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-200 overflow-hidden',
         position === 'right' && 'border-l border-r-0',
         className
       )}
@@ -48,13 +51,27 @@ export function Sidebar({
 
     >
       {header && (
-        <div className="p-4 border-b flex items-center justify-between">
-          {!collapsed && <div className="font-semibold">{header}</div>}
+        <div
+          className={cn(
+            "px-2 py-2 border-b border-sidebar-border",
+            collapsed
+              ? "flex flex-col items-center gap-2"
+              : "flex items-center gap-2"
+          )}
+        >
+          <div
+            className={cn(
+              'flex items-center gap-2 text-sm font-semibold',
+              collapsed ? 'justify-center' : 'flex-1'
+            )}
+          >
+            {headerContent}
+          </div>
           {collapsible && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 ml-auto"
+              className={cn("h-7 w-7", !collapsed && "ml-auto")}
               onClick={toggleCollapse}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
@@ -64,7 +81,7 @@ export function Sidebar({
         </div>
       )}
       
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className={cn("flex-1 overflow-y-auto p-2", collapsed && "hidden")}>
         {children}
       </div>
       

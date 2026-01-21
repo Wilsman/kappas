@@ -13,11 +13,8 @@ import {
   TaskAddRewardItem
 } from '../types';
 import { TraderName } from '../data/traders';
-import localOverlay from '../../overlay-refs/overlay.json';
-
 const TARKOV_API_URL = 'https://api.tarkov.dev/graphql';
 export const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json';
-const USE_LOCAL_OVERLAY = import.meta.env.VITE_USE_LOCAL_OVERLAY === 'true';
 
 type TaskOverlayTarget = Task | CollectorItemsData['data']['task'];
 type TaskRequirement = Task['taskRequirements'][number];
@@ -236,10 +233,6 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
 }
 
 export async function fetchOverlay(): Promise<Overlay> {
-  if (USE_LOCAL_OVERLAY) {
-    console.log('[Overlay] Using local overlay (VITE_USE_LOCAL_OVERLAY=true).');
-    return localOverlay as Overlay;
-  }
   try {
     const response = await fetch(OVERLAY_URL);
     if (!response.ok) throw new Error(`Overlay fetch failed: ${response.status}`);
@@ -247,8 +240,9 @@ export async function fetchOverlay(): Promise<Overlay> {
     console.log(`[Overlay] Successfully fetched latest from: ${OVERLAY_URL}`);
     return data;
   } catch (err) {
-    console.warn('Failed to fetch remote overlay, falling back to local:', err);
-    return localOverlay as Overlay;
+    console.error('Failed to fetch remote overlay:', err);
+    // Return a minimal empty overlay to prevent the app from breaking
+    return { tasks: {}, $meta: { version: '0.0.0-empty', generated: new Date().toISOString() } };
   }
 }
 

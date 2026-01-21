@@ -56,6 +56,12 @@ import {
 } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
 import { Button } from "./components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { TRADER_COLORS } from "./data/traders";
 import { Sidebar as LegacySidebar } from "./components/Sidebar";
 import {
@@ -298,6 +304,7 @@ function App() {
     (typeof LOADING_STAGES)[keyof typeof LOADING_STAGES]
   >(LOADING_STAGES.boot);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     try {
@@ -1648,9 +1655,9 @@ function App() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">
-          <TextShimmerWave
-            as="h1"
-            className="text-2xl md:text-3xl font-semibold tracking-wide"
+            <TextShimmerWave
+              as="h1"
+              className="text-2xl min-[988px]:text-3xl font-semibold tracking-wide"
             duration={1}
             zDistance={120}
             xDistance={30}
@@ -1707,34 +1714,71 @@ function App() {
           side="left"
         />
         <SidebarInset>
-          <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
+          <div className="min-h-[100dvh] bg-background text-foreground flex flex-col overflow-hidden">
             {/* Header */}
             <header className="border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
               <div className="px-2">
-                <div className="grid grid-cols-3 items-center gap-3 py-2">
-                  {/* Left: title */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    <SidebarTrigger className="-ml-1" />
-                    <h1 className="text-xl font-semibold truncate md:peer-data-[state=collapsed]:hidden">
-                      {isMobile
-                        ? "EFT Tracker"
-                        : "Escape from Tarkov Task Tracker"}
-                    </h1>
-                    <span
-                      className={cn(
-                        "inline-flex text-[10px] px-2 py-0.5 rounded-full font-semibold border",
-                        "bg-orange-600/10 text-orange-600 border-orange-600/20"
-                      )}
-                    >
-                      BETA
-                    </span>
-                    <span className="hidden md:inline-flex md:peer-data-[state=collapsed]:hidden text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-600 border border-emerald-600/20">
-                      Live API
-                    </span>
+                <div className="flex flex-col gap-2 py-2 min-[988px]:grid min-[988px]:grid-cols-3 min-[988px]:items-center">
+                  {/* Left: title + mobile actions */}
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <SidebarTrigger className="-ml-1" />
+                      <h1 className="text-lg font-semibold truncate sm:text-xl min-[988px]:peer-data-[state=collapsed]:hidden">
+                        {isMobile
+                          ? "EFT Tracker"
+                          : "Escape from Tarkov Task Tracker"}
+                      </h1>
+                      <span
+                        className={cn(
+                          "inline-flex text-[10px] px-2 py-0.5 rounded-full font-semibold border",
+                          "bg-orange-600/10 text-orange-600 border-orange-600/20"
+                        )}
+                      >
+                        BETA
+                      </span>
+                      <span className="hidden min-[988px]:inline-flex min-[988px]:peer-data-[state=collapsed]:hidden text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-600 border border-emerald-600/20">
+                        Live API
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 min-[988px]:hidden">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          window.dispatchEvent(new Event("open-command-menu"))
+                        }
+                        aria-label="Search"
+                      >
+                        <Search className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setProgressOpen(true)}
+                        aria-label="View progress"
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        aria-label="Refresh data"
+                      >
+                        <RotateCcw
+                          className={cn(
+                            "h-4 w-4",
+                            isRefreshing && "animate-spin"
+                          )}
+                        />
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Center: Focus segmented control */}
-                  <div className="hidden md:flex items-center justify-center gap-2">
+                  <div className="hidden min-[988px]:flex items-center justify-center gap-2">
                     <span className="text-xs text-muted-foreground">Focus</span>
                     <div className="flex items-center gap-1 p-1 rounded-full border bg-muted/30">
                       <Button
@@ -1793,7 +1837,7 @@ function App() {
                   </div>
 
                   {/* Right: Search hint + Refresh */}
-                  <div className="hidden md:flex items-center justify-end gap-3">
+                  <div className="hidden min-[988px]:flex items-center justify-end gap-3">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1840,11 +1884,11 @@ function App() {
             </header>
 
             {/* Main + Right Progress */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
               {/* Main Content */}
               <main
                 className={cn(
-                  "flex-1 bg-background relative",
+                  "flex-1 min-h-0 bg-background relative",
                   viewMode === "grouped" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
@@ -1864,7 +1908,7 @@ function App() {
                           <Skeleton className="h-6 w-40" />
                           <Skeleton className="h-4 w-64" />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 min-[988px]:grid-cols-2 gap-4">
                           <Skeleton className="h-40 w-full" />
                           <Skeleton className="h-40 w-full" />
                         </div>
@@ -2040,10 +2084,11 @@ function App() {
                     Progress
                   </div>
                 }
+                headerIcon={<BarChart3 className="h-4 w-4" />}
                 defaultCollapsed={false}
                 width="20rem"
                 collapsedWidth="3rem"
-                className="hidden md:flex"
+                className="hidden min-[988px]:flex"
               >
                 <div className="p-2 space-y-3">
                   <QuestProgressPanel
@@ -2092,6 +2137,37 @@ function App() {
         onSelectMap={handleSelectMap}
       />
       <NotesWidget />
+      <Sheet open={progressOpen} onOpenChange={setProgressOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[85vh] overflow-y-auto p-0"
+        >
+          <SheetHeader className="px-4 pt-4">
+            <SheetTitle>Progress Overview</SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-6 pt-3">
+            <QuestProgressPanel
+              totalQuests={displayTotalQuests}
+              completedQuests={displayCompletedQuests}
+              traders={traderProgress}
+              totalCollectorItems={collectorItems.length}
+              completedCollectorItems={completedCollectorItems.size}
+              totalKappaTasks={totalKappaTasks}
+              completedKappaTasks={completedKappaTasks}
+              totalLightkeeperTasks={totalLightkeeperTasks}
+              completedLightkeeperTasks={completedLightkeeperTasks}
+              totalAchievements={achievements.length}
+              completedAchievements={completedAchievements.size}
+              totalStorylineObjectives={totalStorylineObjectives}
+              completedStorylineObjectives={completedStorylineCount}
+              totalPrestigeSteps={prestigeProgress?.total}
+              completedPrestigeSteps={prestigeProgress?.completed}
+              currentPrestigeId={prestigeProgress?.id}
+              progressTitle={progressTitle}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
       <OnboardingModal
         isOpen={showOnboarding}
         onClose={handleCloseOnboarding}
