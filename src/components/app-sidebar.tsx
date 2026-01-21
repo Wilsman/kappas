@@ -73,6 +73,7 @@ import {
   FolderSync,
 } from "lucide-react";
 import { ExportImportDialog } from "@/components/ExportImportDialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   SelectiveResetDialog,
   type ResetOptions,
@@ -123,6 +124,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onImportAllProfiles: (
     data: import("@/utils/indexedDB").AllProfilesExportData,
   ) => Promise<void>;
+  isLoading?: boolean;
 }
 
 export function AppSidebar({
@@ -155,6 +157,7 @@ export function AppSidebar({
   onImportComplete,
   onImportAsNewProfile,
   onImportAllProfiles,
+  isLoading = false,
   ...props
 }: AppSidebarProps) {
   const [perTraderOpen, setPerTraderOpen] = React.useState(false);
@@ -210,200 +213,223 @@ export function AppSidebar({
           </div>
           {/* Profile selector */}
           <div className="group-data-[collapsible=icon]:hidden rounded-lg border border-sidebar-border/60 bg-sidebar-accent/10 p-2">
-            <div className="mb-1 flex items-center gap-2">
-              <Select
-                value={activeProfileId}
-                onValueChange={(v) => onSwitchProfile(v)}
-              >
-                <SelectTrigger className="w-full h-8">
-                  <SelectValue placeholder="Select character" />
-                </SelectTrigger>
-                <SelectContent>
-                  {profiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label="Character actions"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setNameInput("");
-                      setNameModalOpen({ mode: "create" });
-                    }}
-                  >
-                    <UserPlus className="mr-2 h-4 w-4" /> New character
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setNameInput(activeProfile?.name || "");
-                      setNameModalOpen({ mode: "rename" });
-                    }}
-                    disabled={!activeProfile}
-                  >
-                    <Edit3 className="mr-2 h-4 w-4" /> Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!activeProfile}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setExportImportOpen(true);
-                    }}
-                  >
-                    <FolderSync className="mr-2 h-4 w-4" />
-                    Export / Import
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!activeProfile}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setResetOpen(true);
-                    }}
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Reset progress
-                  </DropdownMenuItem>
-                  <button
-                    className="w-full text-left px-2 py-1.5 text-sm flex items-center gap-2 hover:bg-muted disabled:opacity-50"
-                    disabled={!activeProfile}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setDeleteOpen(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" /> Delete
-                  </button>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            {/* Faction Toggle & PMC Level */}
-            {activeProfile && (
-              <div className="space-y-2">
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    {(["USEC", "BEAR"] as const).map((faction) => (
-                      <button
-                        key={faction}
-                        onClick={() =>
-                          onUpdateFaction(activeProfile.id, faction)
-                        }
-                        className={`flex items-center justify-center px-2 py-2 text-xs font-medium rounded-md border transition-all ${
-                          activeProfile.faction === faction
-                            ? faction === "USEC"
-                              ? "border-blue-600/60 text-blue-500"
-                              : "border-red-600/60 text-red-500"
-                            : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
-                        }`}
-                      >
-                        {faction}
-                      </button>
-                    ))}
-                  </div>
+            {isLoading ? (
+              /* Skeleton loading state */
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-8 flex-1" />
+                  <Skeleton className="h-8 w-8" />
                 </div>
-                {editions.length > 0 && (
-                  <div className="space-y-1">
-                    <Select
-                      value={
-                        activeEditionId ||
-                        activeProfile.edition ||
-                        editions[0]?.id ||
-                        ""
-                      }
-                      onValueChange={(v) =>
-                        onUpdateEdition(activeProfile.id, v)
-                      }
-                    >
-                      <SelectTrigger className="w-full h-8">
-                        <SelectValue placeholder="Select edition" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {editions.map((edition) => (
-                          <SelectItem key={edition.id} value={edition.id}>
-                            {edition.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <Skeleton className="h-9" />
+                  <Skeleton className="h-9" />
+                </div>
+                <Skeleton className="h-8 w-full" />
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="sidebar-player-level"
-                    className="text-[11px] text-muted-foreground"
-                  >
-                    Level
-                  </label>
-                  <Input
-                    id="sidebar-player-level"
-                    type="number"
-                    min={1}
-                    value={Number.isFinite(playerLevel) ? playerLevel : ""}
-                    onChange={(e) =>
-                      onSetPlayerLevel(Math.max(1, Number(e.target.value) || 1))
-                    }
-                    className="h-8 w-20 text-xs"
-                  />
+                  <Skeleton className="h-4 w-10" />
+                  <Skeleton className="h-8 w-20" />
                 </div>
               </div>
-            )}
-            {/* Standalone delete confirmation outside the menu so it doesn't close instantly */}
-            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete character?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This removes local progress for "{activeProfile?.name}".
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      if (activeProfile) onDeleteProfile(activeProfile.id);
-                      setDeleteOpen(false);
-                    }}
+            ) : (
+              <>
+                <div className="mb-1 flex items-center gap-2">
+                  <Select
+                    value={activeProfileId}
+                    onValueChange={(v) => onSwitchProfile(v)}
                   >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            {/* Export/Import dialog */}
-            <ExportImportDialog
-              open={exportImportOpen}
-              onOpenChange={setExportImportOpen}
-              profileName={activeProfile?.name || "Profile"}
-              profiles={profiles}
-              activeProfileId={activeProfileId}
-              onImportComplete={onImportComplete}
-              onImportAsNewProfile={onImportAsNewProfile}
-              onImportAllProfiles={onImportAllProfiles}
-            />
-            {/* Reset confirmation */}
-            <SelectiveResetDialog
-              open={resetOpen}
-              onOpenChange={setResetOpen}
-              profileName={activeProfile?.name || "Profile"}
-              onConfirm={(options) => {
-                onResetProfile(options);
-                setResetOpen(false);
-              }}
-            />
+                    <SelectTrigger className="w-full h-8">
+                      <SelectValue placeholder="Select character" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {profiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Character actions"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setNameInput("");
+                          setNameModalOpen({ mode: "create" });
+                        }}
+                      >
+                        <UserPlus className="mr-2 h-4 w-4" /> New character
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setNameInput(activeProfile?.name || "");
+                          setNameModalOpen({ mode: "rename" });
+                        }}
+                        disabled={!activeProfile}
+                      >
+                        <Edit3 className="mr-2 h-4 w-4" /> Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!activeProfile}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setExportImportOpen(true);
+                        }}
+                      >
+                        <FolderSync className="mr-2 h-4 w-4" />
+                        Export / Import
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!activeProfile}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setResetOpen(true);
+                        }}
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Reset progress
+                      </DropdownMenuItem>
+                      <button
+                        className="w-full text-left px-2 py-1.5 text-sm flex items-center gap-2 hover:bg-muted disabled:opacity-50"
+                        disabled={!activeProfile}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setDeleteOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </button>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* Faction Toggle & PMC Level */}
+                {activeProfile && (
+                  <div className="space-y-2">
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["USEC", "BEAR"] as const).map((faction) => (
+                          <button
+                            key={faction}
+                            onClick={() =>
+                              onUpdateFaction(activeProfile.id, faction)
+                            }
+                            className={`flex items-center justify-center px-2 py-2 text-xs font-medium rounded-md border transition-all ${
+                              activeProfile.faction === faction
+                                ? faction === "USEC"
+                                  ? "border-blue-600/60 text-blue-500"
+                                  : "border-red-600/60 text-red-500"
+                                : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                          >
+                            {faction}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {editions.length > 0 && (
+                      <div className="space-y-1">
+                        <Select
+                          value={
+                            activeEditionId ||
+                            activeProfile.edition ||
+                            editions[0]?.id ||
+                            ""
+                          }
+                          onValueChange={(v) =>
+                            onUpdateEdition(activeProfile.id, v)
+                          }
+                        >
+                          <SelectTrigger className="w-full h-8">
+                            <SelectValue placeholder="Select edition" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {editions.map((edition) => (
+                              <SelectItem key={edition.id} value={edition.id}>
+                                {edition.title}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="sidebar-player-level"
+                        className="text-[11px] text-muted-foreground"
+                      >
+                        Level
+                      </label>
+                      <Input
+                        id="sidebar-player-level"
+                        type="number"
+                        min={1}
+                        value={Number.isFinite(playerLevel) ? playerLevel : ""}
+                        onChange={(e) =>
+                          onSetPlayerLevel(
+                            Math.max(1, Number(e.target.value) || 1),
+                          )
+                        }
+                        className="h-8 w-20 text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+                {/* Standalone delete confirmation outside the menu so it doesn't close instantly */}
+                <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete character?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This removes local progress for "{activeProfile?.name}".
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          if (activeProfile) onDeleteProfile(activeProfile.id);
+                          setDeleteOpen(false);
+                        }}
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                {/* Export/Import dialog */}
+                <ExportImportDialog
+                  open={exportImportOpen}
+                  onOpenChange={setExportImportOpen}
+                  profileName={activeProfile?.name || "Profile"}
+                  profiles={profiles}
+                  activeProfileId={activeProfileId}
+                  onImportComplete={onImportComplete}
+                  onImportAsNewProfile={onImportAsNewProfile}
+                  onImportAllProfiles={onImportAllProfiles}
+                />
+                {/* Reset confirmation */}
+                <SelectiveResetDialog
+                  open={resetOpen}
+                  onOpenChange={setResetOpen}
+                  profileName={activeProfile?.name || "Profile"}
+                  onConfirm={(options) => {
+                    onResetProfile(options);
+                    setResetOpen(false);
+                  }}
+                />
+              </>
+            )}
           </div>
 
           {/* Create/Rename dialog */}

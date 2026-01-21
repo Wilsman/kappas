@@ -60,7 +60,7 @@ interface CurrentlyWorkingOnViewProps {
   taskObjectiveItemProgress: Record<string, number>;
   onUpdateTaskObjectiveItemProgress: (
     objectiveItemKey: string,
-    count: number
+    count: number,
   ) => void;
   hideoutItemQuantities: Record<string, number>;
   onUpdateHideoutItemQuantity: (itemKey: string, count: number) => void;
@@ -94,7 +94,7 @@ export function CurrentlyWorkingOnView({
 }: CurrentlyWorkingOnViewProps) {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [expandedHideout, setExpandedHideout] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [showAllNextTasks, setShowAllNextTasks] = useState(false);
 
@@ -119,13 +119,13 @@ export function CurrentlyWorkingOnView({
   const buildObjectiveItemKey = (
     taskId: string,
     objectiveIndex: number,
-    itemKey: string
+    itemKey: string,
   ) => `${taskId}::${objectiveIndex}::${itemKey}`;
 
   const handleObjectiveItemDelta = (
     objectiveItemKey: string,
     delta: number,
-    maxCount: number
+    maxCount: number,
   ) => {
     const current = taskObjectiveItemProgress[objectiveItemKey] || 0;
     const next = Math.max(0, Math.min(maxCount, current + delta));
@@ -136,7 +136,7 @@ export function CurrentlyWorkingOnView({
     itemKey: string,
     delta: number,
     maxCount: number,
-    isCompleted: boolean
+    isCompleted: boolean,
   ) => {
     const current = hideoutItemQuantities[itemKey] || 0;
     const next = Math.max(0, Math.min(maxCount, current + delta));
@@ -148,7 +148,6 @@ export function CurrentlyWorkingOnView({
       onToggleHideoutItem(itemKey);
     }
   };
-
 
   // Filter tasks that are marked as working on
   const activeTasks = useMemo(() => {
@@ -163,7 +162,7 @@ export function CurrentlyWorkingOnView({
       if (task.minPlayerLevel > level) return false;
       if (task.taskRequirements && task.taskRequirements.length > 0) {
         return task.taskRequirements.every((req) =>
-          completedTasks.has(req.task.id)
+          completedTasks.has(req.task.id),
         );
       }
       return true;
@@ -237,7 +236,7 @@ export function CurrentlyWorkingOnView({
         const station = hideoutStations.find((s) => s.name === stationName);
         if (!station) return null;
         const level = station.levels.find(
-          (l) => l.level === parseInt(levelIndex)
+          (l) => l.level === parseInt(levelIndex),
         );
         if (!level) return null;
         return { station, level, key };
@@ -326,24 +325,39 @@ export function CurrentlyWorkingOnView({
       {/* Next Quests Section */}
       {nextTasks.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="py-3 px-4">
             <div className="flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              <CardTitle>Next Quests ({nextTasks.length})</CardTitle>
+              <Target className="h-4 w-4" />
+              <CardTitle className="text-base">
+                Next Quests ({nextTasks.length})
+              </CardTitle>
             </div>
-            <CardDescription>Unlocked by your completed quests</CardDescription>
+            <CardDescription className="text-xs">
+              Unlocked by your completed quests
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {(showAllNextTasks ? nextTasks : nextTasks.slice(0, 3)).map(
+          <CardContent className="space-y-1 px-4 pb-3 pt-0">
+            {(showAllNextTasks ? nextTasks : nextTasks.slice(0, 2)).map(
               (task) => (
                 <div
                   key={task.id}
-                  className="flex items-center justify-between gap-4 rounded-lg border bg-card px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-md border bg-card px-2 py-1.5"
                 >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium">{task.name}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    {task.trader?.imageLink && (
+                      <img
+                        src={task.trader.imageLink}
+                        alt={task.trader.name}
+                        loading="lazy"
+                        className="h-5 w-5 rounded-full object-cover flex-shrink-0"
+                      />
+                    )}
+                    <span className="font-medium text-sm truncate">
+                      {task.name}
+                    </span>
                     <Badge
                       variant="outline"
+                      className="text-xs px-1.5 py-0"
                       style={{
                         borderColor:
                           TRADER_COLORS[
@@ -357,34 +371,33 @@ export function CurrentlyWorkingOnView({
                     >
                       {task.trader.name}
                     </Badge>
-                    <Badge variant="secondary">Lvl {task.minPlayerLevel}</Badge>
-                    {task.map?.name && (
-                      <Badge variant="outline">{task.map.name}</Badge>
-                    )}
+                    <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                      Lvl {task.minPlayerLevel}
+                    </Badge>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-7 w-7 flex-shrink-0"
                     onClick={() => onToggleWorkingOnTask(task.id)}
                     title="Add to working on"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              )
+              ),
             )}
-            {nextTasks.length > 1 && (
-              <div className="pt-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAllNextTasks((prev) => !prev)}
-                >
-                  {showAllNextTasks
-                    ? "Show less"
-                    : `Show all (${nextTasks.length})`}
-                </Button>
-              </div>
+            {nextTasks.length > 2 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs w-full"
+                onClick={() => setShowAllNextTasks((prev) => !prev)}
+              >
+                {showAllNextTasks
+                  ? "Show less"
+                  : `Show all (${nextTasks.length})`}
+              </Button>
             )}
           </CardContent>
         </Card>
@@ -418,7 +431,7 @@ export function CurrentlyWorkingOnView({
                         key={task.id}
                         className={cn(
                           "rounded-lg border bg-card transition-colors",
-                          isTaskCompleted && "opacity-60"
+                          isTaskCompleted && "opacity-60",
                         )}
                       >
                         <div className="flex items-start justify-between gap-4 p-3">
@@ -430,11 +443,19 @@ export function CurrentlyWorkingOnView({
                             />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
+                                {task.trader?.imageLink && (
+                                  <img
+                                    src={task.trader.imageLink}
+                                    alt={task.trader.name}
+                                    loading="lazy"
+                                    className="h-5 w-5 rounded-full object-cover flex-shrink-0"
+                                  />
+                                )}
                                 <h4
                                   className={cn(
                                     "font-medium",
                                     isTaskCompleted &&
-                                      "line-through text-muted-foreground"
+                                      "line-through text-muted-foreground",
                                   )}
                                 >
                                   {task.name}
@@ -525,7 +546,7 @@ export function CurrentlyWorkingOnView({
                                     key={idx}
                                     className={cn(
                                       "flex items-start gap-2 text-sm p-2 rounded-md hover:bg-muted/50 transition-colors",
-                                      isObjCompleted && "opacity-60"
+                                      isObjCompleted && "opacity-60",
                                     )}
                                   >
                                     <Checkbox
@@ -544,14 +565,15 @@ export function CurrentlyWorkingOnView({
                                         const showInlineIcon =
                                           inlineItem?.iconLink &&
                                           obj.description?.includes(
-                                            inlineItem.name
+                                            inlineItem.name,
                                           );
                                         return (
                                           <>
                                             <p
                                               className={cn(
                                                 "text-muted-foreground",
-                                                isObjCompleted && "line-through"
+                                                isObjCompleted &&
+                                                  "line-through",
                                               )}
                                             >
                                               {showInlineIcon && (
@@ -606,25 +628,25 @@ export function CurrentlyWorkingOnView({
                                                     const requiredCount =
                                                       Math.max(
                                                         1,
-                                                        obj.count ?? 1
+                                                        obj.count ?? 1,
                                                       );
                                                     const itemKey =
                                                       buildObjectiveItemKey(
                                                         task.id,
                                                         idx,
-                                                        item.id || item.name
+                                                        item.id || item.name,
                                                       );
                                                     const currentCount =
                                                       Math.min(
                                                         requiredCount,
                                                         taskObjectiveItemProgress[
                                                           itemKey
-                                                        ] || 0
+                                                        ] || 0,
                                                       );
                                                     const remaining = Math.max(
                                                       0,
                                                       requiredCount -
-                                                        currentCount
+                                                        currentCount,
                                                     );
                                                     const isComplete =
                                                       currentCount >=
@@ -637,7 +659,7 @@ export function CurrentlyWorkingOnView({
                                                         className={cn(
                                                           "flex items-center gap-2 rounded-md border bg-background/40 p-2",
                                                           isComplete &&
-                                                            "opacity-60"
+                                                            "opacity-60",
                                                         )}
                                                       >
                                                         {item.iconLink ? (
@@ -703,14 +725,14 @@ export function CurrentlyWorkingOnView({
                                                               handleObjectiveItemDelta(
                                                                 itemKey,
                                                                 -1,
-                                                                requiredCount
+                                                                requiredCount,
                                                               );
                                                             }}
                                                             className={cn(
                                                               "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
                                                               currentCount <=
                                                                 0 &&
-                                                                "opacity-50 cursor-not-allowed"
+                                                                "opacity-50 cursor-not-allowed",
                                                             )}
                                                             disabled={
                                                               currentCount <= 0
@@ -730,14 +752,14 @@ export function CurrentlyWorkingOnView({
                                                               handleObjectiveItemDelta(
                                                                 itemKey,
                                                                 1,
-                                                                requiredCount
+                                                                requiredCount,
                                                               );
                                                             }}
                                                             className={cn(
                                                               "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
                                                               currentCount >=
                                                                 requiredCount &&
-                                                                "opacity-50 cursor-not-allowed"
+                                                                "opacity-50 cursor-not-allowed",
                                                             )}
                                                             disabled={
                                                               currentCount >=
@@ -796,7 +818,7 @@ export function CurrentlyWorkingOnView({
                     key={objectiveId}
                     className={cn(
                       "flex items-start justify-between gap-4 p-3 rounded-lg border bg-card transition-colors",
-                      isCompleted && "opacity-60"
+                      isCompleted && "opacity-60",
                     )}
                   >
                     <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -814,7 +836,7 @@ export function CurrentlyWorkingOnView({
                         <p
                           className={cn(
                             "text-sm",
-                            isCompleted && "line-through text-muted-foreground"
+                            isCompleted && "line-through text-muted-foreground",
                           )}
                         >
                           {description}
@@ -834,7 +856,7 @@ export function CurrentlyWorkingOnView({
                     </Button>
                   </div>
                 );
-              }
+              },
             )}
           </CardContent>
         </Card>
@@ -863,7 +885,7 @@ export function CurrentlyWorkingOnView({
                   onClick={() => onToggleCollectorItem(item.name)}
                   className={cn(
                     "relative group rounded-lg border bg-card p-2 hover:bg-green-500/20 hover:border-green-500/50 transition-colors cursor-pointer text-left",
-                    completedCollectorItems.has(item.name) && "opacity-50"
+                    completedCollectorItems.has(item.name) && "opacity-50",
                   )}
                 >
                   <div
@@ -871,7 +893,7 @@ export function CurrentlyWorkingOnView({
                       "absolute inset-0 flex items-center justify-center rounded-lg transition-opacity bg-green-500/10",
                       completedCollectorItems.has(item.name)
                         ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100"
+                        : "opacity-0 group-hover:opacity-100",
                     )}
                   >
                     <Check className="h-8 w-8 text-green-500" />
@@ -976,20 +998,24 @@ export function CurrentlyWorkingOnView({
                         const itemKey = `${station.name}-${level.level}-${req.item.name}`;
                         const isItemCompleted =
                           completedHideoutItems.has(itemKey);
-                        const currentCount = hideoutItemQuantities[itemKey] || 0;
+                        const currentCount =
+                          hideoutItemQuantities[itemKey] || 0;
                         return (
                           <div
                             key={idx}
                             className={cn(
                               "flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors group",
-                              isItemCompleted && "opacity-60"
+                              isItemCompleted && "opacity-60",
                             )}
                           >
                             <Checkbox
                               checked={isItemCompleted}
                               onCheckedChange={(checked) => {
                                 if (checked) {
-                                  onUpdateHideoutItemQuantity(itemKey, req.count);
+                                  onUpdateHideoutItemQuantity(
+                                    itemKey,
+                                    req.count,
+                                  );
                                   if (!isItemCompleted) {
                                     onToggleHideoutItem(itemKey);
                                   }
@@ -1013,7 +1039,7 @@ export function CurrentlyWorkingOnView({
                               className={cn(
                                 "text-sm",
                                 isItemCompleted &&
-                                  "line-through text-muted-foreground"
+                                  "line-through text-muted-foreground",
                               )}
                             >
                               {currentCount}/{req.count}x {req.item.name}
@@ -1029,7 +1055,7 @@ export function CurrentlyWorkingOnView({
                                     itemKey,
                                     -1,
                                     req.count,
-                                    isItemCompleted
+                                    isItemCompleted,
                                   );
                                 }}
                                 disabled={currentCount <= 0}
@@ -1046,7 +1072,7 @@ export function CurrentlyWorkingOnView({
                                     itemKey,
                                     1,
                                     req.count,
-                                    isItemCompleted
+                                    isItemCompleted,
                                   );
                                 }}
                                 disabled={currentCount >= req.count}
@@ -1057,7 +1083,6 @@ export function CurrentlyWorkingOnView({
                           </div>
                         );
                       })}
-
                     </div>
                   )}
                 </div>

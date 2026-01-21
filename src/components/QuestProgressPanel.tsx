@@ -1,6 +1,7 @@
-import React from 'react';
-import { Progress } from './ui/progress';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { Progress } from "./ui/progress";
+import { Skeleton } from "./ui/skeleton";
+import { cn } from "@/lib/utils";
 import { TrendingUp, Target, Award, BookOpen } from "lucide-react";
 
 export interface TraderProgress {
@@ -32,6 +33,90 @@ interface QuestProgressPanelProps {
   completedPrestigeSteps?: number;
   currentPrestigeId?: string;
   progressTitle?: string;
+  isLoading?: boolean;
+}
+
+/**
+ * Skeleton version of the progress panel shown during initial load
+ */
+function QuestProgressPanelSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "bg-card border rounded-lg p-3 sm:p-4 shadow-sm w-full md:w-72",
+        className,
+      )}
+    >
+      {/* Overview card skeleton */}
+      <div className="rounded-lg border bg-muted/10 p-3 sm:p-4 mb-3 sm:mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="mt-3">
+          <Skeleton className="h-2 w-full" />
+        </div>
+      </div>
+
+      {/* Stat tiles skeleton */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
+        <div className="rounded-lg border bg-muted/10 p-2.5 sm:p-3">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <div className="flex justify-center">
+            <Skeleton className="h-6 w-8" />
+          </div>
+        </div>
+        <div className="rounded-lg border bg-muted/10 p-2.5 sm:p-3">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <div className="flex justify-center">
+            <Skeleton className="h-6 w-8" />
+          </div>
+        </div>
+      </div>
+
+      {/* Focused tasks skeleton */}
+      <div className="rounded-lg border bg-muted/5 p-3 mb-3 sm:mb-4">
+        <Skeleton className="h-4 w-24 mb-3" />
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="space-y-2 mb-3">
+            <div className="flex justify-between">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+            <Skeleton className="h-2 w-full" />
+          </div>
+        ))}
+      </div>
+
+      {/* Trader list skeleton */}
+      <div className="rounded-lg border bg-muted/10 p-3 space-y-4">
+        <Skeleton className="h-4 w-20" />
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-2 w-2 rounded-full" />
+                <Skeleton className="h-4 w-4 rounded-full" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-3 w-10 ml-auto" />
+              </div>
+              <Skeleton className="h-1.5 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function QuestProgressPanel({
@@ -53,7 +138,13 @@ export function QuestProgressPanel({
   completedPrestigeSteps = 0,
   currentPrestigeId,
   progressTitle = "Progress Overview",
+  isLoading = false,
 }: QuestProgressPanelProps) {
+  // Show skeleton during loading
+  if (isLoading) {
+    return <QuestProgressPanelSkeleton className={className} />;
+  }
+
   const progress = totalQuests > 0 ? (completedQuests / totalQuests) * 100 : 0;
   const itemProgress =
     totalCollectorItems > 0
@@ -85,14 +176,16 @@ export function QuestProgressPanel({
     <div
       className={cn(
         "bg-card border rounded-lg p-3 sm:p-4 shadow-sm w-full md:w-72",
-        className
+        className,
       )}
     >
       {/* Overview card */}
       <div className="rounded-lg border bg-muted/10 p-3 sm:p-4 mb-3 sm:mb-4">
         <div className="flex items-center gap-2 text-foreground mb-2">
           <TrendingUp className="h-4 w-4 text-yellow-500" />
-          <h2 className="text-sm sm:text-base font-semibold">{progressTitle}</h2>
+          <h2 className="text-sm sm:text-base font-semibold">
+            {progressTitle}
+          </h2>
         </div>
         <div className="text-center">
           <div className="text-2xl sm:text-3xl font-bold leading-tight">

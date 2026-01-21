@@ -19,6 +19,7 @@ import {
   Overlay,
 } from "./types";
 import { QuestProgressPanel } from "./components/QuestProgressPanel";
+import { ContentSkeleton } from "./components/ContentSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import SEO from "./components/SEO";
 import {
@@ -72,50 +73,50 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 // Lazily-loaded heavy views
 const FlowView = lazy(() =>
-  import("./components/FlowView").then((m) => ({ default: m.FlowView }))
+  import("./components/FlowView").then((m) => ({ default: m.FlowView })),
 );
 const MindMap = lazy(() =>
-  import("./components/MindMap").then((m) => ({ default: m.MindMap }))
+  import("./components/MindMap").then((m) => ({ default: m.MindMap })),
 );
 const CheckListView = lazy(() =>
   import("./components/CheckListView").then((m) => ({
     default: m.CheckListView,
-  }))
+  })),
 );
 const CollectorView = lazy(() =>
   import("./components/ItemTrackerView").then((m) => ({
     default: m.CollectorView,
-  }))
+  })),
 );
 const PrestigesView = lazy(() =>
   import("./components/PrestigesView").then((m) => ({
     default: m.PrestigesView,
-  }))
+  })),
 );
 const AchievementsView = lazy(() =>
   import("./components/AchievementsView").then((m) => ({
     default: m.AchievementsView,
-  }))
+  })),
 );
 const StorylineQuestsView = lazy(() =>
   import("./components/StorylineQuestsView").then((m) => ({
     default: m.StorylineQuestsView,
-  }))
+  })),
 );
 const HideoutRequirementsView = lazy(() =>
   import("./components/HideoutRequirementsView").then((m) => ({
     default: m.HideoutRequirementsView,
-  }))
+  })),
 );
 const StorylineContainer = lazy(() =>
   import("./components/storyline-map").then((m) => ({
     default: m.StorylineContainer,
-  }))
+  })),
 );
 const CurrentlyWorkingOnView = lazy(() =>
   import("./components/CurrentlyWorkingOnView").then((m) => ({
     default: m.CurrentlyWorkingOnView,
-  }))
+  })),
 );
 import { CommandMenu } from "./components/CommandMenu";
 import { NotesWidget } from "./components/NotesWidget";
@@ -218,7 +219,7 @@ function App() {
         (t) =>
           !t.factionName ||
           t.factionName === "Any" ||
-          t.factionName === activeProfileFaction
+          t.factionName === activeProfileFaction,
       );
     }
 
@@ -229,8 +230,8 @@ function App() {
         const exclusive = new Set(currentEdition.exclusiveTaskIds ?? []);
         const allExclusive = new Set(
           Object.values(overlay.editions).flatMap(
-            (edition) => edition.exclusiveTaskIds ?? []
-          )
+            (edition) => edition.exclusiveTaskIds ?? [],
+          ),
         );
         filtered = filtered.filter((task) => {
           if (task.isEvent) return true;
@@ -274,7 +275,7 @@ function App() {
   }, [tasks, eventTasks]);
   const baseTasks = useMemo(
     () => tasks.filter((task) => !task.isEvent),
-    [tasks]
+    [tasks],
   );
   const [completedCollectorItems, setCompletedCollectorItems] = useState<
     Set<string>
@@ -342,7 +343,7 @@ function App() {
           order: 0,
           img: item.iconLink || "",
           id: item.id || item.name.toLowerCase().replace(/[^a-z0-9]/g, "-"),
-        }))
+        })),
       );
     }
 
@@ -378,7 +379,7 @@ function App() {
       await taskStorage.init();
       await taskStorage.saveUserPreferences({ playerLevel: safeLevel });
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   const isMobile = useIsMobile();
@@ -557,7 +558,7 @@ function App() {
         console.error("Save achievements error", err);
       }
     },
-    [completedAchievements, activeProfileId]
+    [completedAchievements, activeProfileId],
   );
 
   const handleToggleStorylineObjective = useCallback(
@@ -575,7 +576,7 @@ function App() {
         console.error("Save storyline objectives error", err);
       }
     },
-    [completedStorylineObjectives, activeProfileId]
+    [completedStorylineObjectives, activeProfileId],
   );
 
   const handleSetCompletedStorylineObjectives = useCallback(
@@ -590,7 +591,7 @@ function App() {
         console.error("Save storyline objectives error", err);
       }
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   const handleToggleStorylineMapNode = useCallback(
@@ -608,12 +609,12 @@ function App() {
         console.error("Save storyline map nodes error", err);
       }
     },
-    [completedStorylineMapNodes, activeProfileId]
+    [completedStorylineMapNodes, activeProfileId],
   );
 
   const totalQuests = baseTasks.length;
   const completedQuests = baseTasks.filter((task) =>
-    completedTasks.has(task.id)
+    completedTasks.has(task.id),
   ).length;
 
   // Calculate storyline objectives (only main objectives count towards progress)
@@ -645,7 +646,7 @@ function App() {
       Object.keys(TRADER_COLORS).map((name) => [
         name,
         { completed: 0, total: 0, imageLink: undefined } as TP,
-      ])
+      ]),
     ) as Record<keyof typeof TRADER_COLORS, TP>;
 
     baseTasks.forEach(({ trader: { name, imageLink }, id }) => {
@@ -669,7 +670,7 @@ function App() {
         total,
         color: TRADER_COLORS[name as keyof typeof TRADER_COLORS] || "#6b7280",
         imageLink,
-      })
+      }),
     );
   }, [baseTasks, completedTasks]);
 
@@ -720,7 +721,7 @@ function App() {
         setHideoutItemQuantities(savedHideoutItemQuantities);
         setWorkingOnTasks(savedWorkingOnItems.tasks);
         setWorkingOnStorylineObjectives(
-          savedWorkingOnItems.storylineObjectives
+          savedWorkingOnItems.storylineObjectives,
         );
         setWorkingOnCollectorItems(savedWorkingOnItems.collectorItems);
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
@@ -738,7 +739,7 @@ function App() {
         console.error("Switch profile error", e);
       }
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   const handleUpdateFaction = useCallback(
@@ -749,7 +750,7 @@ function App() {
         setActiveProfileFaction(faction);
       }
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   const handleUpdateEdition = useCallback(
@@ -760,7 +761,7 @@ function App() {
         setActiveProfileEdition(edition);
       }
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   const handleCreateProfile = useCallback(
@@ -769,7 +770,7 @@ function App() {
       setProfiles(getProfiles());
       await handleSwitchProfile(p.id);
     },
-    [handleSwitchProfile]
+    [handleSwitchProfile],
   );
 
   const handleRenameProfile = useCallback((id: string, name: string) => {
@@ -786,7 +787,7 @@ function App() {
       const nextActive = wasActive ? getActiveProfileId() : activeProfileId;
       if (wasActive) await handleSwitchProfile(nextActive);
     },
-    [activeProfileId, handleSwitchProfile]
+    [activeProfileId, handleSwitchProfile],
   );
   const mapList = useMemo(() => {
     const set = new Set<string>();
@@ -808,17 +809,17 @@ function App() {
   } = useMemo(() => {
     const kappaTasks = baseTasks.filter((task) => task.kappaRequired);
     const lightkeeperTasks = baseTasks.filter(
-      (task) => task.lightkeeperRequired
+      (task) => task.lightkeeperRequired,
     );
 
     return {
       totalKappaTasks: kappaTasks.length,
       completedKappaTasks: kappaTasks.filter((task) =>
-        completedTasks.has(task.id)
+        completedTasks.has(task.id),
       ).length,
       totalLightkeeperTasks: lightkeeperTasks.length,
       completedLightkeeperTasks: lightkeeperTasks.filter((task) =>
-        completedTasks.has(task.id)
+        completedTasks.has(task.id),
       ).length,
     };
   }, [baseTasks, completedTasks]);
@@ -842,12 +843,12 @@ function App() {
         try {
           const lvl = localStorage.getItem("taskTracker_playerLevel");
           const lvlScoped = localStorage.getItem(
-            `taskTracker_playerLevel::${ensured.activeId}`
+            `taskTracker_playerLevel::${ensured.activeId}`,
           );
           if (lvl && !lvlScoped)
             localStorage.setItem(
               `taskTracker_playerLevel::${ensured.activeId}`,
-              lvl
+              lvl,
             );
         } catch {
           /* ignore legacy migration errors */
@@ -855,12 +856,12 @@ function App() {
         try {
           const en = localStorage.getItem("taskTracker_enableLevelFilter");
           const enScoped = localStorage.getItem(
-            `taskTracker_enableLevelFilter::${ensured.activeId}`
+            `taskTracker_enableLevelFilter::${ensured.activeId}`,
           );
           if (en && !enScoped)
             localStorage.setItem(
               `taskTracker_enableLevelFilter::${ensured.activeId}`,
-              en
+              en,
             );
         } catch {
           /* ignore legacy migration errors */
@@ -868,12 +869,12 @@ function App() {
         try {
           const sc = localStorage.getItem("taskTracker_showCompleted");
           const scScoped = localStorage.getItem(
-            `taskTracker_showCompleted::${ensured.activeId}`
+            `taskTracker_showCompleted::${ensured.activeId}`,
           );
           if (sc && !scScoped)
             localStorage.setItem(
               `taskTracker_showCompleted::${ensured.activeId}`,
-              sc
+              sc,
             );
         } catch {
           /* ignore legacy migration errors */
@@ -909,7 +910,7 @@ function App() {
         setHideoutItemQuantities(savedHideoutItemQuantities);
         setWorkingOnTasks(savedWorkingOnItems.tasks);
         setWorkingOnStorylineObjectives(
-          savedWorkingOnItems.storylineObjectives
+          savedWorkingOnItems.storylineObjectives,
         );
         setWorkingOnCollectorItems(savedWorkingOnItems.collectorItems);
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
@@ -921,7 +922,7 @@ function App() {
           // Migrate from localStorage if exists
           try {
             const lsLevel = localStorage.getItem(
-              `taskTracker_playerLevel::${ensured.activeId}`
+              `taskTracker_playerLevel::${ensured.activeId}`,
             );
             if (lsLevel) {
               loadedLevel = Number(lsLevel);
@@ -930,7 +931,7 @@ function App() {
                   playerLevel: Math.max(1, loadedLevel),
                 });
                 localStorage.removeItem(
-                  `taskTracker_playerLevel::${ensured.activeId}`
+                  `taskTracker_playerLevel::${ensured.activeId}`,
                 );
               }
             }
@@ -1033,6 +1034,8 @@ function App() {
             console.warn("Overlay fetch error", err);
           }
         }
+        // Ensure loading state is always cleared after initialization
+        setIsLoading(false);
       } catch (err) {
         console.error("Init error", err);
         // Ensure UI doesn't get stuck loading on init errors
@@ -1079,7 +1082,7 @@ function App() {
     return () => {
       window.removeEventListener(
         PRESTIGE_UPDATED_EVENT,
-        handler as EventListener
+        handler as EventListener,
       );
     };
   }, []);
@@ -1106,7 +1109,7 @@ function App() {
         console.error("Save error", err);
       }
     },
-    [completedTasks, tasksWithEvents, activeProfileId]
+    [completedTasks, tasksWithEvents, activeProfileId],
   );
 
   // Sidebar trader filter: multi-select toggle
@@ -1118,7 +1121,7 @@ function App() {
       setHiddenTraders(next);
       setViewMode("grouped");
     },
-    [hiddenTraders]
+    [hiddenTraders],
   );
   const handleClearTraderFilter = useCallback(() => {
     setHiddenTraders(new Set());
@@ -1132,8 +1135,8 @@ function App() {
   const focusMode = showKappa
     ? "kappa"
     : showLightkeeper
-    ? "lightkeeper"
-    : "all";
+      ? "lightkeeper"
+      : "all";
 
   const handleSetFocus = useCallback(
     (mode: "all" | "kappa" | "lightkeeper") => {
@@ -1148,7 +1151,7 @@ function App() {
         setShowLightkeeper(false);
       }
     },
-    []
+    [],
   );
 
   const handleToggleCollectorItem = useCallback(
@@ -1169,7 +1172,7 @@ function App() {
         console.error("Save collector items error", err);
       }
     },
-    [completedCollectorItems, activeProfileId]
+    [completedCollectorItems, activeProfileId],
   );
 
   const handleToggleHideoutItem = useCallback(
@@ -1190,7 +1193,7 @@ function App() {
         console.error("Save hideout items error", err);
       }
     },
-    [completedHideoutItems, activeProfileId]
+    [completedHideoutItems, activeProfileId],
   );
 
   const handleSetHideoutItems = useCallback(
@@ -1205,7 +1208,7 @@ function App() {
         console.error("Save hideout items error", err);
       }
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   const handleToggleTaskObjective = useCallback(
@@ -1226,7 +1229,7 @@ function App() {
         console.error("Save task objectives error", err);
       }
     },
-    [completedTaskObjectives, activeProfileId]
+    [completedTaskObjectives, activeProfileId],
   );
 
   const handleUpdateTaskObjectiveItemProgress = useCallback(
@@ -1246,7 +1249,7 @@ function App() {
         return next;
       });
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   const handleUpdateHideoutItemQuantity = useCallback(
@@ -1266,7 +1269,7 @@ function App() {
         return next;
       });
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   // Working on toggle handlers
@@ -1299,7 +1302,7 @@ function App() {
       workingOnCollectorItems,
       workingOnHideoutStations,
       activeProfileId,
-    ]
+    ],
   );
 
   const handleToggleWorkingOnStorylineObjective = useCallback(
@@ -1331,7 +1334,7 @@ function App() {
       workingOnCollectorItems,
       workingOnHideoutStations,
       activeProfileId,
-    ]
+    ],
   );
 
   const handleToggleWorkingOnHideoutStation = useCallback(
@@ -1363,12 +1366,12 @@ function App() {
       workingOnCollectorItems,
       workingOnHideoutStations,
       activeProfileId,
-    ]
+    ],
   );
 
   const handleResetProgress = useCallback(
     async (
-      options?: import("@/components/SelectiveResetDialog").ResetOptions
+      options?: import("@/components/SelectiveResetDialog").ResetOptions,
     ) => {
       if (!activeProfileId) return;
 
@@ -1443,13 +1446,13 @@ function App() {
         console.error("Reset error", err);
       }
     },
-    [activeProfileId]
+    [activeProfileId],
   );
 
   // Check if onboarding should be shown (only once)
   useEffect(() => {
     const onboardingShown = localStorage.getItem(
-      "taskTracker_onboarding_shown"
+      "taskTracker_onboarding_shown",
     );
     if (!onboardingShown && !isLoading) {
       setShowOnboarding(true);
@@ -1536,7 +1539,7 @@ function App() {
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
       window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
     },
-    []
+    [],
   );
 
   // Handler for importing all profiles from a bundle
@@ -1601,7 +1604,7 @@ function App() {
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
       window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
     },
-    []
+    [],
   );
 
   const handleTaskClick = useCallback(
@@ -1614,7 +1617,7 @@ function App() {
           ?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     },
-    [viewMode]
+    [viewMode],
   );
 
   // Derive which totals to display in the right Progress panel based on Focus mode
@@ -1651,31 +1654,7 @@ function App() {
     return "Progress Overview";
   }, [focusMode]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-6">
-            <TextShimmerWave
-              as="h1"
-              className="text-2xl min-[988px]:text-3xl font-semibold tracking-wide"
-            duration={1}
-            zDistance={120}
-            xDistance={30}
-            yDistance={-30}
-            spread={1.2}
-            scaleDistance={1.2}
-            rotateYDistance={12}
-          >
-            {loadingStage.title}
-          </TextShimmerWave>
-          <Progress value={loadingStage.progress} className="w-[240px] h-2" />
-          <p className="text-xs text-muted-foreground font-mono uppercase tracking-[0.2em]">
-            {loadingStage.detail}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Removed full-page loading screen - now showing skeleton layout instead
 
   return (
     <NuqsAdapter>
@@ -1712,6 +1691,7 @@ function App() {
           playerLevel={playerLevel}
           onSetPlayerLevel={handleSetPlayerLevel}
           side="left"
+          isLoading={isLoading}
         />
         <SidebarInset>
           <div className="min-h-[100dvh] bg-background text-foreground flex flex-col overflow-hidden">
@@ -1731,7 +1711,7 @@ function App() {
                       <span
                         className={cn(
                           "inline-flex text-[10px] px-2 py-0.5 rounded-full font-semibold border",
-                          "bg-orange-600/10 text-orange-600 border-orange-600/20"
+                          "bg-orange-600/10 text-orange-600 border-orange-600/20",
                         )}
                       >
                         BETA
@@ -1770,7 +1750,7 @@ function App() {
                         <RotateCcw
                           className={cn(
                             "h-4 w-4",
-                            isRefreshing && "animate-spin"
+                            isRefreshing && "animate-spin",
                           )}
                         />
                       </Button>
@@ -1796,14 +1776,16 @@ function App() {
                           "rounded-full px-3",
                           focusMode === "kappa"
                             ? "bg-violet-600 text-white hover:bg-violet-600"
-                            : "text-violet-600 hover:text-violet-700 border border-violet-500/30"
+                            : "text-violet-600 hover:text-violet-700 border border-violet-500/30",
                         )}
                         onClick={() => handleSetFocus("kappa")}
                       >
                         <span
                           className={cn(
                             "mr-2 h-2 w-2 rounded-full",
-                            focusMode === "kappa" ? "bg-white" : "bg-violet-500"
+                            focusMode === "kappa"
+                              ? "bg-white"
+                              : "bg-violet-500",
                           )}
                           aria-hidden
                         />
@@ -1818,7 +1800,7 @@ function App() {
                           "rounded-full px-3",
                           focusMode === "lightkeeper"
                             ? "bg-amber-600 text-white hover:bg-amber-600"
-                            : "text-amber-600 hover:text-amber-700 border border-amber-500/30"
+                            : "text-amber-600 hover:text-amber-700 border border-amber-500/30",
                         )}
                         onClick={() => handleSetFocus("lightkeeper")}
                       >
@@ -1827,7 +1809,7 @@ function App() {
                             "mr-2 h-2 w-2 rounded-full",
                             focusMode === "lightkeeper"
                               ? "bg-white"
-                              : "bg-amber-500"
+                              : "bg-amber-500",
                           )}
                           aria-hidden
                         />
@@ -1871,7 +1853,7 @@ function App() {
                       <RotateCcw
                         className={cn(
                           "h-4 w-4",
-                          isRefreshing && "animate-spin"
+                          isRefreshing && "animate-spin",
                         )}
                       />
                       <span className="text-xs">
@@ -1896,183 +1878,174 @@ function App() {
                     viewMode === "storyline" ||
                     viewMode === "current"
                     ? "overflow-y-auto"
-                    : "overflow-hidden"
+                    : "overflow-hidden",
                 )}
               >
                 {/* Quests sub-tabs removed; view selection handled via sidebar */}
-                <LazyLoadErrorBoundary>
-                  <Suspense
-                    fallback={
-                      <div className="p-6 space-y-4">
-                        <div className="space-y-2">
-                          <Skeleton className="h-6 w-40" />
-                          <Skeleton className="h-4 w-64" />
-                        </div>
-                        <div className="grid grid-cols-1 min-[988px]:grid-cols-2 gap-4">
-                          <Skeleton className="h-40 w-full" />
-                          <Skeleton className="h-40 w-full" />
-                        </div>
-                      </div>
-                    }
-                  >
-                    {viewMode === "grouped" ? (
-                      <CheckListView
-                        key={`${activeProfileId}:${
-                          activeProfileFaction ?? "none"
-                        }`}
-                        tasks={tasksWithEvents}
-                        completedTasks={completedTasks}
-                        hiddenTraders={hiddenTraders}
-                        showKappa={showKappa}
-                        showLightkeeper={showLightkeeper}
-                        onToggleComplete={handleToggleComplete}
-                        onTaskClick={handleTaskClick}
-                        mapFilter={selectedMap}
-                        groupBy={groupBy}
-                        onSetGroupBy={setGroupBy}
-                        activeProfileId={activeProfileId}
-                        playerLevel={playerLevel}
-                        workingOnTasks={workingOnTasks}
-                        onToggleWorkingOnTask={handleToggleWorkingOnTask}
-                        taskObjectiveItemProgress={taskObjectiveItemProgress}
-                        onUpdateTaskObjectiveItemProgress={
-                          handleUpdateTaskObjectiveItemProgress
-                        }
-                      />
-                    ) : viewMode === "collector" ? (
-                      <CollectorView
-                        collectorItems={collectorItems}
-                        completedCollectorItems={completedCollectorItems}
-                        onToggleCollectorItem={handleToggleCollectorItem}
-                        completedHideoutItems={completedHideoutItems}
-                        onSetHideoutItems={handleSetHideoutItems}
-                        groupBy={collectorGroupBy}
-                        hideoutStations={hideoutStations}
-                        workingOnHideoutStations={workingOnHideoutStations}
-                        onToggleWorkingOnHideoutStation={
-                          handleToggleWorkingOnHideoutStation
-                        }
-                        hideoutItemQuantities={hideoutItemQuantities}
-                        onUpdateHideoutItemQuantity={
-                          handleUpdateHideoutItemQuantity
-                        }
-                      />
-                    ) : viewMode === "prestiges" ? (
-                      <PrestigesView />
-                    ) : viewMode === "achievements" ? (
-                      <AchievementsView
-                        achievements={achievements}
-                        completed={completedAchievements}
-                        onToggle={handleToggleAchievement}
-                      />
-                    ) : viewMode === "storyline" ? (
-                      <StorylineQuestsView
-                        completedObjectives={completedStorylineObjectives}
-                        onToggleObjective={handleToggleStorylineObjective}
-                        onSetCompletedObjectives={
-                          handleSetCompletedStorylineObjectives
-                        }
-                        onNavigateToMap={() => setViewMode("storyline-map")}
-                        workingOnStorylineObjectives={
-                          workingOnStorylineObjectives
-                        }
-                        onToggleWorkingOnStorylineObjective={
-                          handleToggleWorkingOnStorylineObjective
-                        }
-                      />
-                    ) : viewMode === "storyline-map" ? (
-                      <StorylineContainer
-                        completedNodes={completedStorylineMapNodes}
-                        onToggleNode={handleToggleStorylineMapNode}
-                        onBack={() => setViewMode("storyline")}
-                        viewMode={storylineView}
-                        selectedEndingId={selectedEndingId}
-                        onViewChange={(newView, endingId) => {
-                          setStorylineView(newView);
-                          setSelectedEndingId(endingId || null);
-                        }}
-                      />
-                    ) : viewMode === "hideout-requirements" ? (
-                      <HideoutRequirementsView
-                        hideoutStations={hideoutStations}
-                        completedHideoutItems={completedHideoutItems}
-                        onNavigateToStation={(stationName) => {
-                          setCollectorGroupBy("hideout-stations");
-                          setViewMode("collector");
-                          // Use setTimeout to ensure view switches before search
-                          setTimeout(() => {
-                            window.dispatchEvent(
-                              new CustomEvent("taskTracker:globalSearch", {
-                                detail: { term: stationName, scope: "items" },
-                              })
-                            );
-                          }, 100);
-                        }}
-                      />
-                    ) : viewMode === "current" ? (
-                      <CurrentlyWorkingOnView
-                        tasks={tasks}
-                        workingOnTasks={workingOnTasks}
-                        workingOnStorylineObjectives={
-                          workingOnStorylineObjectives
-                        }
-                        workingOnHideoutStations={workingOnHideoutStations}
-                        collectorItems={collectorItems}
-                        hideoutStations={hideoutStations}
-                        completedCollectorItems={completedCollectorItems}
-                        completedTasks={completedTasks}
-                        completedStorylineObjectives={
-                          completedStorylineObjectives
-                        }
-                        completedHideoutItems={completedHideoutItems}
-                        playerLevel={playerLevel}
-                        onToggleWorkingOnTask={handleToggleWorkingOnTask}
-                        onToggleWorkingOnStorylineObjective={
-                          handleToggleWorkingOnStorylineObjective
-                        }
-                        onToggleCollectorItem={handleToggleCollectorItem}
-                        onToggleWorkingOnHideoutStation={
-                          handleToggleWorkingOnHideoutStation
-                        }
-                        onToggleTask={handleToggleComplete}
-                        onToggleStorylineObjective={
-                          handleToggleStorylineObjective
-                        }
-                        onToggleHideoutItem={handleToggleHideoutItem}
-                        completedTaskObjectives={completedTaskObjectives}
-                        onToggleTaskObjective={handleToggleTaskObjective}
-                        taskObjectiveItemProgress={taskObjectiveItemProgress}
-                        onUpdateTaskObjectiveItemProgress={
-                          handleUpdateTaskObjectiveItemProgress
-                        }
-                        hideoutItemQuantities={hideoutItemQuantities}
-                        onUpdateHideoutItemQuantity={
-                          handleUpdateHideoutItemQuantity
-                        }
-                      />
-                    ) : viewMode === "flow" ? (
-                      <FlowView
-                        tasks={tasks}
-                        completedTasks={completedTasks}
-                        hiddenTraders={hiddenTraders}
-                        showKappa={showKappa}
-                        showLightkeeper={showLightkeeper}
-                        onToggleComplete={handleToggleComplete}
-                        highlightedTaskId={highlightedTask}
-                      />
-                    ) : (
-                      <MindMap
-                        tasks={tasks}
-                        completedTasks={completedTasks}
-                        hiddenTraders={hiddenTraders}
-                        showKappa={showKappa}
-                        showLightkeeper={showLightkeeper}
-                        onToggleComplete={handleToggleComplete}
-                        highlightedTaskId={highlightedTask}
-                      />
-                    )}
-                  </Suspense>
-                </LazyLoadErrorBoundary>
+                {isLoading ? (
+                  <ContentSkeleton />
+                ) : (
+                  <LazyLoadErrorBoundary>
+                    <Suspense fallback={<ContentSkeleton />}>
+                      {viewMode === "grouped" ? (
+                        <CheckListView
+                          key={`${activeProfileId}:${
+                            activeProfileFaction ?? "none"
+                          }`}
+                          tasks={tasksWithEvents}
+                          completedTasks={completedTasks}
+                          hiddenTraders={hiddenTraders}
+                          showKappa={showKappa}
+                          showLightkeeper={showLightkeeper}
+                          onToggleComplete={handleToggleComplete}
+                          onTaskClick={handleTaskClick}
+                          mapFilter={selectedMap}
+                          groupBy={groupBy}
+                          onSetGroupBy={setGroupBy}
+                          activeProfileId={activeProfileId}
+                          playerLevel={playerLevel}
+                          workingOnTasks={workingOnTasks}
+                          onToggleWorkingOnTask={handleToggleWorkingOnTask}
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
+                        />
+                      ) : viewMode === "collector" ? (
+                        <CollectorView
+                          collectorItems={collectorItems}
+                          completedCollectorItems={completedCollectorItems}
+                          onToggleCollectorItem={handleToggleCollectorItem}
+                          completedHideoutItems={completedHideoutItems}
+                          onSetHideoutItems={handleSetHideoutItems}
+                          groupBy={collectorGroupBy}
+                          hideoutStations={hideoutStations}
+                          workingOnHideoutStations={workingOnHideoutStations}
+                          onToggleWorkingOnHideoutStation={
+                            handleToggleWorkingOnHideoutStation
+                          }
+                          hideoutItemQuantities={hideoutItemQuantities}
+                          onUpdateHideoutItemQuantity={
+                            handleUpdateHideoutItemQuantity
+                          }
+                        />
+                      ) : viewMode === "prestiges" ? (
+                        <PrestigesView />
+                      ) : viewMode === "achievements" ? (
+                        <AchievementsView
+                          achievements={achievements}
+                          completed={completedAchievements}
+                          onToggle={handleToggleAchievement}
+                        />
+                      ) : viewMode === "storyline" ? (
+                        <StorylineQuestsView
+                          completedObjectives={completedStorylineObjectives}
+                          onToggleObjective={handleToggleStorylineObjective}
+                          onSetCompletedObjectives={
+                            handleSetCompletedStorylineObjectives
+                          }
+                          onNavigateToMap={() => setViewMode("storyline-map")}
+                          workingOnStorylineObjectives={
+                            workingOnStorylineObjectives
+                          }
+                          onToggleWorkingOnStorylineObjective={
+                            handleToggleWorkingOnStorylineObjective
+                          }
+                        />
+                      ) : viewMode === "storyline-map" ? (
+                        <StorylineContainer
+                          completedNodes={completedStorylineMapNodes}
+                          onToggleNode={handleToggleStorylineMapNode}
+                          onBack={() => setViewMode("storyline")}
+                          viewMode={storylineView}
+                          selectedEndingId={selectedEndingId}
+                          onViewChange={(newView, endingId) => {
+                            setStorylineView(newView);
+                            setSelectedEndingId(endingId || null);
+                          }}
+                        />
+                      ) : viewMode === "hideout-requirements" ? (
+                        <HideoutRequirementsView
+                          hideoutStations={hideoutStations}
+                          completedHideoutItems={completedHideoutItems}
+                          onNavigateToStation={(stationName) => {
+                            setCollectorGroupBy("hideout-stations");
+                            setViewMode("collector");
+                            // Use setTimeout to ensure view switches before search
+                            setTimeout(() => {
+                              window.dispatchEvent(
+                                new CustomEvent("taskTracker:globalSearch", {
+                                  detail: { term: stationName, scope: "items" },
+                                }),
+                              );
+                            }, 100);
+                          }}
+                        />
+                      ) : viewMode === "current" ? (
+                        <CurrentlyWorkingOnView
+                          tasks={tasks}
+                          workingOnTasks={workingOnTasks}
+                          workingOnStorylineObjectives={
+                            workingOnStorylineObjectives
+                          }
+                          workingOnHideoutStations={workingOnHideoutStations}
+                          collectorItems={collectorItems}
+                          hideoutStations={hideoutStations}
+                          completedCollectorItems={completedCollectorItems}
+                          completedTasks={completedTasks}
+                          completedStorylineObjectives={
+                            completedStorylineObjectives
+                          }
+                          completedHideoutItems={completedHideoutItems}
+                          playerLevel={playerLevel}
+                          onToggleWorkingOnTask={handleToggleWorkingOnTask}
+                          onToggleWorkingOnStorylineObjective={
+                            handleToggleWorkingOnStorylineObjective
+                          }
+                          onToggleCollectorItem={handleToggleCollectorItem}
+                          onToggleWorkingOnHideoutStation={
+                            handleToggleWorkingOnHideoutStation
+                          }
+                          onToggleTask={handleToggleComplete}
+                          onToggleStorylineObjective={
+                            handleToggleStorylineObjective
+                          }
+                          onToggleHideoutItem={handleToggleHideoutItem}
+                          completedTaskObjectives={completedTaskObjectives}
+                          onToggleTaskObjective={handleToggleTaskObjective}
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
+                          hideoutItemQuantities={hideoutItemQuantities}
+                          onUpdateHideoutItemQuantity={
+                            handleUpdateHideoutItemQuantity
+                          }
+                        />
+                      ) : viewMode === "flow" ? (
+                        <FlowView
+                          tasks={tasks}
+                          completedTasks={completedTasks}
+                          hiddenTraders={hiddenTraders}
+                          showKappa={showKappa}
+                          showLightkeeper={showLightkeeper}
+                          onToggleComplete={handleToggleComplete}
+                          highlightedTaskId={highlightedTask}
+                        />
+                      ) : (
+                        <MindMap
+                          tasks={tasks}
+                          completedTasks={completedTasks}
+                          hiddenTraders={hiddenTraders}
+                          showKappa={showKappa}
+                          showLightkeeper={showLightkeeper}
+                          onToggleComplete={handleToggleComplete}
+                          highlightedTaskId={highlightedTask}
+                        />
+                      )}
+                    </Suspense>
+                  </LazyLoadErrorBoundary>
+                )}
               </main>
 
               {/* Right Progress */}
@@ -2109,6 +2082,7 @@ function App() {
                     completedPrestigeSteps={prestigeProgress?.completed}
                     currentPrestigeId={prestigeProgress?.id}
                     progressTitle={progressTitle}
+                    isLoading={isLoading}
                   />
                 </div>
               </LegacySidebar>
@@ -2164,6 +2138,7 @@ function App() {
               completedPrestigeSteps={prestigeProgress?.completed}
               currentPrestigeId={prestigeProgress?.id}
               progressTitle={progressTitle}
+              isLoading={isLoading}
             />
           </div>
         </SheetContent>
