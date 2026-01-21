@@ -12,7 +12,8 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "deploy:prod": "bun run build && wrangler pages deploy dist --project-name=kappas --branch=master --commit-dirty=true",
-    "deploy:dev": "bun run build && wrangler pages deploy dist --project-name=kappas --branch=dev --commit-dirty=true"
+    "deploy:dev": "bun run build && wrangler pages deploy dist --project-name=kappas --branch=dev --commit-dirty=true",
+    "task": "npx tsx scripts/task-cli.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

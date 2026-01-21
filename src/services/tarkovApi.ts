@@ -181,6 +181,30 @@ export function applyTaskOverlay<T extends TaskOverlayTarget>(baseTask: T, overl
   return result;
 }
 
+// Prefixes that indicate a task is a seasonal/temporary event
+const EVENT_TASK_PREFIXES = [
+  'winter_',
+  'halloween_',
+  'event_',
+  'newyear_',
+  'christmas_',
+  'easter_',
+  'summer_',
+  'spring_',
+  'autumn_',
+  'fall_',
+];
+
+/**
+ * Determines if a task from tasksAdd is a seasonal event or a permanent addition.
+ * Event tasks have specific prefixes in their ID (e.g., winter_2025_missing_in_action).
+ * Permanent tasks (e.g., setting_priorities, goals_and_means) do not have these prefixes.
+ */
+function isEventTask(taskId: string): boolean {
+  const lowerCaseId = taskId.toLowerCase();
+  return EVENT_TASK_PREFIXES.some((prefix) => lowerCaseId.startsWith(prefix));
+}
+
 export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
   if (!overlay.tasksAdd) return [];
 
@@ -227,10 +251,11 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
       lightkeeperRequired: false,
       objectives: objectiveList.length > 0 ? objectiveList : undefined,
       finishRewards: rewardItems.length > 0 ? { items: rewardItems } : undefined,
-      isEvent: true,
+      isEvent: isEventTask(task.id),
     };
   });
 }
+
 
 export async function fetchOverlay(): Promise<Overlay> {
   try {
