@@ -265,7 +265,11 @@ export async function fetchOverlay(): Promise<Overlay> {
     console.log(`[Overlay] Successfully fetched latest from: ${OVERLAY_URL}`);
     return data;
   } catch (err) {
-    console.error('Failed to fetch remote overlay:', err);
+    console.error('[Overlay] Failed to fetch remote overlay:', err);
+    console.warn(
+      '[Overlay] Returning empty overlay - tasksAdd will be unavailable. ' +
+      'Event/overlay-only tasks marked as "working on" may disappear temporarily.'
+    );
     // Return a minimal empty overlay to prevent the app from breaking
     return { tasks: {}, $meta: { version: '0.0.0-empty', generated: new Date().toISOString() } };
   }

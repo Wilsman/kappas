@@ -7,6 +7,8 @@ import {
   Suspense,
 } from "react";
 import { NuqsAdapter } from "nuqs/adapters/react";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "./hooks/use-mobile";
 import { RotateCcw, BarChart3, Search } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -273,6 +275,52 @@ function App() {
     const uniqueEvents = eventTasks.filter((task) => !baseIds.has(task.id));
     return [...tasks, ...uniqueEvents];
   }, [tasks, eventTasks]);
+
+  // Diagnostic: detect and log duplicate tasks
+  useEffect(() => {
+    const idCounts = new Map<string, { count: number; names: string[] }>();
+    const nameCounts = new Map<string, { count: number; ids: string[] }>();
+
+    tasksWithEvents.forEach((task) => {
+      // Track by ID
+      const existing = idCounts.get(task.id);
+      if (existing) {
+        existing.count++;
+        existing.names.push(task.name);
+      } else {
+        idCounts.set(task.id, { count: 1, names: [task.name] });
+      }
+
+      // Track by name
+      const existingName = nameCounts.get(task.name);
+      if (existingName) {
+        existingName.count++;
+        existingName.ids.push(task.id);
+      } else {
+        nameCounts.set(task.name, { count: 1, ids: [task.id] });
+      }
+    });
+
+    // Log duplicates by ID
+    const dupById = Array.from(idCounts.entries()).filter(
+      ([_, v]) => v.count > 1,
+    );
+    if (dupById.length > 0) {
+      console.warn("[Duplicate Detection] Tasks with duplicate IDs:", dupById);
+    }
+
+    // Log duplicates by name (different IDs, same name)
+    const dupByName = Array.from(nameCounts.entries()).filter(
+      ([_, v]) => v.count > 1,
+    );
+    if (dupByName.length > 0) {
+      console.warn(
+        "[Duplicate Detection] Tasks with duplicate names:",
+        dupByName,
+      );
+    }
+  }, [tasksWithEvents]);
+
   const baseTasks = useMemo(
     () => tasks.filter((task) => !task.isEvent),
     [tasks],
@@ -828,6 +876,15 @@ function App() {
     const init = async () => {
       try {
         let overlayLoaded = false;
+
+        // Request persistent storage to prevent browser from clearing IndexedDB
+        if (navigator.storage && navigator.storage.persist) {
+          const isPersisted = await navigator.storage.persisted();
+          if (!isPersisted) {
+            await navigator.storage.persist();
+          }
+        }
+
         setLoadingStage(LOADING_STAGES.profiles);
         const ensured = ensureProfiles();
         setProfiles(ensured.profiles);
@@ -1044,6 +1101,87 @@ function App() {
     };
     void init();
   }, []);
+
+  // Validate and cleanup orphaned working-on task IDs
+  // This runs after tasks are loaded to detect any saved task IDs that no longer exist
+  useEffect(() => {
+    if (!activeProfileId || allTasks.length === 0 || workingOnTasks.size === 0)
+      return;
+
+    const taskIdSet = new Set(allTasks.map((t) => t.id));
+    const orphanedIds: string[] = [];
+
+    workingOnTasks.forEach((taskId) => {
+      if (!taskIdSet.has(taskId)) {
+        orphanedIds.push(taskId);
+      }
+    });
+
+    if (orphanedIds.length > 0) {
+      // Build debug info for user reports (shown when they click "Copy details")
+      const debugInfo = {
+        timestamp: new Date().toISOString(),
+        orphanedTaskIds: orphanedIds,
+        availableTaskCount: allTasks.length,
+        workingOnCount: workingOnTasks.size,
+        message:
+          "These task IDs were marked as 'working on' but no longer exist in the task list.",
+      };
+
+      console.warn(
+        `[WorkingOn] Cleaning up ${orphanedIds.length} orphaned task(s)`,
+      );
+
+      // Show toast notification with copy button
+      toast.warning(
+        `${orphanedIds.length} task${orphanedIds.length > 1 ? "s" : ""} removed from "Working On"`,
+        {
+          description:
+            "Some tasks no longer exist (possibly ended events or data changes).",
+          duration: 10000,
+          action: {
+            label: "Copy details",
+            onClick: () => {
+              navigator.clipboard
+                .writeText(JSON.stringify(debugInfo, null, 2))
+                .then(() => {
+                  toast.success("Debug info copied to clipboard!");
+                })
+                .catch(() => {
+                  toast.error("Failed to copy to clipboard");
+                });
+            },
+          },
+        },
+      );
+
+      // Auto-cleanup: remove orphaned IDs from working-on set
+      const cleanedTasks = new Set(workingOnTasks);
+      orphanedIds.forEach((id) => cleanedTasks.delete(id));
+      setWorkingOnTasks(cleanedTasks);
+
+      // Persist the cleaned state
+      taskStorage.setProfile(activeProfileId);
+      taskStorage.init().then(() => {
+        taskStorage.saveWorkingOnItems({
+          tasks: cleanedTasks,
+          storylineObjectives: workingOnStorylineObjectives,
+          collectorItems: workingOnCollectorItems,
+          hideoutStations: workingOnHideoutStations,
+        });
+        console.info(
+          `[WorkingOn] Cleaned up ${orphanedIds.length} orphaned task(s) from storage.`,
+        );
+      });
+    }
+  }, [
+    activeProfileId,
+    allTasks,
+    workingOnTasks,
+    workingOnStorylineObjectives,
+    workingOnCollectorItems,
+    workingOnHideoutStations,
+  ]);
 
   // // Persist playerLevel to IndexedDB when it changes
   // useEffect(() => {
@@ -2147,6 +2285,7 @@ function App() {
         isOpen={showOnboarding}
         onClose={handleCloseOnboarding}
       />
+      <Toaster position="bottom-right" richColors />
     </NuqsAdapter>
   );
 }

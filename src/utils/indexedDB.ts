@@ -49,16 +49,10 @@ export class TaskStorage {
   }
 
   async init(): Promise<void> {
-    // Skip if already initialized with a valid connection
-    if (this.db) {
-      return;
-    }
+    if (this.db) return;
 
-    // Prevent loading data from archived/deleted profiles
     if (isProfileDeleted(this.profileId)) {
-      console.warn(
-        `[Storage] Profile ${this.profileId} is archived, skipping DB init`
-      );
+      console.warn(`[Storage] Profile ${this.profileId} is archived, skipping DB init`);
       return;
     }
 
@@ -119,23 +113,29 @@ export class TaskStorage {
 
   async saveCompletedTasks(completedTasks: Set<string>): Promise<void> {
     if (!this.db) await this.init();
+    if (!this.db) return;
 
-    console.debug(
-      `[Storage] Saving ${completedTasks.size} tasks to profile ${this.profileId}`
-    );
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([TASKS_STORE], "readwrite");
+      const store = transaction.objectStore(TASKS_STORE);
 
-    const transaction = this.db!.transaction([TASKS_STORE], "readwrite");
-    const store = transaction.objectStore(TASKS_STORE);
+      const clearRequest = store.clear();
+      clearRequest.onsuccess = () => {
+        for (const taskId of completedTasks) {
+          store.add({ id: taskId, completed: true });
+        }
+      };
+      clearRequest.onerror = () => reject(clearRequest.error);
 
-    await store.clear();
-
-    for (const taskId of completedTasks) {
-      await store.add({ id: taskId, completed: true });
-    }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
   }
 
   async loadCompletedTasks(): Promise<Set<string>> {
     if (!this.db) await this.init();
+    if (!this.db) return new Set<string>();
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([TASKS_STORE], "readonly");
@@ -149,7 +149,6 @@ export class TaskStorage {
         });
         resolve(completedTasks);
       };
-
       request.onerror = () => reject(request.error);
     });
   }
@@ -869,8 +868,7 @@ export class ExportImportService {
         } catch (err) {
           reject(
             new Error(
-              `Failed to parse file: ${
-                err instanceof Error ? err.message : "Unknown error"
+              `Failed to parse file: ${err instanceof Error ? err.message : "Unknown error"
               }`
             )
           );
