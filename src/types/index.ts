@@ -26,6 +26,7 @@ export interface Task {
   };
   finishRewards?: {
     items: RewardItem[];
+    offerUnlock?: OfferUnlock[];
   };
 }
 
@@ -41,6 +42,7 @@ export interface TaskObjective {
     iconLink?: string;
   }[];
   count?: number;
+  foundInRaid?: boolean;
 }
 
 export interface RewardItem {
@@ -49,6 +51,18 @@ export interface RewardItem {
     iconLink?: string;
   };
   count: number;
+}
+
+export interface OfferUnlock {
+  item: {
+    name: string;
+    iconLink?: string;
+  };
+  trader: {
+    name: string;
+    imageLink?: string;
+  };
+  level: number;
 }
 
 export interface TaskRequirement {

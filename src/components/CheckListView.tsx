@@ -32,7 +32,6 @@ import {
   Link2,
   ChevronDown,
   ChevronUp,
-  Award,
   ArrowRight,
   MapPin,
   UserCheck,
@@ -83,7 +82,7 @@ interface CheckListViewProps {
   taskObjectiveItemProgress: Record<string, number>;
   onUpdateTaskObjectiveItemProgress: (
     objectiveItemKey: string,
-    count: number
+    count: number,
   ) => void;
 }
 
@@ -151,10 +150,10 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         } else {
           // Migrate from localStorage if exists
           const storedEnable = localStorage.getItem(
-            `taskTracker_enableLevelFilter::${activeProfileId}`
+            `taskTracker_enableLevelFilter::${activeProfileId}`,
           );
           const storedShow = localStorage.getItem(
-            `taskTracker_showCompleted::${activeProfileId}`
+            `taskTracker_showCompleted::${activeProfileId}`,
           );
 
           const enable = storedEnable != null ? storedEnable === "1" : false;
@@ -173,11 +172,11 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           // Clean up localStorage
           if (storedEnable)
             localStorage.removeItem(
-              `taskTracker_enableLevelFilter::${activeProfileId}`
+              `taskTracker_enableLevelFilter::${activeProfileId}`,
             );
           if (storedShow)
             localStorage.removeItem(
-              `taskTracker_showCompleted::${activeProfileId}`
+              `taskTracker_showCompleted::${activeProfileId}`,
             );
         }
         setPrefsLoaded(true);
@@ -243,7 +242,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 
       if (task.isEvent) {
         setExpandedGroups((prev) =>
-          prev.includes("Seasonal Events") ? prev : [...prev, "Seasonal Events"]
+          prev.includes("Seasonal Events")
+            ? prev
+            : [...prev, "Seasonal Events"],
         );
         setSelectedTaskId(taskId);
         setSearchTerm(task.name);
@@ -253,7 +254,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       if (groupBy === "trader") {
         const groupName = task.trader.name;
         setExpandedGroups((prev) =>
-          prev.includes(groupName) ? prev : [...prev, groupName]
+          prev.includes(groupName) ? prev : [...prev, groupName],
         );
       } else {
         // For map grouping, expand all maps the task belongs to
@@ -269,7 +270,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         } else {
           const groupName = task.map?.name || "Anywhere";
           setExpandedGroups((prev) =>
-            prev.includes(groupName) ? prev : [...prev, groupName]
+            prev.includes(groupName) ? prev : [...prev, groupName],
           );
         }
       }
@@ -278,13 +279,13 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       // Also reflect the clicked task in the search bar to filter the view
       setSearchTerm(task.name);
     },
-    [tasks, groupBy, setSearchTerm]
+    [tasks, groupBy, setSearchTerm],
   );
 
   const buildObjectiveItemKey = useCallback(
     (taskId: string, objectiveIndex: number, itemKey: string) =>
       `${taskId}::${objectiveIndex}::${itemKey}`,
-    []
+    [],
   );
 
   const handleObjectiveItemDelta = useCallback(
@@ -293,18 +294,18 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       const next = Math.max(0, Math.min(maxCount, current + delta));
       onUpdateTaskObjectiveItemProgress(objectiveItemKey, next);
     },
-    [onUpdateTaskObjectiveItemProgress, taskObjectiveItemProgress]
+    [onUpdateTaskObjectiveItemProgress, taskObjectiveItemProgress],
   );
 
   // (moved global search listener below after allGroupNames is defined)
 
   const baseTasks = useMemo(
     () => tasks.filter((task) => !task.isEvent),
-    [tasks]
+    [tasks],
   );
   const eventTasks = useMemo(
     () => tasks.filter((task) => task.isEvent),
-    [tasks]
+    [tasks],
   );
   const hasEventTasks = eventTasks.length > 0;
 
@@ -319,25 +320,25 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             if (task.minPlayerLevel > level) return false;
             if (task.taskRequirements?.length > 0) {
               return task.taskRequirements.every((req) =>
-                completed.has(req.task.id)
+                completed.has(req.task.id),
               );
             }
             return true;
           })
-          .map((task) => task.id)
+          .map((task) => task.id),
       );
     },
-    [completedTasks, playerLevel]
+    [completedTasks, playerLevel],
   );
 
   // Apply filters
   const nextQuestIds = useMemo(
     () => buildNextQuestIds(baseTasks),
-    [baseTasks, buildNextQuestIds]
+    [baseTasks, buildNextQuestIds],
   );
   const nextEventQuestIds = useMemo(
     () => buildNextQuestIds(eventTasks),
-    [eventTasks, buildNextQuestIds]
+    [eventTasks, buildNextQuestIds],
   );
 
   const filterTasks = useCallback(
@@ -378,7 +379,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           const traderMatch = task.trader.name.toLowerCase().includes(term);
           const singleMapMatch = task.map?.name.toLowerCase().includes(term);
           const multiMapMatch = task.maps?.some((m) =>
-            m.name.toLowerCase().includes(term)
+            m.name.toLowerCase().includes(term),
           );
 
           if (!nameMatch && !traderMatch && !singleMapMatch && !multiMapMatch) {
@@ -398,17 +399,17 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       showCompleted,
       completedTasks,
       showNextOnly,
-    ]
+    ],
   );
 
   const filteredTasks = useMemo(
     () => filterTasks(baseTasks, nextQuestIds),
-    [baseTasks, filterTasks, nextQuestIds]
+    [baseTasks, filterTasks, nextQuestIds],
   );
   const filteredEventTasks = useMemo(
     () =>
       showEvents ? filterTasks(eventTasks, nextEventQuestIds) : ([] as Task[]),
-    [showEvents, filterTasks, eventTasks, nextEventQuestIds]
+    [showEvents, filterTasks, eventTasks, nextEventQuestIds],
   );
 
   // Group tasks
@@ -440,7 +441,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       Object.entries(tasksByGroup)
         .map(([name, groupTasks]) => [name, groupTasks] as GroupEntry)
         .sort(([a], [b]) => a.localeCompare(b)),
-    [tasksByGroup]
+    [tasksByGroup],
   );
   const groupsWithEvents = useMemo<GroupEntry[]>(() => {
     if (!hasEventTasks || filteredEventTasks.length === 0) return sortedGroups;
@@ -449,7 +450,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 
   const allGroupNames = useMemo(
     () => groupsWithEvents.map(([name]) => name),
-    [groupsWithEvents]
+    [groupsWithEvents],
   );
   // Only use the explicitly expanded groups
   const finalExpandedGroups = expandedGroups;
@@ -481,7 +482,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             setExpandedGroups((prev) =>
               prev.includes("Seasonal Events")
                 ? prev
-                : [...prev, "Seasonal Events"]
+                : [...prev, "Seasonal Events"],
             );
             setSelectedTaskId(detail.taskId);
             return;
@@ -489,7 +490,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           if (groupBy === "trader") {
             const groupName = t.trader.name;
             setExpandedGroups((prev) =>
-              prev.includes(groupName) ? prev : [...prev, groupName]
+              prev.includes(groupName) ? prev : [...prev, groupName],
             );
           } else {
             // For map grouping, expand all maps the task belongs to
@@ -505,7 +506,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             } else {
               const groupName = t.map?.name || "Anywhere";
               setExpandedGroups((prev) =>
-                prev.includes(groupName) ? prev : [...prev, groupName]
+                prev.includes(groupName) ? prev : [...prev, groupName],
               );
             }
           }
@@ -515,12 +516,12 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     };
     window.addEventListener(
       "taskTracker:globalSearch",
-      handler as EventListener
+      handler as EventListener,
     );
     return () =>
       window.removeEventListener(
         "taskTracker:globalSearch",
-        handler as EventListener
+        handler as EventListener,
       );
   }, [allGroupNames, setSearchTerm, tasks, groupBy]);
 
@@ -535,7 +536,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const getSortedTasks = useCallback(
     (groupTasks: Task[]) => {
       const sorted = [...groupTasks];
-      const compareByName = (a: Task, b: Task) => a.name.localeCompare(b.name);
+      const compareByName = (a: Task, b: Task) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true });
       const compareByLevelAsc = (a: Task, b: Task) =>
         a.minPlayerLevel - b.minPlayerLevel || compareByName(a, b);
       const compareByLevelDesc = (a: Task, b: Task) =>
@@ -586,7 +588,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           return sorted;
       }
     },
-    [completedTasks, sortMode, workingOnTasks]
+    [completedTasks, sortMode, workingOnTasks],
   );
 
   return (
@@ -758,8 +760,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
             const successors = tasks
               .filter((t) =>
                 t.taskRequirements?.some(
-                  (req) => req.task.id === selectedTaskId
-                )
+                  (req) => req.task.id === selectedTaskId,
+                ),
               )
               .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -780,7 +782,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                               "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                               "bg-gray-800 hover:bg-gray-600",
                               completedTasks.has(t.id) &&
-                                "line-through opacity-60"
+                                "line-through opacity-60",
                             )}
                             onClick={() => handleBreadcrumbClick(t.id)}
                           >
@@ -803,7 +805,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                       "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                       "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
                       completedTasks.has(selectedTaskId) &&
-                        "line-through opacity-60"
+                        "line-through opacity-60",
                     )}
                     onClick={() => handleBreadcrumbClick(selectedTaskId)}
                   >
@@ -827,7 +829,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                               "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                               "bg-gray-700 hover:bg-gray-600",
                               completedTasks.has(t.id) &&
-                                "line-through opacity-60"
+                                "line-through opacity-60",
                             )}
                             onClick={() => handleBreadcrumbClick(t.id)}
                           >
@@ -854,7 +856,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         {groupsWithEvents.map(([groupName, groupTasks]) => {
           const sortedGroupTasks = getSortedTasks(groupTasks);
           const completedCount = groupTasks.filter((t) =>
-            completedTasks.has(t.id)
+            completedTasks.has(t.id),
           ).length;
           const totalCount = groupTasks.length;
           const progress =
@@ -867,7 +869,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
               value={groupName}
               className={cn(
                 "border rounded-lg bg-card",
-                isEventGroup && "border-amber-500/40 bg-amber-500/5"
+                isEventGroup && "border-amber-500/40 bg-amber-500/5",
               )}
             >
               <AccordionTrigger className="px-4 py-2 hover:no-underline">
@@ -922,7 +924,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                           <div
                             className={cn(
                               "flex items-center gap-2 p-1.5 rounded-md transition-colors group",
-                              "hover:bg-muted"
+                              "hover:bg-muted",
                             )}
                           >
                             <Checkbox
@@ -942,7 +944,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                   "p-1 rounded-sm transition-colors",
                                   workingOnTasks.has(task.id)
                                     ? "text-blue-500 hover:text-blue-600"
-                                    : "text-muted-foreground/40 hover:text-muted-foreground"
+                                    : "text-muted-foreground/40 hover:text-muted-foreground",
                                 )}
                                 title={
                                   workingOnTasks.has(task.id)
@@ -988,13 +990,13 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
                                 <span
                                   className={cn(
-                                    "flex-1 min-w-0 text-[15px] leading-tight flex items-center gap-2"
+                                    "flex-1 min-w-0 text-[15px] leading-tight flex items-center gap-2",
                                   )}
                                 >
                                   <span
                                     className={cn(
                                       "truncate",
-                                      isCompleted && "line-through"
+                                      isCompleted && "line-through",
                                     )}
                                   >
                                     {task.name}
@@ -1089,7 +1091,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                             inlineIconLink &&
                                             inlineItem &&
                                             objective.description?.includes(
-                                              inlineItem.name
+                                              inlineItem.name,
                                             );
                                           return (
                                             <li key={index}>
@@ -1132,6 +1134,11 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                 {"playerLevel" in objective
                                                   ? `Reach level ${objective.playerLevel}`
                                                   : objective.description}
+                                                {objective.foundInRaid && (
+                                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 font-medium ml-2">
+                                                    FIR
+                                                  </span>
+                                                )}
                                               </span>
                                               {objective.items &&
                                                 objective.items.length > 0 && (
@@ -1146,26 +1153,28 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                         const requiredCount =
                                                           Math.max(
                                                             1,
-                                                            objective.count ?? 1
+                                                            objective.count ??
+                                                              1,
                                                           );
                                                         const itemKey =
                                                           buildObjectiveItemKey(
                                                             task.id,
                                                             index,
-                                                            item.id || item.name
+                                                            item.id ||
+                                                              item.name,
                                                           );
                                                         const currentCount =
                                                           Math.min(
                                                             requiredCount,
                                                             taskObjectiveItemProgress[
                                                               itemKey
-                                                            ] || 0
+                                                            ] || 0,
                                                           );
                                                         const remaining =
                                                           Math.max(
                                                             0,
                                                             requiredCount -
-                                                              currentCount
+                                                              currentCount,
                                                           );
                                                         const isComplete =
                                                           currentCount >=
@@ -1179,7 +1188,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                             className={cn(
                                                               "flex items-center gap-2 rounded-md border bg-background/40 p-2",
                                                               isComplete &&
-                                                                "opacity-60"
+                                                                "opacity-60",
                                                             )}
                                                           >
                                                             {iconLink ? (
@@ -1245,20 +1254,20 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                               <button
                                                                 type="button"
                                                                 onClick={(
-                                                                  e
+                                                                  e,
                                                                 ) => {
                                                                   e.stopPropagation();
                                                                   handleObjectiveItemDelta(
                                                                     itemKey,
                                                                     -1,
-                                                                    requiredCount
+                                                                    requiredCount,
                                                                   );
                                                                 }}
                                                                 className={cn(
                                                                   "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
                                                                   currentCount <=
                                                                     0 &&
-                                                                    "opacity-50 cursor-not-allowed"
+                                                                    "opacity-50 cursor-not-allowed",
                                                                 )}
                                                                 disabled={
                                                                   currentCount <=
@@ -1275,20 +1284,20 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                               <button
                                                                 type="button"
                                                                 onClick={(
-                                                                  e
+                                                                  e,
                                                                 ) => {
                                                                   e.stopPropagation();
                                                                   handleObjectiveItemDelta(
                                                                     itemKey,
                                                                     1,
-                                                                    requiredCount
+                                                                    requiredCount,
                                                                   );
                                                                 }}
                                                                 className={cn(
                                                                   "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
                                                                   currentCount >=
                                                                     requiredCount &&
-                                                                    "opacity-50 cursor-not-allowed"
+                                                                    "opacity-50 cursor-not-allowed",
                                                                 )}
                                                                 disabled={
                                                                   currentCount >=
@@ -1301,13 +1310,13 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                             </div>
                                                           </div>
                                                         );
-                                                      }
+                                                      },
                                                     )}
                                                   </div>
                                                 )}
                                             </li>
                                           );
-                                        }
+                                        },
                                       )}
                                     </ul>
                                   </div>
@@ -1317,19 +1326,25 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                 task.startRewards.items.length > 0) ||
                                 (task.finishRewards?.items &&
                                   task.finishRewards.items.length > 0)) && (
-                                <div className="space-y-1">
-                                  <div className="inline-flex items-center gap-1 text-foreground/80">
-                                    <Award className="h-3 w-3" />
-                                    <span className="text-[11px]">Rewards</span>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-[1px] flex-1 bg-border/50" />
+                                    <span className="text-[11px] font-bold uppercase tracking-widest text-sky-500/80">
+                                      Rewards
+                                    </span>
+                                    <div className="h-[1px] flex-1 bg-border/50" />
                                   </div>
-                                  <ul className="list-disc pl-5 space-y-0.5">
+                                  <div className="grid grid-cols-2 gap-2">
                                     {[
                                       ...(task.startRewards?.items ?? []),
                                       ...(task.finishRewards?.items ?? []),
                                     ].map((reward, index) => (
-                                      <li key={index}>
-                                        <span className="inline-flex items-center gap-1">
-                                          {reward.item.iconLink && (
+                                      <div
+                                        key={index}
+                                        className="flex items-center gap-2 p-2 rounded-lg bg-sky-500/5 border border-sky-500/10"
+                                      >
+                                        <div className="h-8 w-8 shrink-0 rounded-md bg-black/20 flex items-center justify-center p-1 border border-sky-500/20">
+                                          {reward.item.iconLink ? (
                                             <TooltipProvider
                                               delayDuration={150}
                                             >
@@ -1338,7 +1353,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                   <img
                                                     src={reward.item.iconLink}
                                                     alt={reward.item.name}
-                                                    className="h-4 w-4 object-contain"
+                                                    className="h-full w-full object-contain"
                                                     loading="lazy"
                                                   />
                                                 </TooltipTrigger>
@@ -1361,17 +1376,133 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                 </TooltipContent>
                                               </Tooltip>
                                             </TooltipProvider>
+                                          ) : (
+                                            <div className="h-2 w-2 rounded-full bg-sky-500/40" />
                                           )}
-                                          {reward.item.name}
-                                        </span>
-                                        {reward.count > 1
-                                          ? ` (${reward.count})`
-                                          : ""}
-                                      </li>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-xs font-medium text-foreground/90 truncate">
+                                            {reward.item.name}
+                                          </div>
+                                          {reward.count > 1 && (
+                                            <div className="text-[10px] text-sky-500/80 font-medium">
+                                              ×{reward.count}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
                                     ))}
-                                  </ul>
+                                  </div>
                                 </div>
                               )}
+
+                              {task.finishRewards?.offerUnlock &&
+                                task.finishRewards.offerUnlock.length > 0 && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-[1px] flex-1 bg-border/50" />
+                                      <span className="text-[11px] font-bold uppercase tracking-widest text-amber-500/80">
+                                        Unlocks
+                                      </span>
+                                      <div className="h-[1px] flex-1 bg-border/50" />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      {task.finishRewards.offerUnlock.map(
+                                        (unlock, index) => (
+                                          <div
+                                            key={`unlock-${index}`}
+                                            className="flex items-center gap-3 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10"
+                                          >
+                                            {/* Item Icon */}
+                                            <div className="h-10 w-10 shrink-0 rounded-md bg-black/20 flex items-center justify-center p-1 border border-amber-500/20">
+                                              {unlock.item.iconLink ? (
+                                                <TooltipProvider
+                                                  delayDuration={150}
+                                                >
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <img
+                                                        src={
+                                                          unlock.item.iconLink
+                                                        }
+                                                        alt={unlock.item.name}
+                                                        className="h-full w-full object-contain"
+                                                        loading="lazy"
+                                                      />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent
+                                                      side="top"
+                                                      align="center"
+                                                      className="bg-background text-foreground p-2 shadow-md border"
+                                                    >
+                                                      <div className="flex flex-col items-center gap-1">
+                                                        <img
+                                                          src={
+                                                            unlock.item.iconLink
+                                                          }
+                                                          alt={unlock.item.name}
+                                                          className="h-16 w-16 object-contain"
+                                                          loading="lazy"
+                                                        />
+                                                        <span className="text-xs">
+                                                          {unlock.item.name}
+                                                        </span>
+                                                      </div>
+                                                    </TooltipContent>
+                                                  </Tooltip>
+                                                </TooltipProvider>
+                                              ) : (
+                                                <div className="h-2 w-2 rounded-full bg-amber-500/40" />
+                                              )}
+                                            </div>
+                                            {/* Trader Icon (smaller, overlaid) */}
+                                            <div className="h-6 w-6 shrink-0 rounded-full bg-black/40 flex items-center justify-center overflow-hidden -ml-5 ring-2 ring-amber-500/10 z-10">
+                                              {unlock.trader.imageLink ? (
+                                                <TooltipProvider
+                                                  delayDuration={150}
+                                                >
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <img
+                                                        src={
+                                                          unlock.trader
+                                                            .imageLink
+                                                        }
+                                                        alt={unlock.trader.name}
+                                                        className="h-full w-full object-cover"
+                                                        loading="lazy"
+                                                      />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent
+                                                      side="top"
+                                                      align="center"
+                                                      className="bg-background text-foreground p-2 shadow-md border"
+                                                    >
+                                                      <span className="text-xs">
+                                                        {unlock.trader.name}
+                                                      </span>
+                                                    </TooltipContent>
+                                                  </Tooltip>
+                                                </TooltipProvider>
+                                              ) : (
+                                                <div className="h-1.5 w-1.5 rounded-full bg-amber-500/60" />
+                                              )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-xs font-medium text-foreground/90 truncate">
+                                                {unlock.item.name}
+                                              </div>
+                                              <div className="text-[10px] text-amber-500/80 font-medium">
+                                                {unlock.trader.name} LL
+                                                {unlock.level}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ),
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                             </div>
                           </CollapsibleContent>
                         </Collapsible>

@@ -25,7 +25,7 @@ type PreviewItem =
       kind: "task";
       task: Task;
       context: string;
-      contextType: "generic" | "objective" | "reward";
+      contextType: "generic" | "objective" | "reward" | "unlock";
       icon?: string;
     }
   | { kind: "hideout"; match: HideoutMatchEntry }
@@ -105,7 +105,7 @@ export function CommandMenu(props: CommandMenuProps) {
             className="font-semibold text-emerald-300"
           >
             {source.slice(matchIndex, matchIndex + q.length)}
-          </span>
+          </span>,
         );
         idx = matchIndex + q.length;
         matchIndex = lower.indexOf(q, idx);
@@ -113,7 +113,7 @@ export function CommandMenu(props: CommandMenuProps) {
       if (idx < source.length) parts.push(source.slice(idx));
       return parts;
     },
-    [hasQuery, queryLower]
+    [hasQuery, queryLower],
   );
 
   function ContextChip({
@@ -138,7 +138,7 @@ export function CommandMenu(props: CommandMenuProps) {
             "border-primary/20 bg-primary/10 text-primary-foreground",
           tone === "neutral" &&
             "border-muted-foreground/20 bg-muted/20 text-muted-foreground",
-          className
+          className,
         )}
       >
         {label}
@@ -197,7 +197,7 @@ export function CommandMenu(props: CommandMenuProps) {
       context: string;
       score: number;
       icon?: string;
-      contextType: "generic" | "objective" | "reward";
+      contextType: "generic" | "objective" | "reward" | "unlock";
     }[]
   >(() => {
     // Normalize helper: lowercase, strip diacritics, normalize whitespace, normalize dash variants
@@ -218,7 +218,7 @@ export function CommandMenu(props: CommandMenuProps) {
         context: string;
         score: number;
         icon?: string;
-        contextType: "generic" | "objective" | "reward";
+        contextType: "generic" | "objective" | "reward" | "unlock";
       }[];
     const q = norm(qRaw);
     const qTight = q.replace(/[^a-z0-9]/g, "");
@@ -274,20 +274,20 @@ export function CommandMenu(props: CommandMenuProps) {
       context: string;
       score: number;
       icon?: string;
-      contextType: "generic" | "objective" | "reward";
+      contextType: "generic" | "objective" | "reward" | "unlock";
     } | null {
       let best: {
         context: string;
         score: number;
         icon?: string;
-        contextType: "generic" | "objective" | "reward";
+        contextType: "generic" | "objective" | "reward" | "unlock";
       } | null = null;
 
       function consider(
         context: string,
         baseScore: number,
         icon?: string,
-        contextType: "generic" | "objective" | "reward" = "generic"
+        contextType: "generic" | "objective" | "reward" | "unlock" = "generic",
       ) {
         if (baseScore <= 0) return;
         if (!best || baseScore > best.score)
@@ -309,7 +309,7 @@ export function CommandMenu(props: CommandMenuProps) {
         if (obj.description)
           consider(
             `Objective: ${obj.description}`,
-            scoreValue(obj.description, 0.8)
+            scoreValue(obj.description, 0.8),
           );
         for (const it of obj.items ?? []) {
           // Skip overly-generic matches like "Any item(s)"
@@ -328,7 +328,7 @@ export function CommandMenu(props: CommandMenuProps) {
             `Objective Item: ${it.name}${qty}`,
             base,
             it.iconLink,
-            "objective"
+            "objective",
           );
         }
       }
@@ -343,7 +343,7 @@ export function CommandMenu(props: CommandMenuProps) {
           `Reward: ${r.item.name}${qty}`,
           base,
           r.item.iconLink,
-          "reward"
+          "reward",
         );
       }
       for (const r of t.finishRewards?.items ?? []) {
@@ -355,8 +355,30 @@ export function CommandMenu(props: CommandMenuProps) {
           `Reward: ${r.item.name}${qty}`,
           base,
           r.item.iconLink,
-          "reward"
+          "reward",
         );
+      }
+
+      // Offer unlocks: item names and trader names (higher priority than rewards)
+      for (const u of t.finishRewards?.offerUnlock ?? []) {
+        const itemBase = scoreValue(u.item.name, 1.0);
+        if (itemBase >= 0.5) {
+          consider(
+            `Unlock: ${u.item.name} @ ${u.trader.name} LL${u.level}`,
+            itemBase,
+            u.item.iconLink,
+            "unlock",
+          );
+        }
+        const traderBase = scoreValue(u.trader.name, 0.95);
+        if (traderBase >= 0.5) {
+          consider(
+            `Unlock: ${u.item.name} @ ${u.trader.name} LL${u.level}`,
+            traderBase,
+            u.item.iconLink,
+            "unlock",
+          );
+        }
       }
 
       // Map or trader names as a fallback context
@@ -373,7 +395,7 @@ export function CommandMenu(props: CommandMenuProps) {
       context: string;
       score: number;
       icon?: string;
-      contextType: "generic" | "objective" | "reward";
+      contextType: "generic" | "objective" | "reward" | "unlock";
     }[] = [];
     for (const t of tasks) {
       const m = findBestMatch(t);
@@ -387,7 +409,7 @@ export function CommandMenu(props: CommandMenuProps) {
         });
     }
     out.sort(
-      (a, b) => b.score - a.score || a.task.name.localeCompare(b.task.name)
+      (a, b) => b.score - a.score || a.task.name.localeCompare(b.task.name),
     );
     return out.slice(0, 15);
   }, [query, tasks]);
@@ -398,7 +420,7 @@ export function CommandMenu(props: CommandMenuProps) {
         ...match,
         value: `task:${match.task.id} ${match.task.name} ${match.context}`,
       })),
-    [taskMatches]
+    [taskMatches],
   );
 
   const itemFlags = React.useMemo(() => {
@@ -435,8 +457,8 @@ export function CommandMenu(props: CommandMenuProps) {
     return achievements
       .filter((a) =>
         [a.name, a.description ?? "", a.rarity ?? "", a.side ?? ""].some((v) =>
-          v.toLowerCase().includes(queryLower)
-        )
+          v.toLowerCase().includes(queryLower),
+        ),
       )
       .slice(0, 10);
   }, [achievements, hasQuery, queryLower]);
@@ -449,7 +471,7 @@ export function CommandMenu(props: CommandMenuProps) {
           a.side ?? ""
         }`,
       })),
-    [achievementMatches]
+    [achievementMatches],
   );
 
   const itemMatches = React.useMemo(() => {
@@ -467,7 +489,7 @@ export function CommandMenu(props: CommandMenuProps) {
         flags: itemFlags.get(i.name.toLowerCase()),
         value: `item:${i.name} ${i.name}`,
       })),
-    [itemMatches, itemFlags]
+    [itemMatches, itemFlags],
   );
 
   const hideoutEntries = React.useMemo<HideoutMatchEntry[]>(
@@ -476,7 +498,7 @@ export function CommandMenu(props: CommandMenuProps) {
         ...m,
         value: `hideout:${m.station}:${m.level}:${m.name} ${m.name}`,
       })),
-    [hideoutMatches]
+    [hideoutMatches],
   );
 
   const previewIndex = React.useMemo(() => {
@@ -544,7 +566,7 @@ export function CommandMenu(props: CommandMenuProps) {
       document.removeEventListener("keydown", down);
       window.removeEventListener(
         "open-command-menu",
-        openHandler as EventListener
+        openHandler as EventListener,
       );
     };
   }, []);
@@ -652,7 +674,7 @@ export function CommandMenu(props: CommandMenuProps) {
         const entry = acc.find(
           (item) =>
             item.action === group.action &&
-            item.firRequired === group.firRequired
+            item.firRequired === group.firRequired,
         );
         const items = group.items.map((item) => ({
           label: item.label,
@@ -685,7 +707,7 @@ export function CommandMenu(props: CommandMenuProps) {
       }));
       const renderObjectiveItem = (
         item: { label: string; icon?: string },
-        key: React.Key
+        key: React.Key,
       ) => (
         <div
           key={key}
@@ -693,7 +715,11 @@ export function CommandMenu(props: CommandMenuProps) {
         >
           <div className="h-8 w-8 rounded-md bg-black/20 flex items-center justify-center p-1 border border-border/20 group-hover/item:border-border/40">
             {item.icon ? (
-              <img src={item.icon} alt="" className="h-full w-full object-contain" />
+              <img
+                src={item.icon}
+                alt=""
+                className="h-full w-full object-contain"
+              />
             ) : (
               <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
             )}
@@ -738,7 +764,9 @@ export function CommandMenu(props: CommandMenuProps) {
                   <div
                     className={cn(
                       "h-1.5 w-1.5 rounded-full",
-                      statusLabel === "Done" ? "bg-emerald-500" : "bg-amber-500"
+                      statusLabel === "Done"
+                        ? "bg-emerald-500"
+                        : "bg-amber-500",
                     )}
                   />
                   <p className="text-xs font-bold">{statusLabel}</p>
@@ -785,19 +813,57 @@ export function CommandMenu(props: CommandMenuProps) {
                 </div>
 
                 <div className="space-y-4">
-                  {task.isEvent ? (
-                    objectiveGroups
-                      .filter(
-                        (group) =>
-                          (group.description && group.description.length > 0) ||
-                          group.items.length > 0
-                      )
-                      .map((group, gIdx) => (
-                        <div key={gIdx} className="space-y-2">
-                          {group.description && (
-                            <div className="flex items-center gap-2 px-1 text-xs text-foreground/90">
-                              <span className="font-semibold">
-                                {group.description}
+                  {task.isEvent
+                    ? objectiveGroups
+                        .filter(
+                          (group) =>
+                            (group.description &&
+                              group.description.length > 0) ||
+                            group.items.length > 0,
+                        )
+                        .map((group, gIdx) => (
+                          <div key={gIdx} className="space-y-2">
+                            {group.description && (
+                              <div className="flex items-center gap-2 px-1 text-xs text-foreground/90">
+                                <span className="font-semibold">
+                                  {group.description}
+                                </span>
+                                {group.firRequired && (
+                                  <ContextChip
+                                    label="FiR"
+                                    tone="info"
+                                    className="text-[8px] px-1 py-0 h-4"
+                                  />
+                                )}
+                              </div>
+                            )}
+                            <div className="grid gap-2">
+                              {group.items.length > 0
+                                ? group.items.map((item, iIdx) =>
+                                    renderObjectiveItem(item, iIdx),
+                                  )
+                                : group.description && (
+                                    <div className="p-3 rounded-lg bg-secondary/10 border border-border/20 flex items-start gap-3">
+                                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
+                                      <span className="text-xs text-muted-foreground italic font-medium leading-relaxed">
+                                        {group.description}
+                                      </span>
+                                    </div>
+                                  )}
+                            </div>
+                          </div>
+                        ))
+                    : combinedObjectiveGroups
+                        .filter(
+                          (group) =>
+                            group.items.length > 0 ||
+                            group.descriptions.length > 0,
+                        )
+                        .map((group, gIdx) => (
+                          <div key={gIdx} className="space-y-2">
+                            <div className="flex items-center gap-2 px-1">
+                              <span className="text-xs font-bold text-foreground/90">
+                                {group.action}
                               </span>
                               {group.firRequired && (
                                 <ContextChip
@@ -807,64 +873,25 @@ export function CommandMenu(props: CommandMenuProps) {
                                 />
                               )}
                             </div>
-                          )}
-                          <div className="grid gap-2">
-                            {group.items.length > 0
-                              ? group.items.map((item, iIdx) =>
-                                  renderObjectiveItem(item, iIdx)
-                                )
-                              : group.description && (
-                                  <div className="p-3 rounded-lg bg-secondary/10 border border-border/20 flex items-start gap-3">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
-                                    <span className="text-xs text-muted-foreground italic font-medium leading-relaxed">
-                                      {group.description}
-                                    </span>
-                                  </div>
-                                )}
+                            <div className="grid gap-2">
+                              {group.items.length > 0
+                                ? group.items.map((item, iIdx) =>
+                                    renderObjectiveItem(item, iIdx),
+                                  )
+                                : group.descriptions.map((desc, dIdx) => (
+                                    <div
+                                      key={dIdx}
+                                      className="p-3 rounded-lg bg-secondary/10 border border-border/20 flex items-start gap-3"
+                                    >
+                                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
+                                      <span className="text-xs text-muted-foreground italic font-medium leading-relaxed">
+                                        {desc}
+                                      </span>
+                                    </div>
+                                  ))}
+                            </div>
                           </div>
-                        </div>
-                      ))
-                  ) : (
-                    combinedObjectiveGroups
-                      .filter(
-                        (group) =>
-                          group.items.length > 0 ||
-                          group.descriptions.length > 0
-                      )
-                      .map((group, gIdx) => (
-                        <div key={gIdx} className="space-y-2">
-                          <div className="flex items-center gap-2 px-1">
-                            <span className="text-xs font-bold text-foreground/90">
-                              {group.action}
-                            </span>
-                            {group.firRequired && (
-                              <ContextChip
-                                label="FiR"
-                                tone="info"
-                                className="text-[8px] px-1 py-0 h-4"
-                              />
-                            )}
-                          </div>
-                          <div className="grid gap-2">
-                            {group.items.length > 0
-                              ? group.items.map((item, iIdx) =>
-                                  renderObjectiveItem(item, iIdx)
-                                )
-                              : group.descriptions.map((desc, dIdx) => (
-                                  <div
-                                    key={dIdx}
-                                    className="p-3 rounded-lg bg-secondary/10 border border-border/20 flex items-start gap-3"
-                                  >
-                                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 mt-1.5 shrink-0" />
-                                    <span className="text-xs text-muted-foreground italic font-medium leading-relaxed">
-                                      {desc}
-                                    </span>
-                                  </div>
-                                ))}
-                          </div>
-                        </div>
-                      ))
-                  )}
+                        ))}
                 </div>
               </div>
             )}
@@ -903,6 +930,60 @@ export function CommandMenu(props: CommandMenuProps) {
                 </div>
               </div>
             )}
+
+            {task.finishRewards?.offerUnlock &&
+              task.finishRewards.offerUnlock.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-[1px] flex-1 bg-border/50" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-amber-500/80">
+                      Unlocks
+                    </span>
+                    <div className="h-[1px] flex-1 bg-border/50" />
+                  </div>
+                  <div className="grid gap-2">
+                    {task.finishRewards.offerUnlock.map((unlock, uIdx) => (
+                      <div
+                        key={`unlock-${uIdx}`}
+                        className="flex items-center gap-3 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10"
+                      >
+                        {/* Item Icon */}
+                        <div className="h-10 w-10 shrink-0 rounded-md bg-black/20 flex items-center justify-center p-1 border border-amber-500/20">
+                          {unlock.item.iconLink ? (
+                            <img
+                              src={unlock.item.iconLink}
+                              alt=""
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <div className="h-2 w-2 rounded-full bg-amber-500/40" />
+                          )}
+                        </div>
+                        {/* Trader Icon (smaller, overlaid) */}
+                        <div className="h-6 w-6 shrink-0 rounded-full bg-black/40 flex items-center justify-center overflow-hidden -ml-5 ring-2 ring-amber-500/10 z-10">
+                          {unlock.trader.imageLink ? (
+                            <img
+                              src={unlock.trader.imageLink}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-1.5 w-1.5 rounded-full bg-amber-500/60" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-foreground/90 truncate">
+                            {unlock.item.name}
+                          </div>
+                          <div className="text-[10px] text-amber-500/80 font-medium">
+                            {unlock.trader.name} LL{unlock.level}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       );
@@ -984,7 +1065,7 @@ export function CommandMenu(props: CommandMenuProps) {
                   "h-16 w-16 shrink-0 rounded-2xl flex items-center justify-center border-2 rotate-3 shadow-lg transition-transform hover:rotate-0 duration-500",
                   isLegendary
                     ? "bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-amber-500/10"
-                    : "bg-sky-500/10 border-sky-500/30 text-sky-500 shadow-sky-500/10"
+                    : "bg-sky-500/10 border-sky-500/30 text-sky-500 shadow-sky-500/10",
                 )}
               >
                 <span className="text-2xl font-black italic">A</span>
@@ -1231,14 +1312,15 @@ export function CommandMenu(props: CommandMenuProps) {
                                     scope: "tasks",
                                     taskId: t.id,
                                   },
-                                })
+                                }),
                               );
                             }, 0);
                             setOpen(false);
                           }}
                           className={cn(
                             "py-3",
-                            t.isEvent && "bg-amber-500/10 hover:bg-amber-500/15"
+                            t.isEvent &&
+                              "bg-amber-500/10 hover:bg-amber-500/15",
                           )}
                         >
                           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -1267,7 +1349,7 @@ export function CommandMenu(props: CommandMenuProps) {
                                     "h-1.5 w-1.5 rounded-full",
                                     statusLabel === "Done"
                                       ? "bg-emerald-500/80"
-                                      : "bg-muted-foreground/30"
+                                      : "bg-muted-foreground/30",
                                   )}
                                 />
                               </div>
@@ -1283,7 +1365,9 @@ export function CommandMenu(props: CommandMenuProps) {
                                   contextType === "objective" &&
                                     "text-sky-400/80",
                                   contextType === "reward" &&
-                                    "text-emerald-400/80"
+                                    "text-emerald-400/80",
+                                  contextType === "unlock" &&
+                                    "text-amber-400/80",
                                 )}
                               >
                                 {renderHighlighted(context)}
@@ -1292,7 +1376,7 @@ export function CommandMenu(props: CommandMenuProps) {
                           </div>
                         </CommandItem>
                       );
-                    }
+                    },
                   )}
                 </CommandGroup>
 
@@ -1309,7 +1393,7 @@ export function CommandMenu(props: CommandMenuProps) {
                             window.dispatchEvent(
                               new CustomEvent("taskTracker:globalSearch", {
                                 detail: { term: title, scope: "prestiges" },
-                              })
+                              }),
                             );
                           }, 0);
                           setOpen(false);
@@ -1369,8 +1453,8 @@ export function CommandMenu(props: CommandMenuProps) {
                                               term: m.name,
                                               scope: "hideout",
                                             },
-                                          }
-                                        )
+                                          },
+                                        ),
                                       );
                                     }, 0);
                                     setOpen(false);
@@ -1379,7 +1463,7 @@ export function CommandMenu(props: CommandMenuProps) {
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className="truncate">
                                       {renderHighlighted(
-                                        `${m.name} ×${m.count}`
+                                        `${m.name} ×${m.count}`,
                                       )}
                                     </span>
                                     <div className="ml-auto flex items-center gap-1 shrink-0">
@@ -1391,12 +1475,12 @@ export function CommandMenu(props: CommandMenuProps) {
                                   </div>
                                 </CommandItem>
                               ))}
-                          </CommandGroup>
+                          </CommandGroup>,
                         );
                       }
                       if (idx < arr.length - 1)
                         nodes.push(
-                          <CommandSeparator key={`hideout-sep-${station}`} />
+                          <CommandSeparator key={`hideout-sep-${station}`} />,
                         );
                       return nodes;
                     });
@@ -1413,7 +1497,7 @@ export function CommandMenu(props: CommandMenuProps) {
                           window.dispatchEvent(
                             new CustomEvent("taskTracker:globalSearch", {
                               detail: { term: a.name, scope: "achievements" },
-                            })
+                            }),
                           );
                         }, 0);
                         setOpen(false);
@@ -1432,7 +1516,7 @@ export function CommandMenu(props: CommandMenuProps) {
                                   "h-1.5 w-1.5 rounded-full",
                                   a.rarity.toLowerCase() === "legendary"
                                     ? "bg-amber-400"
-                                    : "bg-sky-400"
+                                    : "bg-sky-400",
                                 )}
                               />
                             )}
@@ -1458,7 +1542,7 @@ export function CommandMenu(props: CommandMenuProps) {
                           window.dispatchEvent(
                             new CustomEvent("taskTracker:globalSearch", {
                               detail: { term: i.name, scope: "items" },
-                            })
+                            }),
                           );
                         }, 0);
                         setOpen(false);

@@ -11,8 +11,6 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "./hooks/use-mobile";
 import { RotateCcw, BarChart3, Search } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { TextShimmerWave } from "@/components/ui/text-shimmer-wave";
 import {
   Task,
   CollectorItemsData,
@@ -22,7 +20,6 @@ import {
 } from "./types";
 import { QuestProgressPanel } from "./components/QuestProgressPanel";
 import { ContentSkeleton } from "./components/ContentSkeleton";
-import { Skeleton } from "@/components/ui/skeleton";
 import SEO from "./components/SEO";
 import {
   taskStorage,
@@ -54,7 +51,6 @@ import {
   fetchOverlay,
   loadCombinedCache,
   isCombinedCacheFresh,
-  type FetchStage,
   buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
@@ -125,69 +121,6 @@ import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { LazyLoadErrorBoundary } from "./components/LazyLoadErrorBoundary";
 import { STORYLINE_QUESTS } from "@/data/storylineQuests";
-
-const LOADING_STAGES = {
-  boot: {
-    title: "INIT::QUEST-CORE v1.0",
-    detail: "BOOTSTRAP SEQUENCE...",
-    progress: 8,
-  },
-  profiles: {
-    title: "SYS::PROFILES",
-    detail: "LOADING USER CONTEXT...",
-    progress: 16,
-  },
-  local: {
-    title: "SYS::LOCAL",
-    detail: "RESTORING SAVED PROGRESS...",
-    progress: 28,
-  },
-  prefs: {
-    title: "SYS::PREFERENCES",
-    detail: "APPLYING USER SETTINGS...",
-    progress: 38,
-  },
-  cacheCheck: {
-    title: "CACHE::CHECK",
-    detail: "VERIFYING LOCAL SNAPSHOT...",
-    progress: 48,
-  },
-  cacheApply: {
-    title: "CACHE::APPLY",
-    detail: "HYDRATING UI FROM CACHE...",
-    progress: 58,
-  },
-  request: {
-    title: "NET::REQUEST",
-    detail: "REQUESTING QUEST PAYLOAD...",
-    progress: 68,
-  },
-  parse: {
-    title: "NET::PARSE",
-    detail: "DECODING API RESPONSE...",
-    progress: 74,
-  },
-  overlayFetch: {
-    title: "NET::OVERLAY",
-    detail: "FETCHING DATA OVERLAY...",
-    progress: 80,
-  },
-  overlayApply: {
-    title: "MERGE::OVERLAY",
-    detail: "APPLYING PATCHES...",
-    progress: 86,
-  },
-  normalize: {
-    title: "MAP::NORMALIZE",
-    detail: "BUILDING MAP INDEX...",
-    progress: 92,
-  },
-  finalize: {
-    title: "SYS::FINALIZE",
-    detail: "FINALIZING SESSION...",
-    progress: 97,
-  },
-} as const;
 
 function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -303,7 +236,7 @@ function App() {
 
     // Log duplicates by ID
     const dupById = Array.from(idCounts.entries()).filter(
-      ([_, v]) => v.count > 1,
+      ([, v]) => v.count > 1,
     );
     if (dupById.length > 0) {
       console.warn("[Duplicate Detection] Tasks with duplicate IDs:", dupById);
@@ -311,7 +244,7 @@ function App() {
 
     // Log duplicates by name (different IDs, same name)
     const dupByName = Array.from(nameCounts.entries()).filter(
-      ([_, v]) => v.count > 1,
+      ([, v]) => v.count > 1,
     );
     if (dupByName.length > 0) {
       console.warn(
@@ -349,9 +282,6 @@ function App() {
   const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadingStage, setLoadingStage] = useState<
-    (typeof LOADING_STAGES)[keyof typeof LOADING_STAGES]
-  >(LOADING_STAGES.boot);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
 
@@ -885,7 +815,6 @@ function App() {
           }
         }
 
-        setLoadingStage(LOADING_STAGES.profiles);
         const ensured = ensureProfiles();
         setProfiles(ensured.profiles);
         setActiveProfileId(ensured.activeId);
@@ -937,7 +866,6 @@ function App() {
           /* ignore legacy migration errors */
         }
 
-        setLoadingStage(LOADING_STAGES.local);
         taskStorage.setProfile(ensured.activeId);
         await taskStorage.init();
         const savedTasks = await taskStorage.loadCompletedTasks();
@@ -971,7 +899,6 @@ function App() {
         );
         setWorkingOnCollectorItems(savedWorkingOnItems.collectorItems);
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
-        setLoadingStage(LOADING_STAGES.prefs);
         // Load player level from user preferences (with migration from localStorage)
         const savedPrefs = await taskStorage.loadUserPreferences();
         let loadedLevel = Number(savedPrefs.playerLevel);
@@ -1002,28 +929,15 @@ function App() {
           setPlayerLevel(1);
         }
 
-        setLoadingStage(LOADING_STAGES.cacheCheck);
         // Load cached API data instantly if present
         const cached = loadCombinedCache();
         if (cached) {
-          setLoadingStage(LOADING_STAGES.cacheApply);
           setAllTasks(cached.tasks.data.tasks);
           setApiCollectorItems(cached.collectorItems);
           setAchievements(cached.achievements.data.achievements);
           setHideoutStations(cached.hideoutStations.data.hideoutStations);
           setIsLoading(false);
         }
-
-        const handleFetchStage = (stage: FetchStage) => {
-          if (stage === "request") setLoadingStage(LOADING_STAGES.request);
-          if (stage === "parse") setLoadingStage(LOADING_STAGES.parse);
-          if (stage === "overlay-fetch")
-            setLoadingStage(LOADING_STAGES.overlayFetch);
-          if (stage === "overlay-apply")
-            setLoadingStage(LOADING_STAGES.overlayApply);
-          if (stage === "normalize") setLoadingStage(LOADING_STAGES.normalize);
-          if (stage === "done") setLoadingStage(LOADING_STAGES.finalize);
-        };
 
         const needsRefresh = !isCombinedCacheFresh();
         if (needsRefresh) {
@@ -1035,7 +949,7 @@ function App() {
               achievements: achievementsData,
               hideoutStations,
               overlay: overlayData,
-            } = await fetchCombinedData(handleFetchStage);
+            } = await fetchCombinedData();
             setAllTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
@@ -1062,7 +976,7 @@ function App() {
               achievements: achievementsData,
               hideoutStations,
               overlay: overlayData,
-            } = await fetchCombinedData(handleFetchStage);
+            } = await fetchCombinedData();
             setAllTasks(tasksData.data.tasks);
             setApiCollectorItems(collectorData);
             setAchievements(achievementsData.data.achievements);
