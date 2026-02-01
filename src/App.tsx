@@ -27,6 +27,7 @@ import {
   migrateDefaultDbIfNeeded,
   ExportImportService,
 } from "./utils/indexedDB";
+import "./utils/debug"; // Registers window.debugTracker() for user support
 import {
   ensureProfiles,
   getProfiles,
@@ -54,6 +55,26 @@ import {
   buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
+
+// Helper to load data with retry logic for Chrome session restore scenarios
+async function loadWithRetry<T>(
+  loadFn: () => Promise<T>,
+  retries = 3,
+  delay = 100
+): Promise<T> {
+  let lastError: Error | undefined;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await loadFn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (i < retries - 1) {
+        await new Promise(r => setTimeout(r, delay * (i + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
 import { Button } from "./components/ui/button";
 import {
   Sheet,
@@ -672,22 +693,45 @@ function App() {
         }
         taskStorage.setProfile(id);
         await taskStorage.init();
-        const savedTasks = await taskStorage.loadCompletedTasks();
-        const savedCollectorItems =
-          await taskStorage.loadCompletedCollectorItems();
-        const savedHideoutItems = await taskStorage.loadCompletedHideoutItems();
-        const savedAchievements = await taskStorage.loadCompletedAchievements();
-        const savedStorylineObjectives =
-          await taskStorage.loadCompletedStorylineObjectives();
-        const savedStorylineMapNodes =
-          await taskStorage.loadCompletedStorylineMapNodes();
-        const savedTaskObjectives =
-          await taskStorage.loadCompletedTaskObjectives();
-        const savedTaskObjectiveItemProgress =
-          await taskStorage.loadTaskObjectiveItemProgress();
-        const savedHideoutItemQuantities =
-          await taskStorage.loadHideoutItemQuantities();
-        const savedWorkingOnItems = await taskStorage.loadWorkingOnItems();
+
+        // Load all data with retry logic for reliability
+        const loadResults = await Promise.allSettled([
+          loadWithRetry(() => taskStorage.loadCompletedTasks()),
+          loadWithRetry(() => taskStorage.loadCompletedCollectorItems()),
+          loadWithRetry(() => taskStorage.loadCompletedHideoutItems()),
+          loadWithRetry(() => taskStorage.loadCompletedAchievements()),
+          loadWithRetry(() => taskStorage.loadCompletedStorylineObjectives()),
+          loadWithRetry(() => taskStorage.loadCompletedStorylineMapNodes()),
+          loadWithRetry(() => taskStorage.loadCompletedTaskObjectives()),
+          loadWithRetry(() => taskStorage.loadTaskObjectiveItemProgress()),
+          loadWithRetry(() => taskStorage.loadHideoutItemQuantities()),
+          loadWithRetry(() => taskStorage.loadWorkingOnItems()),
+        ]);
+
+        const [
+          savedTasksResult,
+          savedCollectorItemsResult,
+          savedHideoutItemsResult,
+          savedAchievementsResult,
+          savedStorylineObjectivesResult,
+          savedStorylineMapNodesResult,
+          savedTaskObjectivesResult,
+          savedTaskObjectiveItemProgressResult,
+          savedHideoutItemQuantitiesResult,
+          savedWorkingOnItemsResult,
+        ] = loadResults;
+
+        const savedTasks = savedTasksResult.status === "fulfilled" ? savedTasksResult.value : new Set<string>();
+        const savedCollectorItems = savedCollectorItemsResult.status === "fulfilled" ? savedCollectorItemsResult.value : new Set<string>();
+        const savedHideoutItems = savedHideoutItemsResult.status === "fulfilled" ? savedHideoutItemsResult.value : new Set<string>();
+        const savedAchievements = savedAchievementsResult.status === "fulfilled" ? savedAchievementsResult.value : new Set<string>();
+        const savedStorylineObjectives = savedStorylineObjectivesResult.status === "fulfilled" ? savedStorylineObjectivesResult.value : new Set<string>();
+        const savedStorylineMapNodes = savedStorylineMapNodesResult.status === "fulfilled" ? savedStorylineMapNodesResult.value : new Set<string>();
+        const savedTaskObjectives = savedTaskObjectivesResult.status === "fulfilled" ? savedTaskObjectivesResult.value : new Set<string>();
+        const savedTaskObjectiveItemProgress = savedTaskObjectiveItemProgressResult.status === "fulfilled" ? savedTaskObjectiveItemProgressResult.value : {};
+        const savedHideoutItemQuantities = savedHideoutItemQuantitiesResult.status === "fulfilled" ? savedHideoutItemQuantitiesResult.value : {};
+        const savedWorkingOnItems = savedWorkingOnItemsResult.status === "fulfilled" ? savedWorkingOnItemsResult.value : { tasks: new Set<string>(), storylineObjectives: new Set<string>(), collectorItems: new Set<string>(), hideoutStations: new Set<string>() };
+
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedHideoutItems(savedHideoutItems);
@@ -868,22 +912,116 @@ function App() {
 
         taskStorage.setProfile(ensured.activeId);
         await taskStorage.init();
-        const savedTasks = await taskStorage.loadCompletedTasks();
+
+        // Load all data with retry logic for Chrome session restore scenarios
+        // This ensures that if IndexedDB isn't immediately ready, we retry
+        const loadResults = await Promise.allSettled([
+          loadWithRetry(() => taskStorage.loadCompletedTasks(), 3, 100),
+          loadWithRetry(() => taskStorage.loadCompletedCollectorItems(), 3, 100),
+          loadWithRetry(() => taskStorage.loadCompletedHideoutItems(), 3, 100),
+          loadWithRetry(() => taskStorage.loadCompletedAchievements(), 3, 100),
+          loadWithRetry(() => taskStorage.loadCompletedStorylineObjectives(), 3, 100),
+          loadWithRetry(() => taskStorage.loadCompletedStorylineMapNodes(), 3, 100),
+          loadWithRetry(() => taskStorage.loadCompletedTaskObjectives(), 3, 100),
+          loadWithRetry(() => taskStorage.loadTaskObjectiveItemProgress(), 3, 100),
+          loadWithRetry(() => taskStorage.loadHideoutItemQuantities(), 3, 100),
+          loadWithRetry(() => taskStorage.loadWorkingOnItems(), 3, 100),
+        ]);
+
+        // Extract results with error logging
+        const [
+          savedTasksResult,
+          savedCollectorItemsResult,
+          savedHideoutItemsResult,
+          savedAchievementsResult,
+          savedStorylineObjectivesResult,
+          savedStorylineMapNodesResult,
+          savedTaskObjectivesResult,
+          savedTaskObjectiveItemProgressResult,
+          savedHideoutItemQuantitiesResult,
+          savedWorkingOnItemsResult,
+        ] = loadResults;
+
+        const savedTasks =
+          savedTasksResult.status === "fulfilled"
+            ? savedTasksResult.value
+            : new Set<string>();
+        if (savedTasksResult.status === "rejected") {
+          console.error("[Init] Failed to load completed tasks:", savedTasksResult.reason);
+        }
+
         const savedCollectorItems =
-          await taskStorage.loadCompletedCollectorItems();
-        const savedHideoutItems = await taskStorage.loadCompletedHideoutItems();
-        const savedAchievements = await taskStorage.loadCompletedAchievements();
+          savedCollectorItemsResult.status === "fulfilled"
+            ? savedCollectorItemsResult.value
+            : new Set<string>();
+        if (savedCollectorItemsResult.status === "rejected") {
+          console.error("[Init] Failed to load collector items:", savedCollectorItemsResult.reason);
+        }
+
+        const savedHideoutItems =
+          savedHideoutItemsResult.status === "fulfilled"
+            ? savedHideoutItemsResult.value
+            : new Set<string>();
+        if (savedHideoutItemsResult.status === "rejected") {
+          console.error("[Init] Failed to load hideout items:", savedHideoutItemsResult.reason);
+        }
+
+        const savedAchievements =
+          savedAchievementsResult.status === "fulfilled"
+            ? savedAchievementsResult.value
+            : new Set<string>();
+        if (savedAchievementsResult.status === "rejected") {
+          console.error("[Init] Failed to load achievements:", savedAchievementsResult.reason);
+        }
+
         const savedStorylineObjectives =
-          await taskStorage.loadCompletedStorylineObjectives();
+          savedStorylineObjectivesResult.status === "fulfilled"
+            ? savedStorylineObjectivesResult.value
+            : new Set<string>();
+        if (savedStorylineObjectivesResult.status === "rejected") {
+          console.error("[Init] Failed to load storyline objectives:", savedStorylineObjectivesResult.reason);
+        }
+
         const savedStorylineMapNodes =
-          await taskStorage.loadCompletedStorylineMapNodes();
+          savedStorylineMapNodesResult.status === "fulfilled"
+            ? savedStorylineMapNodesResult.value
+            : new Set<string>();
+        if (savedStorylineMapNodesResult.status === "rejected") {
+          console.error("[Init] Failed to load storyline map nodes:", savedStorylineMapNodesResult.reason);
+        }
+
         const savedTaskObjectives =
-          await taskStorage.loadCompletedTaskObjectives();
+          savedTaskObjectivesResult.status === "fulfilled"
+            ? savedTaskObjectivesResult.value
+            : new Set<string>();
+        if (savedTaskObjectivesResult.status === "rejected") {
+          console.error("[Init] Failed to load task objectives:", savedTaskObjectivesResult.reason);
+        }
+
         const savedTaskObjectiveItemProgress =
-          await taskStorage.loadTaskObjectiveItemProgress();
+          savedTaskObjectiveItemProgressResult.status === "fulfilled"
+            ? savedTaskObjectiveItemProgressResult.value
+            : {};
+        if (savedTaskObjectiveItemProgressResult.status === "rejected") {
+          console.error("[Init] Failed to load task objective item progress:", savedTaskObjectiveItemProgressResult.reason);
+        }
+
         const savedHideoutItemQuantities =
-          await taskStorage.loadHideoutItemQuantities();
-        const savedWorkingOnItems = await taskStorage.loadWorkingOnItems();
+          savedHideoutItemQuantitiesResult.status === "fulfilled"
+            ? savedHideoutItemQuantitiesResult.value
+            : {};
+        if (savedHideoutItemQuantitiesResult.status === "rejected") {
+          console.error("[Init] Failed to load hideout item quantities:", savedHideoutItemQuantitiesResult.reason);
+        }
+
+        const savedWorkingOnItems =
+          savedWorkingOnItemsResult.status === "fulfilled"
+            ? savedWorkingOnItemsResult.value
+            : { tasks: new Set<string>(), storylineObjectives: new Set<string>(), collectorItems: new Set<string>(), hideoutStations: new Set<string>() };
+        if (savedWorkingOnItemsResult.status === "rejected") {
+          console.error("[Init] Failed to load working on items:", savedWorkingOnItemsResult.reason);
+        }
+
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedHideoutItems(savedHideoutItems);
@@ -899,6 +1037,15 @@ function App() {
         );
         setWorkingOnCollectorItems(savedWorkingOnItems.collectorItems);
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
+
+        console.log("[Init] Data loaded successfully:", {
+          tasks: savedTasks.size,
+          collectorItems: savedCollectorItems.size,
+          hideoutItems: savedHideoutItems.size,
+          achievements: savedAchievements.size,
+          storylineObjectives: savedStorylineObjectives.size,
+          profileId: ensured.activeId,
+        });
         // Load player level from user preferences (with migration from localStorage)
         const savedPrefs = await taskStorage.loadUserPreferences();
         let loadedLevel = Number(savedPrefs.playerLevel);
@@ -1519,19 +1666,38 @@ function App() {
   // Handler for when import completes - reload all data from IndexedDB
   const handleImportComplete = useCallback(async () => {
     try {
-      const savedTasks = await taskStorage.loadCompletedTasks();
-      const savedCollectorItems =
-        await taskStorage.loadCompletedCollectorItems();
-      const savedHideoutItems = await taskStorage.loadCompletedHideoutItems();
-      const savedAchievements = await taskStorage.loadCompletedAchievements();
-      const savedStorylineObjectives =
-        await taskStorage.loadCompletedStorylineObjectives();
-      const savedStorylineMapNodes =
-        await taskStorage.loadCompletedStorylineMapNodes();
-      const savedTaskObjectives =
-        await taskStorage.loadCompletedTaskObjectives();
-      const savedTaskObjectiveItemProgress =
-        await taskStorage.loadTaskObjectiveItemProgress();
+      // Load all data with explicit error handling for each type
+      const loadResults = await Promise.allSettled([
+        taskStorage.loadCompletedTasks(),
+        taskStorage.loadCompletedCollectorItems(),
+        taskStorage.loadCompletedHideoutItems(),
+        taskStorage.loadCompletedAchievements(),
+        taskStorage.loadCompletedStorylineObjectives(),
+        taskStorage.loadCompletedStorylineMapNodes(),
+        taskStorage.loadCompletedTaskObjectives(),
+        taskStorage.loadTaskObjectiveItemProgress(),
+      ]);
+
+      const [
+        savedTasksResult,
+        savedCollectorItemsResult,
+        savedHideoutItemsResult,
+        savedAchievementsResult,
+        savedStorylineObjectivesResult,
+        savedStorylineMapNodesResult,
+        savedTaskObjectivesResult,
+        savedTaskObjectiveItemProgressResult,
+      ] = loadResults;
+
+      const savedTasks = savedTasksResult.status === "fulfilled" ? savedTasksResult.value : new Set<string>();
+      const savedCollectorItems = savedCollectorItemsResult.status === "fulfilled" ? savedCollectorItemsResult.value : new Set<string>();
+      const savedHideoutItems = savedHideoutItemsResult.status === "fulfilled" ? savedHideoutItemsResult.value : new Set<string>();
+      const savedAchievements = savedAchievementsResult.status === "fulfilled" ? savedAchievementsResult.value : new Set<string>();
+      const savedStorylineObjectives = savedStorylineObjectivesResult.status === "fulfilled" ? savedStorylineObjectivesResult.value : new Set<string>();
+      const savedStorylineMapNodes = savedStorylineMapNodesResult.status === "fulfilled" ? savedStorylineMapNodesResult.value : new Set<string>();
+      const savedTaskObjectives = savedTaskObjectivesResult.status === "fulfilled" ? savedTaskObjectivesResult.value : new Set<string>();
+      const savedTaskObjectiveItemProgress = savedTaskObjectiveItemProgressResult.status === "fulfilled" ? savedTaskObjectiveItemProgressResult.value : {};
+
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
       setCompletedHideoutItems(savedHideoutItems);
@@ -1564,20 +1730,38 @@ function App() {
       // Import the data into the new profile
       await ExportImportService.importAllData(data);
 
-      // Load the imported data into state
-      const savedTasks = await taskStorage.loadCompletedTasks();
-      const savedCollectorItems =
-        await taskStorage.loadCompletedCollectorItems();
-      const savedHideoutItems = await taskStorage.loadCompletedHideoutItems();
-      const savedAchievements = await taskStorage.loadCompletedAchievements();
-      const savedStorylineObjectives =
-        await taskStorage.loadCompletedStorylineObjectives();
-      const savedStorylineMapNodes =
-        await taskStorage.loadCompletedStorylineMapNodes();
-      const savedTaskObjectives =
-        await taskStorage.loadCompletedTaskObjectives();
-      const savedTaskObjectiveItemProgress =
-        await taskStorage.loadTaskObjectiveItemProgress();
+      // Load the imported data into state with error handling
+      const loadResults = await Promise.allSettled([
+        taskStorage.loadCompletedTasks(),
+        taskStorage.loadCompletedCollectorItems(),
+        taskStorage.loadCompletedHideoutItems(),
+        taskStorage.loadCompletedAchievements(),
+        taskStorage.loadCompletedStorylineObjectives(),
+        taskStorage.loadCompletedStorylineMapNodes(),
+        taskStorage.loadCompletedTaskObjectives(),
+        taskStorage.loadTaskObjectiveItemProgress(),
+      ]);
+
+      const [
+        savedTasksResult,
+        savedCollectorItemsResult,
+        savedHideoutItemsResult,
+        savedAchievementsResult,
+        savedStorylineObjectivesResult,
+        savedStorylineMapNodesResult,
+        savedTaskObjectivesResult,
+        savedTaskObjectiveItemProgressResult,
+      ] = loadResults;
+
+      const savedTasks = savedTasksResult.status === "fulfilled" ? savedTasksResult.value : new Set<string>();
+      const savedCollectorItems = savedCollectorItemsResult.status === "fulfilled" ? savedCollectorItemsResult.value : new Set<string>();
+      const savedHideoutItems = savedHideoutItemsResult.status === "fulfilled" ? savedHideoutItemsResult.value : new Set<string>();
+      const savedAchievements = savedAchievementsResult.status === "fulfilled" ? savedAchievementsResult.value : new Set<string>();
+      const savedStorylineObjectives = savedStorylineObjectivesResult.status === "fulfilled" ? savedStorylineObjectivesResult.value : new Set<string>();
+      const savedStorylineMapNodes = savedStorylineMapNodesResult.status === "fulfilled" ? savedStorylineMapNodesResult.value : new Set<string>();
+      const savedTaskObjectives = savedTaskObjectivesResult.status === "fulfilled" ? savedTaskObjectivesResult.value : new Set<string>();
+      const savedTaskObjectiveItemProgress = savedTaskObjectiveItemProgressResult.status === "fulfilled" ? savedTaskObjectiveItemProgressResult.value : {};
+
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
       setCompletedHideoutItems(savedHideoutItems);
