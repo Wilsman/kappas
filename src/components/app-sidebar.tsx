@@ -12,6 +12,8 @@ import {
   Home,
   Map,
   Target,
+  Bug,
+  StickyNote,
 } from "lucide-react";
 
 import {
@@ -822,8 +824,41 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        {/* Notes Quick Access */}
+        <div className="px-3 py-2 border-t border-sidebar-border/30 group-data-[collapsible=icon]:hidden">
+          <button
+            onClick={() => {
+              // Open notes modal/sheet
+              window.dispatchEvent(new CustomEvent("taskTracker:openNotes"));
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs rounded-md bg-sidebar-accent/50 text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            title="Open notes"
+          >
+            <StickyNote className="h-3.5 w-3.5" />
+            <span>My Notes</span>
+            <span className="ml-auto text-[10px] text-muted-foreground">Ctrl+Shift+U</span>
+          </button>
+        </div>
+        {/* Debug Export - Support Section */}
+        <div className="px-3 py-2 border-t border-sidebar-border/30 group-data-[collapsible=icon]:hidden">
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined" && "debugTracker" in window) {
+                (window as Window & { debugTracker: () => Promise<void> }).debugTracker();
+              }
+            }}
+            className="flex w-full items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] rounded-md bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors border border-amber-500/20"
+            title="Export debug info to help diagnose issues"
+          >
+            <Bug className="h-3 w-3" />
+            <span>Export Debug Data</span>
+          </button>
+          <p className="mt-1.5 text-[9px] text-center text-muted-foreground/60">
+            Having issues? Export debug info and share with support
+          </p>
+        </div>
         {/* Discord Button */}
-        <div className="flex items-center justify-center group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center justify-center pt-1 pb-2 group-data-[collapsible=icon]:hidden">
           <a
             href="https://discord.com/invite/3dFmr5qaJK"
             rel="nofollow noreferrer"
