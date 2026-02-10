@@ -41,3 +41,6 @@ deploy.md
 
 # Auto Claude data directory
 .auto-claude/
+
+# Local agent skills directories
+skills/

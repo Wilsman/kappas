@@ -410,6 +410,7 @@ function App() {
     "selector" | "ending" | "fullMap"
   >("selector");
   const [selectedEndingId, setSelectedEndingId] = useState<string | null>(null);
+  const [isRouteInitialized, setIsRouteInitialized] = useState(false);
 
   // Lightweight client-side routing for deep links like /Items/CollectorItems?search=...
   function normalizePath(pathname: string) {
@@ -489,6 +490,7 @@ function App() {
     if (/^\/(quests\/(checklist)?)\/?$/i.test(initialPathname)) {
       window.history.replaceState(null, "", `/${initialSearch}`);
     }
+    setIsRouteInitialized(true);
     const onPop = () => applyFromLocation();
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -497,6 +499,8 @@ function App() {
 
   // When state changes via UI, update the path (preserving existing query string like ?search=...)
   useEffect(() => {
+    if (!isRouteInitialized) return;
+
     let nextPath = "/";
     if (viewMode === "grouped") {
       // Default checklist view lives at root
@@ -537,7 +541,14 @@ function App() {
       // Clear query string (e.g., ?search=...) when navigating to a new view/tab
       window.history.pushState(null, "", nextPath);
     }
-  }, [viewMode, groupBy, collectorGroupBy, storylineView, selectedEndingId]);
+  }, [
+    isRouteInitialized,
+    viewMode,
+    groupBy,
+    collectorGroupBy,
+    storylineView,
+    selectedEndingId,
+  ]);
 
   // Note: preserve query params (e.g., ?tasksSearch=...) to enable deep links
   // When navigating between views we already replace the path without query above.
