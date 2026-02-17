@@ -43,6 +43,62 @@ describe("TaskStorage - Tasks", () => {
     expect(loaded.has("task-3")).toBe(true);
     expect(loaded.has("task-1")).toBe(false);
   });
+
+  it("should recover tasks from local snapshot when IndexedDB is empty", async () => {
+    const profileId = "snapshot-recovery-profile";
+    const snapshotKey = `taskTracker_completedTasks_snapshot_v1::${profileId}`;
+    localStorage.setItem(snapshotKey, JSON.stringify(["task-1", "task-2"]));
+
+    const session1 = new TaskStorage();
+    session1.setProfile(profileId);
+    await session1.init();
+
+    const loadedFromSnapshot = await session1.loadCompletedTasks();
+    expect(loadedFromSnapshot.size).toBe(2);
+    expect(loadedFromSnapshot.has("task-1")).toBe(true);
+    expect(loadedFromSnapshot.has("task-2")).toBe(true);
+
+    // Confirm reconciliation persisted into IndexedDB.
+    localStorage.removeItem(snapshotKey);
+    const session2 = new TaskStorage();
+    session2.setProfile(profileId);
+    await session2.init();
+    const loadedFromDb = await session2.loadCompletedTasks();
+    expect(loadedFromDb.size).toBe(2);
+    expect(loadedFromDb.has("task-1")).toBe(true);
+    expect(loadedFromDb.has("task-2")).toBe(true);
+  });
+
+  it("should treat snapshot as latest state and reconcile stale IndexedDB task data", async () => {
+    const profileId = "snapshot-authoritative-profile";
+    const snapshotKey = `taskTracker_completedTasks_snapshot_v1::${profileId}`;
+
+    const session1 = new TaskStorage();
+    session1.setProfile(profileId);
+    await session1.init();
+    await session1.saveCompletedTasks(new Set(["task-a", "task-b"]));
+
+    // Simulate a newer UI state where task-b was unchecked before refresh.
+    localStorage.setItem(snapshotKey, JSON.stringify(["task-a"]));
+
+    const session2 = new TaskStorage();
+    session2.setProfile(profileId);
+    await session2.init();
+    const reconciled = await session2.loadCompletedTasks();
+    expect(reconciled.size).toBe(1);
+    expect(reconciled.has("task-a")).toBe(true);
+    expect(reconciled.has("task-b")).toBe(false);
+
+    // Confirm stale DB data was corrected.
+    localStorage.removeItem(snapshotKey);
+    const session3 = new TaskStorage();
+    session3.setProfile(profileId);
+    await session3.init();
+    const afterReconcile = await session3.loadCompletedTasks();
+    expect(afterReconcile.size).toBe(1);
+    expect(afterReconcile.has("task-a")).toBe(true);
+    expect(afterReconcile.has("task-b")).toBe(false);
+  });
 });
 
 describe("TaskStorage - Collector Items", () => {

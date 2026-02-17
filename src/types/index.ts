@@ -2,6 +2,7 @@ import { TraderName } from "../data/traders";
 
 export interface Task {
   id: string;
+  experience?: number;
   minPlayerLevel: number;
   factionName?: string | null;
   taskRequirements: TaskRequirement[];
@@ -25,8 +26,14 @@ export interface Task {
     items: RewardItem[];
   };
   finishRewards?: {
-    items: RewardItem[];
+    items?: RewardItem[];
     offerUnlock?: OfferUnlock[];
+    traderStanding?: TraderStandingReward[];
+    customization?: TaskCustomizationReward[];
+    achievement?: TaskAchievementReward[];
+    skillLevelReward?: TaskSkillLevelReward[];
+    traderUnlock?: TaskTraderUnlockReward[];
+    craftUnlock?: TaskCraftUnlockReward[];
   };
 }
 
@@ -47,7 +54,9 @@ export interface TaskObjective {
 
 export interface RewardItem {
   item: {
+    id?: string;
     name: string;
+    shortName?: string;
     iconLink?: string;
   };
   count: number;
@@ -55,14 +64,65 @@ export interface RewardItem {
 
 export interface OfferUnlock {
   item: {
+    id?: string;
     name: string;
+    shortName?: string;
     iconLink?: string;
   };
   trader: {
+    id?: string;
     name: string;
     imageLink?: string;
   };
   level: number;
+}
+
+export interface TraderStandingReward {
+  trader?: {
+    id?: string;
+    name?: TraderName;
+    imageLink?: string;
+  };
+  standing?: number;
+}
+
+export interface TaskCustomizationReward {
+  id?: string;
+  name: string;
+  customizationType?: string;
+  customizationTypeName?: string;
+  imageLink?: string;
+}
+
+export interface TaskAchievementReward {
+  id?: string;
+  name: string;
+  description?: string;
+  imageLink?: string;
+}
+
+export interface TaskSkillLevelReward {
+  name?: string;
+  level?: number;
+  skill?: {
+    id?: string;
+    name?: string;
+  };
+}
+
+export interface TaskTraderUnlockReward {
+  id?: string;
+  name: string;
+  imageLink?: string;
+}
+
+export interface TaskCraftUnlockReward {
+  id?: string;
+  level?: number;
+  station?: {
+    name: string;
+    imageLink?: string;
+  };
 }
 
 export interface TaskRequirement {
@@ -221,21 +281,31 @@ export interface TaskAdd {
   id: string;
   name: string;
   wikiLink?: string;
+  minPlayerLevel?: number;
+  factionName?: string | null;
   trader: {
     id?: string;
     name: TraderName;
   };
+  map?: { id?: string; name: string } | null;
   maps?: Array<{ id: string; name: string }>;
   kappaRequired?: boolean;
+  lightkeeperRequired?: boolean;
   taskRequirements?: TaskRequirement[];
   objectives?: TaskAddObjective[];
   experience?: number;
   finishRewards?: {
     items?: TaskAddRewardItem[];
+    offerUnlock?: OfferUnlock[];
     traderStanding?: Array<{
       trader?: { id?: string; name?: TraderName };
       standing?: number;
     }>;
+    customization?: TaskCustomizationReward[];
+    achievement?: TaskAchievementReward[];
+    skillLevelReward?: TaskSkillLevelReward[];
+    traderUnlock?: TaskTraderUnlockReward[];
+    craftUnlock?: TaskCraftUnlockReward[];
   };
 }
 
@@ -247,6 +317,7 @@ export interface TaskAddObjective {
   markerItem?: { id?: string; name: string; shortName?: string };
   items?: Array<{ id?: string; name: string; shortName?: string }>;
   count?: number;
+  foundInRaid?: boolean;
 }
 
 export interface TaskAddRewardItem {

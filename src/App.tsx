@@ -2140,6 +2140,7 @@ function App() {
                             activeProfileFaction ?? "none"
                           }`}
                           tasks={tasksWithEvents}
+                          achievements={achievements}
                           completedTasks={completedTasks}
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}

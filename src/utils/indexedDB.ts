@@ -14,6 +14,44 @@ const USER_PREFS_STORE = "userPreferences";
 const WORKING_ON_STORE = "workingOnItems";
 const TASK_OBJECTIVES_STORE = "completedTaskObjectives";
 const TASK_OBJECTIVE_ITEM_PROGRESS_STORE = "taskObjectiveItemProgress";
+const TASKS_SNAPSHOT_KEY = "taskTracker_completedTasks_snapshot_v1";
+
+function getTaskSnapshotStorageKey(profileId: string): string {
+  return `${TASKS_SNAPSHOT_KEY}::${profileId || "default"}`;
+}
+
+function writeTaskSnapshot(profileId: string, tasks: Set<string>): void {
+  try {
+    localStorage.setItem(
+      getTaskSnapshotStorageKey(profileId),
+      JSON.stringify(Array.from(tasks))
+    );
+  } catch {
+    /* ignore localStorage errors */
+  }
+}
+
+function readTaskSnapshot(profileId: string): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(getTaskSnapshotStorageKey(profileId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return new Set(
+      parsed.filter((id): id is string => typeof id === "string" && id.length > 0)
+    );
+  } catch {
+    return null;
+  }
+}
+
+function areStringSetsEqual(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) return false;
+  }
+  return true;
+}
 
 // User preferences interface for export/import
 export interface UserPreferences {
@@ -26,7 +64,13 @@ export interface UserPreferences {
 
 export class TaskStorage {
   private db: IDBDatabase | null = null;
-  private profileId: string = "default";
+  private profileId: string = (() => {
+    try {
+      return localStorage.getItem("taskTracker_activeProfile_v1") || "default";
+    } catch {
+      return "default";
+    }
+  })();
 
   getProfileId(): string {
     return this.profileId;
@@ -112,6 +156,9 @@ export class TaskStorage {
   }
 
   async saveCompletedTasks(completedTasks: Set<string>): Promise<void> {
+    // Write-through snapshot to survive abrupt page refresh before IndexedDB commits.
+    writeTaskSnapshot(this.profileId, completedTasks);
+
     if (!this.db) await this.init();
     if (!this.db) return;
 
@@ -143,11 +190,28 @@ export class TaskStorage {
       const request = store.getAll();
 
       request.onsuccess = () => {
-        const completedTasks = new Set<string>();
-        request.result.forEach((item: { id: string }) => {
-          completedTasks.add(item.id);
-        });
-        resolve(completedTasks);
+        void (async () => {
+          const completedTasks = new Set<string>();
+          request.result.forEach((item: { id: string }) => {
+            completedTasks.add(item.id);
+          });
+
+          const snapshotTasks = readTaskSnapshot(this.profileId);
+          if (!snapshotTasks) {
+            resolve(completedTasks);
+            return;
+          }
+
+          // Snapshot is authoritative for latest UI state; reconcile DB if needed.
+          if (!areStringSetsEqual(snapshotTasks, completedTasks)) {
+            try {
+              await this.saveCompletedTasks(snapshotTasks);
+            } catch {
+              /* ignore reconciliation errors */
+            }
+          }
+          resolve(snapshotTasks);
+        })();
       };
       request.onerror = () => reject(request.error);
     });
@@ -1058,13 +1122,8 @@ export async function migrateLegacyDataIfNeeded(
 export async function migrateDefaultDbIfNeeded(
   targetProfileId: string
 ): Promise<void> {
-  // Skip if already migrated or if target is "default" (would be same DB)
+  // Skip if target is "default" (would be same DB)
   if (targetProfileId === "default") return;
-  try {
-    if (localStorage.getItem(MIGRATION_DEFAULT_FLAG) === "1") return;
-  } catch {
-    // continue
-  }
 
   // Check if the default DB exists and has data
   const defaultDbExists = await new Promise<boolean>((resolve) => {

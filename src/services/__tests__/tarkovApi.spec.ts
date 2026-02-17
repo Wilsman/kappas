@@ -123,6 +123,13 @@ describe('fetchCombinedData', () => {
     expect(body.query).toContain('tasks');
     expect(body.query).toContain('achievements');
     expect(body.query).toContain('hideoutStations');
+    expect(body.query).toContain('experience');
+    expect(body.query).toContain('traderStanding');
+    expect(body.query).toContain('skillLevelReward');
+    expect(body.query).toContain('traderUnlock');
+    expect(body.query).toContain('craftUnlock');
+    expect(body.query).toContain('customization');
+    expect(body.query).toContain('achievement');
   });
 
   it('throws on HTTP error', async () => {

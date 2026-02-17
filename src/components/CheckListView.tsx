@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { useQueryState } from "nuqs";
-import { Task } from "../types";
+import { Achievement, Task } from "../types";
 import { Input } from "./ui/input";
 import { Checkbox } from "./ui/checkbox";
 import { Progress } from "./ui/progress";
@@ -66,6 +66,7 @@ import {
 
 interface CheckListViewProps {
   tasks: Task[];
+  achievements: Achievement[];
   completedTasks: Set<string>;
   hiddenTraders: Set<string>;
   showKappa: boolean;
@@ -88,6 +89,7 @@ interface CheckListViewProps {
 
 export const CheckListView: React.FC<CheckListViewProps> = ({
   tasks,
+  achievements,
   completedTasks,
   hiddenTraders,
   showKappa,
@@ -212,6 +214,22 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       // ignore
     });
   }, [showEvents, prefsLoaded]);
+
+  const achievementById = useMemo(() => {
+    const map = new Map<string, Achievement>();
+    achievements.forEach((achievement) => {
+      map.set(achievement.id, achievement);
+    });
+    return map;
+  }, [achievements]);
+
+  const achievementByName = useMemo(() => {
+    const map = new Map<string, Achievement>();
+    achievements.forEach((achievement) => {
+      map.set(achievement.name.toLowerCase(), achievement);
+    });
+    return map;
+  }, [achievements]);
 
   // Listen for global reset event to reset enableLevelFilter
   useEffect(() => {
@@ -904,14 +922,61 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 border-t">
-                <div className="pr-2 space-y-1">
-                  {sortedGroupTasks.map((task) => {
-                    const isCompleted = completedTasks.has(task.id);
-                    return (
-                      <div
-                        key={task.id}
-                        ref={(el) => itemRefs.current.set(task.id, el)}
-                      >
+                  <div className="pr-2 space-y-1">
+                    {sortedGroupTasks.map((task) => {
+                      const isCompleted = completedTasks.has(task.id);
+                      const rewardItems = [
+                        ...(task.startRewards?.items ?? []),
+                        ...(task.finishRewards?.items ?? []),
+                      ];
+                      const traderStandingRewards = (
+                        task.finishRewards?.traderStanding ?? []
+                      ).filter(
+                        (rep) =>
+                          typeof rep.standing === "number" && !!rep.trader?.name,
+                      );
+                      const skillLevelRewards = (
+                        task.finishRewards?.skillLevelReward ?? []
+                      ).filter(
+                        (skill) =>
+                          typeof skill.level === "number" &&
+                          !!(skill.name || skill.skill?.name),
+                      );
+                      const traderUnlockRewards = (
+                        task.finishRewards?.traderUnlock ?? []
+                      ).filter((entry) => !!entry.name);
+                      const customizationRewards = (
+                        task.finishRewards?.customization ?? []
+                      ).filter((entry) => !!entry.name);
+                      const achievementRewards = (
+                        task.finishRewards?.achievement ?? []
+                      ).filter((entry) => !!entry.name);
+                      const achievementRewardBadges = achievementRewards.map(
+                        (entry) => {
+                          const match =
+                            (entry.id ? achievementById.get(entry.id) : undefined) ??
+                            achievementByName.get(entry.name.toLowerCase());
+                          return {
+                            ...entry,
+                            imageLink: entry.imageLink ?? match?.imageLink,
+                          };
+                        },
+                      );
+                      const hasExperienceReward =
+                        typeof task.experience === "number" && task.experience > 0;
+                      const hasAnyRewards =
+                        rewardItems.length > 0 ||
+                        hasExperienceReward ||
+                        traderStandingRewards.length > 0 ||
+                        skillLevelRewards.length > 0 ||
+                        traderUnlockRewards.length > 0 ||
+                        customizationRewards.length > 0 ||
+                        achievementRewardBadges.length > 0;
+                      return (
+                        <div
+                          key={task.id}
+                          ref={(el) => itemRefs.current.set(task.id, el)}
+                        >
                         <Collapsible
                           open={selectedTaskId === task.id}
                           onOpenChange={(open) => {
@@ -1322,10 +1387,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                   </div>
                                 )}
 
-                              {((task.startRewards?.items &&
-                                task.startRewards.items.length > 0) ||
-                                (task.finishRewards?.items &&
-                                  task.finishRewards.items.length > 0)) && (
+                              {hasAnyRewards && (
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2">
                                     <div className="h-[1px] flex-1 bg-border/50" />
@@ -1334,65 +1396,105 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                     </span>
                                     <div className="h-[1px] flex-1 bg-border/50" />
                                   </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {[
-                                      ...(task.startRewards?.items ?? []),
-                                      ...(task.finishRewards?.items ?? []),
-                                    ].map((reward, index) => (
-                                      <div
-                                        key={index}
-                                        className="flex items-center gap-2 p-2 rounded-lg bg-sky-500/5 border border-sky-500/10"
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {traderStandingRewards.map((rep, index) => {
+                                      const standing = rep.standing ?? 0;
+                                      const sign = standing > 0 ? "+" : "";
+                                      return (
+                                        <span
+                                          key={`rep-${rep.trader?.name}-${index}`}
+                                          className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300"
+                                        >
+                                          {`${sign}${standing.toFixed(2)} ${rep.trader?.name}`}
+                                        </span>
+                                      );
+                                    })}
+                                    {skillLevelRewards.map((skill, index) => (
+                                      <span
+                                        key={`skill-${skill.name ?? skill.skill?.name}-${index}`}
+                                        className="inline-flex items-center gap-1 rounded-md border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300"
                                       >
-                                        <div className="h-8 w-8 shrink-0 rounded-md bg-black/20 flex items-center justify-center p-1 border border-sky-500/20">
-                                          {reward.item.iconLink ? (
-                                            <TooltipProvider
-                                              delayDuration={150}
-                                            >
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <img
-                                                    src={reward.item.iconLink}
-                                                    alt={reward.item.name}
-                                                    className="h-full w-full object-contain"
-                                                    loading="lazy"
-                                                  />
-                                                </TooltipTrigger>
-                                                <TooltipContent
-                                                  side="top"
-                                                  align="center"
-                                                  className="bg-background text-foreground p-2 shadow-md border"
-                                                >
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <img
-                                                      src={reward.item.iconLink}
-                                                      alt={reward.item.name}
-                                                      className="h-16 w-16 object-contain"
-                                                      loading="lazy"
-                                                    />
-                                                    <span className="text-xs">
-                                                      {reward.item.name}
-                                                    </span>
-                                                  </div>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          ) : (
-                                            <div className="h-2 w-2 rounded-full bg-sky-500/40" />
+                                        +{skill.level}{" "}
+                                        {skill.name || skill.skill?.name}
+                                      </span>
+                                    ))}
+                                    {hasExperienceReward && (
+                                      <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                        {task.experience?.toLocaleString()} XP
+                                      </span>
+                                    )}
+                                    {traderUnlockRewards.map((entry, index) => (
+                                      <span
+                                        key={`trader-unlock-${entry.id ?? entry.name}-${index}`}
+                                        className="inline-flex items-center gap-1 rounded-md border border-orange-500/25 bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-orange-300"
+                                      >
+                                        {entry.imageLink && (
+                                          <img
+                                            src={entry.imageLink}
+                                            alt={entry.name}
+                                            className="h-3.5 w-3.5 rounded-full object-cover"
+                                            loading="lazy"
+                                          />
+                                        )}
+                                        Unlock {entry.name}
+                                      </span>
+                                    ))}
+                                    {achievementRewardBadges.map(
+                                      (achievement, index) => (
+                                        <span
+                                          key={`achievement-${achievement.id ?? achievement.name}-${index}`}
+                                          className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300"
+                                        >
+                                          {achievement.imageLink && (
+                                            <img
+                                              src={achievement.imageLink}
+                                              alt={achievement.name}
+                                              className="h-3.5 w-3.5 rounded-sm object-contain"
+                                              loading="lazy"
+                                            />
                                           )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="text-xs font-medium text-foreground/90 truncate">
-                                            {reward.item.name}
-                                          </div>
-                                          {reward.count > 1 && (
-                                            <div className="text-[10px] text-sky-500/80 font-medium">
-                                              ×{reward.count}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
+                                          {achievement.name}
+                                        </span>
+                                      ),
+                                    )}
+                                    {customizationRewards.map((entry, index) => (
+                                      <span
+                                        key={`customization-${entry.id ?? entry.name}-${index}`}
+                                        className="inline-flex items-center gap-1 rounded-md border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-300"
+                                      >
+                                        {entry.name}
+                                      </span>
                                     ))}
                                   </div>
+                                  {rewardItems.length > 0 && (
+                                    <div className="grid gap-1.5 sm:grid-cols-2">
+                                      {rewardItems.map((reward, index) => (
+                                        <div
+                                          key={`reward-item-${index}`}
+                                          className="flex items-center gap-2 rounded-md border border-sky-500/15 bg-sky-500/5 px-2 py-1"
+                                        >
+                                          <div className="h-5 w-5 shrink-0 rounded-sm bg-black/20 p-0.5 flex items-center justify-center">
+                                            {reward.item.iconLink ? (
+                                              <img
+                                                src={reward.item.iconLink}
+                                                alt={reward.item.name}
+                                                className="h-full w-full object-contain"
+                                                loading="lazy"
+                                              />
+                                            ) : (
+                                              <div className="h-1.5 w-1.5 rounded-full bg-sky-500/40" />
+                                            )}
+                                          </div>
+                                          <span className="min-w-0 truncate text-[11px] text-sky-100/90">
+                                            {reward.item.name}
+                                            {reward.count > 1
+                                              ? ` x${reward.count.toLocaleString()}`
+                                              : ""}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 

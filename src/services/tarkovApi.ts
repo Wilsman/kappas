@@ -247,10 +247,14 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
         maps: objective.maps?.map((map) => ({ name: map.name })),
         items: items.length > 0 ? items : undefined,
         count: objective.count,
+        foundInRaid: objective.foundInRaid,
       } satisfies TaskObjective;
     });
 
     const mapNames = new Set<string>();
+    if (task.map?.name) {
+      mapNames.add(task.map.name);
+    }
     task.maps?.forEach((map) => mapNames.add(map.name));
     task.objectives?.forEach((objective) => {
       objective.maps?.forEach((map) => mapNames.add(map.name));
@@ -261,28 +265,104 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
       .map((reward) => ({
         count: reward.count,
         item: {
+          id: reward.item.id,
           name: reward.item.name,
+          shortName: reward.item.shortName,
           iconLink: buildIconLink(reward.item.id),
         },
       }));
+
+    const offerUnlocks = (task.finishRewards?.offerUnlock ?? [])
+      .filter((unlock) => !!unlock?.item?.name && !!unlock?.trader?.name)
+      .map((unlock) => ({
+        item: {
+          id: unlock.item.id,
+          name: unlock.item.name,
+          shortName: unlock.item.shortName,
+          iconLink: unlock.item.iconLink ?? buildIconLink(unlock.item.id),
+        },
+        trader: {
+          id: unlock.trader.id,
+          name: unlock.trader.name,
+          imageLink: unlock.trader.imageLink,
+        },
+        level: unlock.level,
+      }));
+
+    const traderStanding = (task.finishRewards?.traderStanding ?? [])
+      .filter((entry) => !!entry?.trader?.name && entry.standing != null)
+      .map((entry) => ({
+        trader: {
+          id: entry.trader?.id,
+          name: toTraderName(entry.trader?.name),
+        },
+        standing: entry.standing,
+      }));
+
+    const customizationRewards = (task.finishRewards?.customization ?? []).filter(
+      (entry) => !!entry?.name,
+    );
+    const achievementRewards = (task.finishRewards?.achievement ?? []).filter(
+      (entry) => !!entry?.name,
+    );
+    const skillLevelRewards = (task.finishRewards?.skillLevelReward ?? []).filter(
+      (entry) => !!(entry?.name || entry?.skill?.name),
+    );
+    const traderUnlockRewards = (task.finishRewards?.traderUnlock ?? []).filter(
+      (entry) => !!entry?.name,
+    );
+    const craftUnlockRewards = (task.finishRewards?.craftUnlock ?? []).filter(
+      (entry) => !!entry?.id,
+    );
+
+    const finishRewards =
+      rewardItems.length > 0 ||
+      offerUnlocks.length > 0 ||
+      traderStanding.length > 0 ||
+      customizationRewards.length > 0 ||
+      achievementRewards.length > 0 ||
+      skillLevelRewards.length > 0 ||
+      traderUnlockRewards.length > 0 ||
+      craftUnlockRewards.length > 0
+        ? {
+            ...(rewardItems.length > 0 ? { items: rewardItems } : {}),
+            ...(offerUnlocks.length > 0 ? { offerUnlock: offerUnlocks } : {}),
+            ...(traderStanding.length > 0 ? { traderStanding } : {}),
+            ...(customizationRewards.length > 0
+              ? { customization: customizationRewards }
+              : {}),
+            ...(achievementRewards.length > 0
+              ? { achievement: achievementRewards }
+              : {}),
+            ...(skillLevelRewards.length > 0
+              ? { skillLevelReward: skillLevelRewards }
+              : {}),
+            ...(traderUnlockRewards.length > 0
+              ? { traderUnlock: traderUnlockRewards }
+              : {}),
+            ...(craftUnlockRewards.length > 0
+              ? { craftUnlock: craftUnlockRewards }
+              : {}),
+          }
+        : undefined;
 
     return {
       id: task.id,
       name: task.name,
       wikiLink: task.wikiLink ?? "",
-      minPlayerLevel: 1,
-      factionName: null,
+      experience: task.experience,
+      minPlayerLevel: task.minPlayerLevel ?? 1,
+      factionName: task.factionName ?? null,
       taskRequirements: task.taskRequirements ?? [],
-      map: null,
+      map: task.map?.name ? { name: task.map.name } : null,
       maps: Array.from(mapNames).map((name) => ({ name })),
       trader: {
         name: toTraderName(task.trader?.name),
       },
       kappaRequired: task.kappaRequired,
-      lightkeeperRequired: false,
+      lightkeeperRequired: task.lightkeeperRequired ?? false,
       objectives: objectiveList.length > 0 ? objectiveList : undefined,
-      finishRewards:
-        rewardItems.length > 0 ? { items: rewardItems } : undefined,
+      finishRewards,
       isEvent: isEventTask(task.id),
     };
   });
@@ -482,8 +562,41 @@ const COMBINED_QUERY = `
     trader { name imageLink }
     wikiLink
     name
+    experience
     startRewards { items { item { name iconLink } count } }
     finishRewards {
+      traderStanding {
+        standing
+        trader { id name imageLink }
+      }
+      skillLevelReward {
+        name
+        level
+        skill { id name }
+      }
+      traderUnlock {
+        id
+        name
+        imageLink
+      }
+      craftUnlock {
+        id
+        level
+        station { name imageLink }
+      }
+      achievement {
+        id
+        name
+        description
+        imageLink
+      }
+      customization {
+        id
+        name
+        customizationType
+        customizationTypeName
+        imageLink
+      }
       offerUnlock {
         item { name iconLink }
         trader { name imageLink }

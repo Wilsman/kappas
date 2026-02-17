@@ -104,6 +104,40 @@ describe("Overlay Integration", () => {
                                 item: { id: "reward-1", name: "Roubles" },
                             },
                         ],
+                        traderStanding: [
+                            {
+                                trader: {
+                                    id: "trader-1",
+                                    name: "Prapor",
+                                },
+                                standing: 0.05,
+                            },
+                        ],
+                        customization: [
+                            {
+                                id: "custom-1",
+                                name: "Scavenger target",
+                                customizationType: "ShootingRangeMark",
+                                customizationTypeName: "Targets",
+                            },
+                        ],
+                        achievement: [
+                            {
+                                id: "achievement-1",
+                                name: "Duck Hunt",
+                                description: "Complete the event task",
+                            },
+                        ],
+                        skillLevelReward: [
+                            {
+                                name: "Perception",
+                                level: 4,
+                                skill: {
+                                    id: "Perception",
+                                    name: "Perception",
+                                },
+                            },
+                        ],
                     },
                 },
             },
@@ -125,6 +159,18 @@ describe("Overlay Integration", () => {
         expect(eventTask.finishRewards?.items?.[0].item.iconLink).toBe(
             "https://assets.tarkov.dev/reward-1-icon.webp"
         );
+        expect(eventTask.finishRewards?.traderStanding?.[0].trader?.name).toBe(
+            "Prapor"
+        );
+        expect(eventTask.finishRewards?.traderStanding?.[0].standing).toBe(0.05);
+        expect(eventTask.finishRewards?.customization?.[0].name).toBe(
+            "Scavenger target"
+        );
+        expect(eventTask.finishRewards?.achievement?.[0].name).toBe("Duck Hunt");
+        expect(eventTask.finishRewards?.skillLevelReward?.[0].name).toBe(
+            "Perception"
+        );
+        expect(eventTask.finishRewards?.skillLevelReward?.[0].level).toBe(4);
     });
 
     describe("Collector Task (Mock Overlay)", () => {
