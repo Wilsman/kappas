@@ -24,6 +24,7 @@ import {
   ChevronUp,
   ExternalLink,
   Lightbulb,
+  ListTodo,
   Plus,
   Minus,
 } from "lucide-react";
@@ -184,6 +185,29 @@ export function CurrentlyWorkingOnView({
       return true;
     });
   }, [tasks, completedTasks, workingOnTasks, playerLevel]);
+
+  const objectiveProgressByTaskId = useMemo(() => {
+    const map = new Map<string, { completed: number; total: number }>();
+    activeTasks.forEach((task) => {
+      const total = task.objectives?.length ?? 0;
+      if (total <= 0) return;
+      const objectiveKeys = buildTaskObjectiveKeys(task);
+      let completed = 0;
+      objectiveKeys.forEach((objectiveKey, index) => {
+        if (
+          isTaskObjectiveCompleted(
+            completedTaskObjectives,
+            objectiveKey,
+            buildLegacyTaskObjectiveKey(task.id, index),
+          )
+        ) {
+          completed += 1;
+        }
+      });
+      map.set(task.id, { completed, total });
+    });
+    return map;
+  }, [activeTasks, completedTaskObjectives]);
 
   // Group active tasks by map - tasks with multiple maps appear under each map
   const normalizeMapName = (name?: string | null) => {
@@ -443,6 +467,9 @@ export function CurrentlyWorkingOnView({
                     const isTaskCompleted = completedTasks.has(task.id);
                     const isExpanded = expandedTasks.has(task.id);
                     const objectiveKeys = buildTaskObjectiveKeys(task);
+                    const objectiveProgress = objectiveProgressByTaskId.get(
+                      task.id,
+                    );
                     return (
                       <div
                         key={task.id}
@@ -497,6 +524,22 @@ export function CurrentlyWorkingOnView({
                                 <Badge variant="secondary">
                                   Lvl {task.minPlayerLevel}
                                 </Badge>
+                                {objectiveProgress && (
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "inline-flex items-center gap-1",
+                                      objectiveProgress.completed >=
+                                        objectiveProgress.total
+                                        ? "border-green-500/30 bg-green-500/10 text-green-400"
+                                        : "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
+                                    )}
+                                  >
+                                    <ListTodo className="h-3 w-3" />
+                                    {objectiveProgress.completed}/
+                                    {objectiveProgress.total}
+                                  </Badge>
+                                )}
                                 <a
                                   href={task.wikiLink}
                                   target="_blank"
