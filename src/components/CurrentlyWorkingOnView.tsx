@@ -35,6 +35,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  buildLegacyTaskObjectiveItemProgressKey,
+  buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveItemProgressKey,
+  buildTaskObjectiveKeys,
+  getTaskObjectiveItemProgress,
+  isTaskObjectiveCompleted,
+} from "@/utils/taskObjectives";
 
 interface CurrentlyWorkingOnViewProps {
   tasks: Task[];
@@ -56,11 +64,16 @@ interface CurrentlyWorkingOnViewProps {
   onToggleStorylineObjective: (objectiveId: string) => void;
   onToggleHideoutItem: (itemKey: string) => void;
   completedTaskObjectives: Set<string>;
-  onToggleTaskObjective: (objectiveKey: string) => void;
+  onToggleTaskObjective: (
+    taskId: string,
+    objectiveKey: string,
+    legacyObjectiveKey?: string,
+  ) => void;
   taskObjectiveItemProgress: Record<string, number>;
   onUpdateTaskObjectiveItemProgress: (
     objectiveItemKey: string,
     count: number,
+    legacyObjectiveItemKey?: string,
   ) => void;
   hideoutItemQuantities: Record<string, number>;
   onUpdateHideoutItemQuantity: (itemKey: string, count: number) => void;
@@ -116,20 +129,23 @@ export function CurrentlyWorkingOnView({
     });
   };
 
-  const buildObjectiveItemKey = (
-    taskId: string,
-    objectiveIndex: number,
-    itemKey: string,
-  ) => `${taskId}::${objectiveIndex}::${itemKey}`;
-
   const handleObjectiveItemDelta = (
     objectiveItemKey: string,
     delta: number,
     maxCount: number,
+    legacyObjectiveItemKey?: string,
   ) => {
-    const current = taskObjectiveItemProgress[objectiveItemKey] || 0;
+    const current = getTaskObjectiveItemProgress(
+      taskObjectiveItemProgress,
+      objectiveItemKey,
+      legacyObjectiveItemKey,
+    );
     const next = Math.max(0, Math.min(maxCount, current + delta));
-    onUpdateTaskObjectiveItemProgress(objectiveItemKey, next);
+    onUpdateTaskObjectiveItemProgress(
+      objectiveItemKey,
+      next,
+      legacyObjectiveItemKey,
+    );
   };
 
   const handleHideoutItemDelta = (
@@ -426,6 +442,7 @@ export function CurrentlyWorkingOnView({
                   {mapTasks.map((task) => {
                     const isTaskCompleted = completedTasks.has(task.id);
                     const isExpanded = expandedTasks.has(task.id);
+                    const objectiveKeys = buildTaskObjectiveKeys(task);
                     return (
                       <div
                         key={task.id}
@@ -538,9 +555,17 @@ export function CurrentlyWorkingOnView({
                           task.objectives.length > 0 && (
                             <div className="px-3 pb-3 ml-8 space-y-2 border-t mt-2 pt-3">
                               {task.objectives.map((obj, idx) => {
-                                const objectiveKey = `${task.id}-${idx}`;
+                                const objectiveKey =
+                                  objectiveKeys[idx] ??
+                                  buildLegacyTaskObjectiveKey(task.id, idx);
+                                const legacyObjectiveKey =
+                                  buildLegacyTaskObjectiveKey(task.id, idx);
                                 const isObjCompleted =
-                                  completedTaskObjectives.has(objectiveKey);
+                                  isTaskObjectiveCompleted(
+                                    completedTaskObjectives,
+                                    objectiveKey,
+                                    legacyObjectiveKey,
+                                  );
                                 return (
                                   <div
                                     key={idx}
@@ -552,7 +577,11 @@ export function CurrentlyWorkingOnView({
                                     <Checkbox
                                       checked={isObjCompleted}
                                       onCheckedChange={() =>
-                                        onToggleTaskObjective(objectiveKey)
+                                        onToggleTaskObjective(
+                                          task.id,
+                                          objectiveKey,
+                                          legacyObjectiveKey,
+                                        )
                                       }
                                       className="mt-0.5 h-4 w-4"
                                     />
@@ -631,7 +660,12 @@ export function CurrentlyWorkingOnView({
                                                         obj.count ?? 1,
                                                       );
                                                     const itemKey =
-                                                      buildObjectiveItemKey(
+                                                      buildTaskObjectiveItemProgressKey(
+                                                        objectiveKey,
+                                                        item.id || item.name,
+                                                      );
+                                                    const legacyItemKey =
+                                                      buildLegacyTaskObjectiveItemProgressKey(
                                                         task.id,
                                                         idx,
                                                         item.id || item.name,
@@ -639,9 +673,11 @@ export function CurrentlyWorkingOnView({
                                                     const currentCount =
                                                       Math.min(
                                                         requiredCount,
-                                                        taskObjectiveItemProgress[
-                                                          itemKey
-                                                        ] || 0,
+                                                        getTaskObjectiveItemProgress(
+                                                          taskObjectiveItemProgress,
+                                                          itemKey,
+                                                          legacyItemKey,
+                                                        ),
                                                       );
                                                     const remaining = Math.max(
                                                       0,
@@ -720,14 +756,15 @@ export function CurrentlyWorkingOnView({
                                                         <div className="flex items-center gap-1">
                                                           <button
                                                             type="button"
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              handleObjectiveItemDelta(
-                                                                itemKey,
-                                                                -1,
-                                                                requiredCount,
-                                                              );
-                                                            }}
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleObjectiveItemDelta(
+                                                                  itemKey,
+                                                                  -1,
+                                                                  requiredCount,
+                                                                  legacyItemKey,
+                                                                );
+                                                              }}
                                                             className={cn(
                                                               "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
                                                               currentCount <=
@@ -747,14 +784,15 @@ export function CurrentlyWorkingOnView({
                                                           </span>
                                                           <button
                                                             type="button"
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              handleObjectiveItemDelta(
-                                                                itemKey,
-                                                                1,
-                                                                requiredCount,
-                                                              );
-                                                            }}
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleObjectiveItemDelta(
+                                                                  itemKey,
+                                                                  1,
+                                                                  requiredCount,
+                                                                  legacyItemKey,
+                                                                );
+                                                              }}
                                                             className={cn(
                                                               "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
                                                               currentCount >=

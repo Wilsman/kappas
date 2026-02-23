@@ -48,6 +48,11 @@ import {
 } from "@/utils/prestige";
 import { buildTaskDependencyMap, getAllDependencies } from "./utils/taskUtils";
 import {
+  buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveKeys,
+  isTaskObjectiveCompleted,
+} from "@/utils/taskObjectives";
+import {
   fetchCombinedData,
   fetchOverlay,
   loadCombinedCache,
@@ -1301,25 +1306,46 @@ function App() {
     async (taskId: string) => {
       if (!activeProfileId) return; // Don't save if profile not initialized
       const next = new Set(completedTasks);
+      const nextTaskObjectives = new Set(completedTaskObjectives);
+      const task = tasksWithEvents.find((entry) => entry.id === taskId);
+      const objectiveKeys = task ? buildTaskObjectiveKeys(task) : [];
+      const applyTaskObjectiveCompletion = (markComplete: boolean) => {
+        objectiveKeys.forEach((objectiveKey, index) => {
+          const legacyKey = buildLegacyTaskObjectiveKey(taskId, index);
+          if (markComplete) {
+            nextTaskObjectives.add(objectiveKey);
+            if (legacyKey !== objectiveKey) nextTaskObjectives.delete(legacyKey);
+          } else {
+            nextTaskObjectives.delete(objectiveKey);
+            nextTaskObjectives.delete(legacyKey);
+          }
+        });
+      };
       if (next.has(taskId)) {
         next.delete(taskId);
+        applyTaskObjectiveCompletion(false);
       } else {
         const depMap = buildTaskDependencyMap(tasksWithEvents);
         const deps = getAllDependencies(taskId, depMap);
         next.add(taskId);
         deps.forEach((id) => next.add(id));
+        applyTaskObjectiveCompletion(true);
       }
       setCompletedTasks(next);
+      setCompletedTaskObjectives(nextTaskObjectives);
       try {
         // Ensure taskStorage is using the correct profile before saving
         taskStorage.setProfile(activeProfileId);
         await taskStorage.init();
-        await taskStorage.saveCompletedTasks(next);
+        await Promise.all([
+          taskStorage.saveCompletedTasks(next),
+          taskStorage.saveCompletedTaskObjectives(nextTaskObjectives),
+        ]);
       } catch (err) {
         console.error("Save error", err);
       }
     },
-    [completedTasks, tasksWithEvents, activeProfileId],
+    [completedTaskObjectives, completedTasks, tasksWithEvents, activeProfileId],
   );
 
   // Sidebar trader filter: multi-select toggle
@@ -1421,34 +1447,110 @@ function App() {
     [activeProfileId],
   );
 
+  const syncTaskCompletionFromObjectives = useCallback(
+    (
+      taskId: string,
+      objectiveProgress: Set<string>,
+      currentCompletedTasks: Set<string>,
+    ): Set<string> => {
+      const task = tasksWithEvents.find((entry) => entry.id === taskId);
+      if (!task || !task.objectives || task.objectives.length === 0) {
+        return currentCompletedTasks;
+      }
+
+      const objectiveKeys = buildTaskObjectiveKeys(task);
+      const allObjectivesCompleted = objectiveKeys.every((objectiveKey, index) =>
+        isTaskObjectiveCompleted(
+          objectiveProgress,
+          objectiveKey,
+          buildLegacyTaskObjectiveKey(task.id, index),
+        ),
+      );
+
+      const nextCompletedTasks = new Set(currentCompletedTasks);
+      if (allObjectivesCompleted) {
+        const depMap = buildTaskDependencyMap(tasksWithEvents);
+        const deps = getAllDependencies(taskId, depMap);
+        nextCompletedTasks.add(taskId);
+        deps.forEach((id) => nextCompletedTasks.add(id));
+      } else {
+        nextCompletedTasks.delete(taskId);
+      }
+
+      return nextCompletedTasks;
+    },
+    [tasksWithEvents],
+  );
+
   const handleToggleTaskObjective = useCallback(
-    async (objectiveKey: string) => {
+    async (
+      taskId: string,
+      objectiveKey: string,
+      legacyObjectiveKey?: string,
+    ) => {
       if (!activeProfileId) return;
+
       const next = new Set(completedTaskObjectives);
-      if (next.has(objectiveKey)) {
+      const isAlreadyCompleted = isTaskObjectiveCompleted(
+        next,
+        objectiveKey,
+        legacyObjectiveKey,
+      );
+      if (isAlreadyCompleted) {
         next.delete(objectiveKey);
+        if (legacyObjectiveKey && legacyObjectiveKey !== objectiveKey) {
+          next.delete(legacyObjectiveKey);
+        }
       } else {
         next.add(objectiveKey);
+        if (legacyObjectiveKey && legacyObjectiveKey !== objectiveKey) {
+          next.delete(legacyObjectiveKey);
+        }
       }
+
+      const nextCompletedTasks = syncTaskCompletionFromObjectives(
+        taskId,
+        next,
+        completedTasks,
+      );
       setCompletedTaskObjectives(next);
+      setCompletedTasks(nextCompletedTasks);
       try {
         taskStorage.setProfile(activeProfileId);
         await taskStorage.init();
-        await taskStorage.saveCompletedTaskObjectives(next);
+        await Promise.all([
+          taskStorage.saveCompletedTaskObjectives(next),
+          taskStorage.saveCompletedTasks(nextCompletedTasks),
+        ]);
       } catch (err) {
         console.error("Save task objectives error", err);
       }
     },
-    [completedTaskObjectives, activeProfileId],
+    [
+      completedTaskObjectives,
+      completedTasks,
+      activeProfileId,
+      syncTaskCompletionFromObjectives,
+    ],
   );
 
   const handleUpdateTaskObjectiveItemProgress = useCallback(
-    (objectiveItemKey: string, count: number) => {
+    (
+      objectiveItemKey: string,
+      count: number,
+      legacyObjectiveItemKey?: string,
+    ) => {
       if (!activeProfileId) return;
       setTaskObjectiveItemProgress((prev) => {
         const next = { ...prev };
         if (count <= 0) delete next[objectiveItemKey];
         else next[objectiveItemKey] = count;
+        if (
+          legacyObjectiveItemKey &&
+          legacyObjectiveItemKey !== objectiveItemKey
+        ) {
+          delete next[legacyObjectiveItemKey];
+        }
         taskStorage.setProfile(activeProfileId);
         taskStorage
           .init()
@@ -2154,6 +2256,8 @@ function App() {
                           playerLevel={playerLevel}
                           workingOnTasks={workingOnTasks}
                           onToggleWorkingOnTask={handleToggleWorkingOnTask}
+                          completedTaskObjectives={completedTaskObjectives}
+                          onToggleTaskObjective={handleToggleTaskObjective}
                           taskObjectiveItemProgress={taskObjectiveItemProgress}
                           onUpdateTaskObjectiveItemProgress={
                             handleUpdateTaskObjectiveItemProgress

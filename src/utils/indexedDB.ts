@@ -715,6 +715,7 @@ export interface ExportData {
   profileName?: string;
   profileId?: string;
   completedTasks: string[];
+  completedTaskObjectives?: string[];
   completedCollectorItems: string[];
   completedHideoutItems: string[];
   completedAchievements: string[];
@@ -757,6 +758,7 @@ export class ExportImportService {
     // Load all data stores
     const [
       completedTasks,
+      completedTaskObjectives,
       completedCollectorItems,
       completedHideoutItems,
       completedAchievements,
@@ -768,6 +770,7 @@ export class ExportImportService {
       workingOnItems,
     ] = await Promise.all([
       taskStorage.loadCompletedTasks(),
+      taskStorage.loadCompletedTaskObjectives(),
       taskStorage.loadCompletedCollectorItems(),
       taskStorage.loadCompletedHideoutItems(),
       taskStorage.loadCompletedAchievements(),
@@ -794,6 +797,7 @@ export class ExportImportService {
       exportedAt: new Date().toISOString(),
       profileName,
       completedTasks: Array.from(completedTasks),
+      completedTaskObjectives: Array.from(completedTaskObjectives),
       completedCollectorItems: Array.from(completedCollectorItems),
       completedHideoutItems: Array.from(completedHideoutItems),
       completedAchievements: Array.from(completedAchievements),
@@ -834,6 +838,9 @@ export class ExportImportService {
     // Import all data stores
     await Promise.all([
       taskStorage.saveCompletedTasks(new Set(data.completedTasks || [])),
+      taskStorage.saveCompletedTaskObjectives(
+        new Set(data.completedTaskObjectives || [])
+      ),
       taskStorage.saveCompletedCollectorItems(
         new Set(data.completedCollectorItems || [])
       ),
