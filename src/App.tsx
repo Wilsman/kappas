@@ -1307,14 +1307,17 @@ function App() {
       if (!activeProfileId) return; // Don't save if profile not initialized
       const next = new Set(completedTasks);
       const nextTaskObjectives = new Set(completedTaskObjectives);
-      const task = tasksWithEvents.find((entry) => entry.id === taskId);
-      const objectiveKeys = task ? buildTaskObjectiveKeys(task) : [];
-      const applyTaskObjectiveCompletion = (markComplete: boolean) => {
+      const applyTaskObjectiveCompletion = (
+        targetTaskId: string,
+        markComplete: boolean,
+      ) => {
+        const task = tasksWithEvents.find((entry) => entry.id === targetTaskId);
+        const objectiveKeys = task ? buildTaskObjectiveKeys(task) : [];
         objectiveKeys.forEach((objectiveKey, index) => {
-          const legacyKey = buildLegacyTaskObjectiveKey(taskId, index);
+          const legacyKey = buildLegacyTaskObjectiveKey(targetTaskId, index);
           if (markComplete) {
             nextTaskObjectives.add(objectiveKey);
-            if (legacyKey !== objectiveKey) nextTaskObjectives.delete(legacyKey);
+            nextTaskObjectives.add(legacyKey);
           } else {
             nextTaskObjectives.delete(objectiveKey);
             nextTaskObjectives.delete(legacyKey);
@@ -1323,13 +1326,15 @@ function App() {
       };
       if (next.has(taskId)) {
         next.delete(taskId);
-        applyTaskObjectiveCompletion(false);
+        applyTaskObjectiveCompletion(taskId, false);
       } else {
         const depMap = buildTaskDependencyMap(tasksWithEvents);
         const deps = getAllDependencies(taskId, depMap);
-        next.add(taskId);
-        deps.forEach((id) => next.add(id));
-        applyTaskObjectiveCompletion(true);
+        const relatedTaskIds = [taskId, ...deps];
+        relatedTaskIds.forEach((id) => {
+          next.add(id);
+          applyTaskObjectiveCompletion(id, true);
+        });
       }
       setCompletedTasks(next);
       setCompletedTaskObjectives(nextTaskObjectives);
@@ -1450,34 +1455,45 @@ function App() {
   const syncTaskCompletionFromObjectives = useCallback(
     (
       taskId: string,
-      objectiveProgress: Set<string>,
       currentCompletedTasks: Set<string>,
+      wasAllObjectivesCompleted: boolean,
+      isAllObjectivesCompleted: boolean,
     ): Set<string> => {
       const task = tasksWithEvents.find((entry) => entry.id === taskId);
       if (!task || !task.objectives || task.objectives.length === 0) {
         return currentCompletedTasks;
       }
 
+      const nextCompletedTasks = new Set(currentCompletedTasks);
+      if (isAllObjectivesCompleted) {
+        const depMap = buildTaskDependencyMap(tasksWithEvents);
+        const deps = getAllDependencies(taskId, depMap);
+        nextCompletedTasks.add(taskId);
+        deps.forEach((id) => nextCompletedTasks.add(id));
+      } else if (wasAllObjectivesCompleted) {
+        nextCompletedTasks.delete(taskId);
+      }
+
+      return nextCompletedTasks;
+    },
+    [tasksWithEvents],
+  );
+
+  const areAllTaskObjectivesCompleted = useCallback(
+    (taskId: string, objectiveProgress: Set<string>): boolean => {
+      const task = tasksWithEvents.find((entry) => entry.id === taskId);
+      if (!task || !task.objectives || task.objectives.length === 0) {
+        return false;
+      }
+
       const objectiveKeys = buildTaskObjectiveKeys(task);
-      const allObjectivesCompleted = objectiveKeys.every((objectiveKey, index) =>
+      return objectiveKeys.every((objectiveKey, index) =>
         isTaskObjectiveCompleted(
           objectiveProgress,
           objectiveKey,
           buildLegacyTaskObjectiveKey(task.id, index),
         ),
       );
-
-      const nextCompletedTasks = new Set(currentCompletedTasks);
-      if (allObjectivesCompleted) {
-        const depMap = buildTaskDependencyMap(tasksWithEvents);
-        const deps = getAllDependencies(taskId, depMap);
-        nextCompletedTasks.add(taskId);
-        deps.forEach((id) => nextCompletedTasks.add(id));
-      } else {
-        nextCompletedTasks.delete(taskId);
-      }
-
-      return nextCompletedTasks;
     },
     [tasksWithEvents],
   );
@@ -1491,6 +1507,10 @@ function App() {
       if (!activeProfileId) return;
 
       const next = new Set(completedTaskObjectives);
+      const wasAllObjectivesCompleted = areAllTaskObjectivesCompleted(
+        taskId,
+        completedTaskObjectives,
+      );
       const isAlreadyCompleted = isTaskObjectiveCompleted(
         next,
         objectiveKey,
@@ -1498,20 +1518,22 @@ function App() {
       );
       if (isAlreadyCompleted) {
         next.delete(objectiveKey);
-        if (legacyObjectiveKey && legacyObjectiveKey !== objectiveKey) {
+        if (legacyObjectiveKey) {
           next.delete(legacyObjectiveKey);
         }
       } else {
         next.add(objectiveKey);
-        if (legacyObjectiveKey && legacyObjectiveKey !== objectiveKey) {
-          next.delete(legacyObjectiveKey);
+        if (legacyObjectiveKey) {
+          next.add(legacyObjectiveKey);
         }
       }
 
+      const isAllObjectivesCompleted = areAllTaskObjectivesCompleted(taskId, next);
       const nextCompletedTasks = syncTaskCompletionFromObjectives(
         taskId,
-        next,
         completedTasks,
+        wasAllObjectivesCompleted,
+        isAllObjectivesCompleted,
       );
       setCompletedTaskObjectives(next);
       setCompletedTasks(nextCompletedTasks);
@@ -1530,6 +1552,7 @@ function App() {
       completedTaskObjectives,
       completedTasks,
       activeProfileId,
+      areAllTaskObjectivesCompleted,
       syncTaskCompletionFromObjectives,
     ],
   );
@@ -1543,13 +1566,16 @@ function App() {
       if (!activeProfileId) return;
       setTaskObjectiveItemProgress((prev) => {
         const next = { ...prev };
-        if (count <= 0) delete next[objectiveItemKey];
-        else next[objectiveItemKey] = count;
-        if (
-          legacyObjectiveItemKey &&
-          legacyObjectiveItemKey !== objectiveItemKey
-        ) {
-          delete next[legacyObjectiveItemKey];
+        if (count <= 0) {
+          delete next[objectiveItemKey];
+          if (legacyObjectiveItemKey) {
+            delete next[legacyObjectiveItemKey];
+          }
+        } else {
+          next[objectiveItemKey] = count;
+          if (legacyObjectiveItemKey) {
+            next[legacyObjectiveItemKey] = count;
+          }
         }
         taskStorage.setProfile(activeProfileId);
         taskStorage
