@@ -639,6 +639,59 @@ export function CurrentlyWorkingOnView({
                                           obj.description?.includes(
                                             inlineItem.name,
                                           );
+                                        const requiredCount = Math.max(
+                                          1,
+                                          obj.count ?? 1,
+                                        );
+                                        const usesSharedPool =
+                                          (obj.items?.length ?? 0) > 1 &&
+                                          requiredCount > 1;
+                                        const objectiveItemProgress =
+                                          (obj.items ?? []).map((item) => {
+                                            const itemKey =
+                                              buildTaskObjectiveItemProgressKey(
+                                                objectiveKey,
+                                                item.id || item.name,
+                                              );
+                                            const legacyItemKey =
+                                              buildLegacyTaskObjectiveItemProgressKey(
+                                                task.id,
+                                                idx,
+                                                item.id || item.name,
+                                              );
+                                            const currentCount = Math.min(
+                                              requiredCount,
+                                              getTaskObjectiveItemProgress(
+                                                taskObjectiveItemProgress,
+                                                itemKey,
+                                                legacyItemKey,
+                                              ),
+                                            );
+                                            return {
+                                              itemKey,
+                                              legacyItemKey,
+                                              currentCount,
+                                            };
+                                          });
+                                        const objectiveTotalCollected =
+                                          usesSharedPool
+                                            ? Math.min(
+                                                requiredCount,
+                                                objectiveItemProgress.reduce(
+                                                  (sum, progress) =>
+                                                    sum + progress.currentCount,
+                                                  0,
+                                                ),
+                                              )
+                                            : 0;
+                                        const objectiveRemaining =
+                                          usesSharedPool
+                                            ? Math.max(
+                                                0,
+                                                requiredCount -
+                                                  objectiveTotalCollected,
+                                              )
+                                            : 0;
                                         return (
                                           <>
                                             <p
@@ -695,165 +748,196 @@ export function CurrentlyWorkingOnView({
                                             {obj.items &&
                                               obj.items &&
                                               obj.items.length > 0 && (
-                                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                                                  {obj.items.map((item) => {
-                                                    const requiredCount =
-                                                      Math.max(
-                                                        1,
-                                                        obj.count ?? 1,
-                                                      );
-                                                    const itemKey =
-                                                      buildTaskObjectiveItemProgressKey(
-                                                        objectiveKey,
-                                                        item.id || item.name,
-                                                      );
-                                                    const legacyItemKey =
-                                                      buildLegacyTaskObjectiveItemProgressKey(
-                                                        task.id,
-                                                        idx,
-                                                        item.id || item.name,
-                                                      );
-                                                    const currentCount =
-                                                      Math.min(
-                                                        requiredCount,
-                                                        getTaskObjectiveItemProgress(
-                                                          taskObjectiveItemProgress,
-                                                          itemKey,
-                                                          legacyItemKey,
-                                                        ),
-                                                      );
-                                                    const remaining = Math.max(
-                                                      0,
-                                                      requiredCount -
-                                                        currentCount,
-                                                    );
-                                                    const isComplete =
-                                                      currentCount >=
-                                                      requiredCount;
-                                                    return (
-                                                      <div
-                                                        key={
-                                                          item.id || item.name
-                                                        }
-                                                        className={cn(
-                                                          "flex items-center gap-2 rounded-md border bg-background/40 p-2",
-                                                          isComplete &&
-                                                            "opacity-60",
-                                                        )}
-                                                      >
-                                                        {item.iconLink ? (
-                                                          <TooltipProvider
-                                                            delayDuration={150}
-                                                          >
-                                                            <Tooltip>
-                                                              <TooltipTrigger
-                                                                asChild
-                                                              >
-                                                                <img
-                                                                  src={
-                                                                    item.iconLink
-                                                                  }
-                                                                  alt={
-                                                                    item.name
-                                                                  }
-                                                                  className="h-8 w-8 object-contain"
-                                                                  loading="lazy"
-                                                                />
-                                                              </TooltipTrigger>
-                                                              <TooltipContent
-                                                                side="top"
-                                                                align="center"
-                                                                className="bg-background text-foreground p-2 shadow-md border"
-                                                              >
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                  <img
-                                                                    src={
-                                                                      item.iconLink
-                                                                    }
-                                                                    alt={
-                                                                      item.name
-                                                                    }
-                                                                    className="h-16 w-16 object-contain"
-                                                                    loading="lazy"
-                                                                  />
-                                                                  <span className="text-xs">
-                                                                    {item.name}
-                                                                  </span>
-                                                                </div>
-                                                              </TooltipContent>
-                                                            </Tooltip>
-                                                          </TooltipProvider>
-                                                        ) : (
-                                                          <div className="h-8 w-8 rounded bg-muted" />
-                                                        )}
-                                                        <div className="min-w-0 flex-1">
-                                                          <div className="text-xs font-medium text-foreground/90 truncate">
-                                                            {item.name}
-                                                          </div>
-                                                          <div className="text-[11px] text-muted-foreground">
-                                                            {remaining === 0
-                                                              ? "Complete"
-                                                              : `${remaining} remaining`}
-                                                          </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                          <button
-                                                            type="button"
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleObjectiveItemDelta(
-                                                                  itemKey,
-                                                                  -1,
-                                                                  requiredCount,
-                                                                  legacyItemKey,
-                                                                );
-                                                              }}
-                                                            className={cn(
-                                                              "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
-                                                              currentCount <=
-                                                                0 &&
-                                                                "opacity-50 cursor-not-allowed",
-                                                            )}
-                                                            disabled={
-                                                              currentCount <= 0
-                                                            }
-                                                            aria-label={`Decrease ${item.name}`}
-                                                          >
-                                                            <Minus className="h-3 w-3 mx-auto" />
-                                                          </button>
-                                                          <span className="w-12 text-center text-xs tabular-nums">
-                                                            {currentCount}/
-                                                            {requiredCount}
-                                                          </span>
-                                                          <button
-                                                            type="button"
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleObjectiveItemDelta(
-                                                                  itemKey,
-                                                                  1,
-                                                                  requiredCount,
-                                                                  legacyItemKey,
-                                                                );
-                                                              }}
-                                                            className={cn(
-                                                              "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
-                                                              currentCount >=
-                                                                requiredCount &&
-                                                                "opacity-50 cursor-not-allowed",
-                                                            )}
-                                                            disabled={
-                                                              currentCount >=
+                                                <div className="mt-2 space-y-2">
+                                                  {usesSharedPool && (
+                                                    <div className="text-[11px] text-muted-foreground">
+                                                      Progress:{" "}
+                                                      <span className="font-medium text-foreground/90">
+                                                        {objectiveTotalCollected}
+                                                        /{requiredCount}
+                                                      </span>{" "}
+                                                      ({objectiveRemaining} remaining)
+                                                    </div>
+                                                  )}
+                                                  <div className="grid gap-2 sm:grid-cols-2">
+                                                    {obj.items.map(
+                                                      (item, itemIndex) => {
+                                                        const itemProgress =
+                                                          objectiveItemProgress[
+                                                            itemIndex
+                                                          ];
+                                                        const itemKey =
+                                                          itemProgress?.itemKey ??
+                                                          buildTaskObjectiveItemProgressKey(
+                                                            objectiveKey,
+                                                            item.id || item.name,
+                                                          );
+                                                        const legacyItemKey =
+                                                          itemProgress?.legacyItemKey ??
+                                                          buildLegacyTaskObjectiveItemProgressKey(
+                                                            task.id,
+                                                            idx,
+                                                            item.id || item.name,
+                                                          );
+                                                        const currentCount =
+                                                          itemProgress?.currentCount ??
+                                                          0;
+                                                        const maxCountForItem =
+                                                          usesSharedPool
+                                                            ? Math.max(
+                                                                currentCount,
+                                                                requiredCount -
+                                                                  (objectiveTotalCollected -
+                                                                    currentCount),
+                                                              )
+                                                            : requiredCount;
+                                                        const remaining =
+                                                          usesSharedPool
+                                                            ? objectiveRemaining
+                                                            : Math.max(
+                                                                0,
+                                                                requiredCount -
+                                                                  currentCount,
+                                                              );
+                                                        const isComplete =
+                                                          usesSharedPool
+                                                            ? objectiveTotalCollected >=
                                                               requiredCount
+                                                            : currentCount >=
+                                                              requiredCount;
+                                                        return (
+                                                          <div
+                                                            key={
+                                                              item.id ||
+                                                              item.name
                                                             }
-                                                            aria-label={`Increase ${item.name}`}
+                                                            className={cn(
+                                                              "flex items-center gap-2 rounded-md border bg-background/40 p-2",
+                                                              isComplete &&
+                                                                "opacity-60",
+                                                            )}
                                                           >
-                                                            <Plus className="h-3 w-3 mx-auto" />
-                                                          </button>
-                                                        </div>
-                                                      </div>
-                                                    );
-                                                  })}
+                                                            {item.iconLink ? (
+                                                              <TooltipProvider
+                                                                delayDuration={150}
+                                                              >
+                                                                <Tooltip>
+                                                                  <TooltipTrigger
+                                                                    asChild
+                                                                  >
+                                                                    <img
+                                                                      src={
+                                                                        item.iconLink
+                                                                      }
+                                                                      alt={
+                                                                        item.name
+                                                                      }
+                                                                      className="h-8 w-8 object-contain"
+                                                                      loading="lazy"
+                                                                    />
+                                                                  </TooltipTrigger>
+                                                                  <TooltipContent
+                                                                    side="top"
+                                                                    align="center"
+                                                                    className="bg-background text-foreground p-2 shadow-md border"
+                                                                  >
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                      <img
+                                                                        src={
+                                                                          item.iconLink
+                                                                        }
+                                                                        alt={
+                                                                          item.name
+                                                                        }
+                                                                        className="h-16 w-16 object-contain"
+                                                                        loading="lazy"
+                                                                      />
+                                                                      <span className="text-xs">
+                                                                        {item.name}
+                                                                      </span>
+                                                                    </div>
+                                                                  </TooltipContent>
+                                                                </Tooltip>
+                                                              </TooltipProvider>
+                                                            ) : (
+                                                              <div className="h-8 w-8 rounded bg-muted" />
+                                                            )}
+                                                            <div className="min-w-0 flex-1">
+                                                              <div className="text-xs font-medium text-foreground/90 truncate">
+                                                                {item.name}
+                                                              </div>
+                                                              <div className="text-[11px] text-muted-foreground">
+                                                                {usesSharedPool
+                                                                  ? `Contributed: ${currentCount}`
+                                                                  : remaining ===
+                                                                        0
+                                                                    ? "Complete"
+                                                                    : `${remaining} remaining`}
+                                                              </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                              <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  handleObjectiveItemDelta(
+                                                                    itemKey,
+                                                                    -1,
+                                                                    maxCountForItem,
+                                                                    legacyItemKey,
+                                                                  );
+                                                                }}
+                                                                className={cn(
+                                                                  "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                                  currentCount <=
+                                                                    0 &&
+                                                                    "opacity-50 cursor-not-allowed",
+                                                                )}
+                                                                disabled={
+                                                                  currentCount <=
+                                                                  0
+                                                                }
+                                                                aria-label={`Decrease ${item.name}`}
+                                                              >
+                                                                <Minus className="h-3 w-3 mx-auto" />
+                                                              </button>
+                                                              <span className="w-12 text-center text-xs tabular-nums">
+                                                                {currentCount}/
+                                                                {usesSharedPool
+                                                                  ? requiredCount
+                                                                  : maxCountForItem}
+                                                              </span>
+                                                              <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  handleObjectiveItemDelta(
+                                                                    itemKey,
+                                                                    1,
+                                                                    maxCountForItem,
+                                                                    legacyItemKey,
+                                                                  );
+                                                                }}
+                                                                className={cn(
+                                                                  "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                                  currentCount >=
+                                                                    maxCountForItem &&
+                                                                    "opacity-50 cursor-not-allowed",
+                                                                )}
+                                                                disabled={
+                                                                  currentCount >=
+                                                                  maxCountForItem
+                                                                }
+                                                                aria-label={`Increase ${item.name}`}
+                                                              >
+                                                                <Plus className="h-3 w-3 mx-auto" />
+                                                              </button>
+                                                            </div>
+                                                          </div>
+                                                        );
+                                                      },
+                                                    )}
+                                                  </div>
                                                 </div>
                                               )}
                                           </>

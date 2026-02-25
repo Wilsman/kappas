@@ -1282,6 +1282,59 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                             objective.description?.includes(
                                               inlineItem.name,
                                             );
+                                          const requiredCount = Math.max(
+                                            1,
+                                            objective.count ?? 1,
+                                          );
+                                          const usesSharedPool =
+                                            (objective.items?.length ?? 0) > 1 &&
+                                            requiredCount > 1;
+                                          const objectiveItemProgress =
+                                            (objective.items ?? []).map((item) => {
+                                              const itemKey =
+                                                buildTaskObjectiveItemProgressKey(
+                                                  objectiveKey,
+                                                  item.id || item.name,
+                                                );
+                                              const legacyItemKey =
+                                                buildLegacyTaskObjectiveItemProgressKey(
+                                                  task.id,
+                                                  index,
+                                                  item.id || item.name,
+                                                );
+                                              const currentCount = Math.min(
+                                                requiredCount,
+                                                getTaskObjectiveItemProgress(
+                                                  taskObjectiveItemProgress,
+                                                  itemKey,
+                                                  legacyItemKey,
+                                                ),
+                                              );
+                                              return {
+                                                itemKey,
+                                                legacyItemKey,
+                                                currentCount,
+                                              };
+                                            });
+                                          const objectiveTotalCollected =
+                                            usesSharedPool
+                                              ? Math.min(
+                                                  requiredCount,
+                                                  objectiveItemProgress.reduce(
+                                                    (sum, progress) =>
+                                                      sum + progress.currentCount,
+                                                    0,
+                                                  ),
+                                                )
+                                              : 0;
+                                          const objectiveRemaining =
+                                            usesSharedPool
+                                              ? Math.max(
+                                                  0,
+                                                  requiredCount -
+                                                    objectiveTotalCollected,
+                                                )
+                                              : 0;
                                           return (
                                             <li key={index}>
                                               <div
@@ -1359,27 +1412,38 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                               </div>
                                               {objective.items &&
                                                 objective.items.length > 0 && (
-                                                  <div className="mt-2 ml-6 grid gap-2 sm:grid-cols-2">
+                                                  <div className="mt-2 ml-6 space-y-2">
+                                                    {usesSharedPool && (
+                                                      <div className="text-[11px] text-muted-foreground">
+                                                        Progress:{" "}
+                                                        <span className="font-medium text-foreground/90">
+                                                          {objectiveTotalCollected}
+                                                          /{requiredCount}
+                                                        </span>{" "}
+                                                        ({objectiveRemaining} remaining)
+                                                      </div>
+                                                    )}
+                                                    <div className="grid gap-2 sm:grid-cols-2">
                                                     {objective.items.map(
-                                                      (item) => {
+                                                      (item, itemIndex) => {
                                                         const iconLink =
                                                           item.iconLink ||
                                                           (item.id
                                                             ? `https://assets.tarkov.dev/${item.id}-icon.webp`
                                                             : "");
-                                                        const requiredCount =
-                                                          Math.max(
-                                                            1,
-                                                            objective.count ??
-                                                              1,
-                                                          );
+                                                        const itemProgress =
+                                                          objectiveItemProgress[
+                                                            itemIndex
+                                                          ];
                                                         const itemKey =
+                                                          itemProgress?.itemKey ??
                                                           buildTaskObjectiveItemProgressKey(
                                                             objectiveKey,
                                                             item.id ||
                                                               item.name,
                                                           );
                                                         const legacyItemKey =
+                                                          itemProgress?.legacyItemKey ??
                                                           buildLegacyTaskObjectiveItemProgressKey(
                                                             task.id,
                                                             index,
@@ -1387,23 +1451,31 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                               item.name,
                                                           );
                                                         const currentCount =
-                                                          Math.min(
-                                                            requiredCount,
-                                                            getTaskObjectiveItemProgress(
-                                                              taskObjectiveItemProgress,
-                                                              itemKey,
-                                                              legacyItemKey,
-                                                            ),
-                                                          );
+                                                          itemProgress?.currentCount ??
+                                                          0;
+                                                        const maxCountForItem =
+                                                          usesSharedPool
+                                                            ? Math.max(
+                                                                currentCount,
+                                                                requiredCount -
+                                                                  (objectiveTotalCollected -
+                                                                    currentCount),
+                                                              )
+                                                            : requiredCount;
                                                         const remaining =
-                                                          Math.max(
-                                                            0,
-                                                            requiredCount -
-                                                              currentCount,
-                                                          );
+                                                          usesSharedPool
+                                                            ? objectiveRemaining
+                                                            : Math.max(
+                                                                0,
+                                                                requiredCount -
+                                                                  currentCount,
+                                                              );
                                                         const isComplete =
-                                                          currentCount >=
-                                                          requiredCount;
+                                                          usesSharedPool
+                                                            ? objectiveTotalCollected >=
+                                                              requiredCount
+                                                            : currentCount >=
+                                                              requiredCount;
                                                         return (
                                                           <div
                                                             key={
@@ -1470,9 +1542,12 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                 {item.name}
                                                               </div>
                                                               <div className="text-[11px] text-muted-foreground">
-                                                                {remaining === 0
-                                                                  ? "Complete"
-                                                                  : `${remaining} remaining`}
+                                                                {usesSharedPool
+                                                                  ? `Contributed: ${currentCount}`
+                                                                  : remaining ===
+                                                                        0
+                                                                    ? "Complete"
+                                                                    : `${remaining} remaining`}
                                                               </div>
                                                             </div>
                                                             <div className="flex items-center gap-1">
@@ -1485,7 +1560,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                   handleObjectiveItemDelta(
                                                                     itemKey,
                                                                     -1,
-                                                                    requiredCount,
+                                                                    maxCountForItem,
                                                                     legacyItemKey,
                                                                   );
                                                                 }}
@@ -1505,7 +1580,9 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                               </button>
                                                               <span className="w-12 text-center text-xs tabular-nums">
                                                                 {currentCount}/
-                                                                {requiredCount}
+                                                                {usesSharedPool
+                                                                  ? requiredCount
+                                                                  : maxCountForItem}
                                                               </span>
                                                               <button
                                                                 type="button"
@@ -1516,19 +1593,19 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                                   handleObjectiveItemDelta(
                                                                     itemKey,
                                                                     1,
-                                                                    requiredCount,
+                                                                    maxCountForItem,
                                                                     legacyItemKey,
                                                                   );
                                                                 }}
                                                                 className={cn(
                                                                   "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
                                                                   currentCount >=
-                                                                    requiredCount &&
+                                                                    maxCountForItem &&
                                                                     "opacity-50 cursor-not-allowed",
                                                                 )}
                                                                 disabled={
                                                                   currentCount >=
-                                                                  requiredCount
+                                                                  maxCountForItem
                                                                 }
                                                                 aria-label={`Increase ${item.name}`}
                                                               >
@@ -1539,6 +1616,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                         );
                                                       },
                                                     )}
+                                                  </div>
                                                   </div>
                                                 )}
                                             </li>
