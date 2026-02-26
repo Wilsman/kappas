@@ -2329,6 +2329,10 @@ function App() {
                           onToggleWorkingOnStorylineObjective={
                             handleToggleWorkingOnStorylineObjective
                           }
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
                         />
                       ) : viewMode === "storyline-map" ? (
                         <StorylineContainer

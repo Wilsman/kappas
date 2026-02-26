@@ -2,6 +2,13 @@ export interface StorylineObjective {
   id: string;
   description: string;
   type: "main" | "optional";
+  itemRequirement?: {
+    itemId?: string;
+    itemName: string;
+    iconLink?: string;
+    requiredCount: number;
+    foundInRaid?: boolean;
+  };
   progress?: {
     current: number;
     required: number;
@@ -293,16 +300,37 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
         id: "falling-skies-main-11",
         type: "main",
         description: "Hand over 2 Toolset in raid",
+        itemRequirement: {
+          itemId: "590c2e1186f77425357b6124",
+          itemName: "Toolset",
+          iconLink: "https://assets.tarkov.dev/590c2e1186f77425357b6124-icon.webp",
+          requiredCount: 2,
+          foundInRaid: true,
+        },
       },
       {
         id: "falling-skies-main-12",
         type: "main",
         description: "Hand over 3 Rechargeable battery in raid",
+        itemRequirement: {
+          itemId: "590a358486f77429692b2790",
+          itemName: "Rechargeable battery",
+          iconLink: "https://assets.tarkov.dev/590a358486f77429692b2790-icon.webp",
+          requiredCount: 3,
+          foundInRaid: true,
+        },
       },
       {
         id: "falling-skies-main-13",
         type: "main",
         description: "Hand over 5 Printed circuit board in raid",
+        itemRequirement: {
+          itemId: "590a3b0486f7743954552bdb",
+          itemName: "Printed circuit board",
+          iconLink: "https://assets.tarkov.dev/590a3b0486f7743954552bdb-icon.webp",
+          requiredCount: 5,
+          foundInRaid: true,
+        },
       },
       {
         id: "falling-skies-main-14",
@@ -803,6 +831,12 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
         id: "labyrinth-main-5",
         type: "main",
         description: "Collect 2 Labrys access keycards",
+        itemRequirement: {
+          itemId: "679b9819a2f2dd4da9023512",
+          itemName: "Labrys access keycard",
+          iconLink: "https://assets.tarkov.dev/679b9819a2f2dd4da9023512-icon.webp",
+          requiredCount: 2,
+        },
       },
       {
         id: "labyrinth-main-6",

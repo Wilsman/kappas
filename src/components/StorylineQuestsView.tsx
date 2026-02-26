@@ -9,6 +9,8 @@ import {
   CheckCheck,
   RotateCcw,
   Target,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -26,7 +28,100 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { STORYLINE_QUESTS } from "@/data/storylineQuests";
+import { STORYLINE_QUESTS, type StorylineObjective } from "@/data/storylineQuests";
+
+type StorylineItemRequirement = NonNullable<StorylineObjective["itemRequirement"]>;
+
+const STORYLINE_TRACKER_ICONS = {
+  dogtags: "https://assets.tarkov.dev/6662e9aca7e0b43baa3d5f74-icon.webp",
+  dollars: "https://assets.tarkov.dev/5696686a4bdc2da3298b456a-icon.webp",
+  roubles: "https://assets.tarkov.dev/5449016a4bdc2d6f028b456f-icon.webp",
+} as const;
+
+const parseRequiredCount = (value: string): number => {
+  const parsed = Number.parseInt(value.replace(/,/g, ""), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const cleanObjectiveItemName = (value: string): string => {
+  return value
+    .replace(/\(optional\)/gi, "")
+    .replace(/\s+to\s+[A-Za-z'.-]+.*$/i, "")
+    .replace(/\s+found in raid\s+/gi, " ")
+    .replace(/\s+in raid\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const resolveDefaultIconLink = (itemName: string): string | undefined => {
+  if (/\bdogtags?\b/i.test(itemName)) {
+    return STORYLINE_TRACKER_ICONS.dogtags;
+  }
+  if (/\bdollars?\b/i.test(itemName)) {
+    return STORYLINE_TRACKER_ICONS.dollars;
+  }
+  if (/\broubles?\b/i.test(itemName)) {
+    return STORYLINE_TRACKER_ICONS.roubles;
+  }
+  return undefined;
+};
+
+const getObjectiveItemRequirement = (
+  objective: StorylineObjective,
+): StorylineItemRequirement | null => {
+  if (objective.itemRequirement) {
+    return {
+      ...objective.itemRequirement,
+      iconLink:
+        objective.itemRequirement.iconLink ||
+        resolveDefaultIconLink(objective.itemRequirement.itemName),
+    };
+  }
+
+  const description = objective.description.trim();
+  const foundInRaid = /\bfound in raid\b|\bin raid\b/i.test(description);
+
+  const handOverCashMatch = description.match(
+    /^Hand over\s+cash.*?([\d,]+)\$/i,
+  );
+  if (handOverCashMatch) {
+    const requiredCount = parseRequiredCount(handOverCashMatch[1]);
+    if (requiredCount > 0) {
+      return {
+        itemName: "Dollars",
+        requiredCount,
+        foundInRaid: false,
+        iconLink: resolveDefaultIconLink("Dollars"),
+      };
+    }
+  }
+
+  const objectivePatterns: RegExp[] = [
+    /^Hand over\s+(?:any\s+)?([\d,]+)\s+(.+)$/i,
+    /^Collect\s+(?:the required\s+)?([\d,]+)\s+(.+)$/i,
+    /^Find\s+(?:any\s+)?([\d,]+)\s+(.+)$/i,
+    /^Obtain\s+([\d,]+)\s+(.+)$/i,
+  ];
+
+  for (const pattern of objectivePatterns) {
+    const match = description.match(pattern);
+    if (!match) continue;
+
+    const requiredCount = parseRequiredCount(match[1]);
+    const itemName = cleanObjectiveItemName(match[2]);
+
+    if (requiredCount > 0 && itemName.length > 0) {
+      return {
+        itemName,
+        requiredCount,
+        foundInRaid,
+        iconLink: resolveDefaultIconLink(itemName),
+      };
+    }
+  }
+
+  return null;
+};
 
 interface StorylineQuestsViewProps {
   completedObjectives: Set<string>;
@@ -35,6 +130,11 @@ interface StorylineQuestsViewProps {
   onNavigateToMap?: () => void;
   workingOnStorylineObjectives?: Set<string>;
   onToggleWorkingOnStorylineObjective?: (objectiveId: string) => void;
+  taskObjectiveItemProgress?: Record<string, number>;
+  onUpdateTaskObjectiveItemProgress?: (
+    objectiveItemKey: string,
+    count: number,
+  ) => void;
 }
 
 export function StorylineQuestsView({
@@ -44,6 +144,8 @@ export function StorylineQuestsView({
   onNavigateToMap,
   workingOnStorylineObjectives = new Set(),
   onToggleWorkingOnStorylineObjective,
+  taskObjectiveItemProgress = {},
+  onUpdateTaskObjectiveItemProgress,
 }: StorylineQuestsViewProps): JSX.Element {
   const [expandedQuests, setExpandedQuests] = useState<
     Record<string, { main: boolean; optional: boolean }>
@@ -123,6 +225,34 @@ export function StorylineQuestsView({
     totalObjectives > 0
       ? Math.round((completedCount / totalObjectives) * 100)
       : 0;
+
+  const getStorylineObjectiveItemKey = (
+    objective: StorylineObjective,
+    requirement: StorylineItemRequirement,
+  ) => {
+    const itemKey = requirement.itemId || requirement.itemName;
+    return `storyline-objective::${objective.id}::${itemKey || "item"}`;
+  };
+
+  const handleStorylineObjectiveItemDelta = (
+    objective: StorylineObjective,
+    delta: number,
+  ) => {
+    const requirement = getObjectiveItemRequirement(objective);
+    if (!requirement || !onUpdateTaskObjectiveItemProgress) {
+      return;
+    }
+    const itemKey = getStorylineObjectiveItemKey(objective, requirement);
+    const currentCount = taskObjectiveItemProgress[itemKey] ?? 0;
+    const nextCount = Math.max(
+      0,
+      Math.min(
+        requirement.requiredCount,
+        currentCount + delta,
+      ),
+    );
+    onUpdateTaskObjectiveItemProgress(itemKey, nextCount);
+  };
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -258,6 +388,36 @@ export function StorylineQuestsView({
                               const isCompleted = completedObjectives.has(
                                 objective.id
                               );
+                              const requirement =
+                                getObjectiveItemRequirement(objective);
+                              const itemKey = requirement
+                                ? getStorylineObjectiveItemKey(
+                                    objective,
+                                    requirement,
+                                  )
+                                : "";
+                              const trackedCount =
+                                requirement && itemKey
+                                  ? taskObjectiveItemProgress[itemKey] ?? 0
+                                  : 0;
+                              const clampedTrackedCount = requirement
+                                ? Math.max(
+                                    0,
+                                    Math.min(
+                                      requirement.requiredCount,
+                                      trackedCount,
+                                    ),
+                                  )
+                                : 0;
+                              const remainingCount = requirement
+                                ? Math.max(
+                                    0,
+                                    requirement.requiredCount - clampedTrackedCount,
+                                  )
+                                : 0;
+                              const isRequirementComplete = requirement
+                                ? clampedTrackedCount >= requirement.requiredCount
+                                : false;
                               return (
                                 <div key={objective.id} className="space-y-1">
                                   <div className="flex items-start gap-2 text-sm">
@@ -295,6 +455,80 @@ export function StorylineQuestsView({
                                       {objective.description}
                                     </label>
                                   </div>
+                                  {requirement && (
+                                    <div className="ml-4">
+                                      <div
+                                        className={`flex items-center gap-2 rounded-md border bg-background/40 p-2 ${isRequirementComplete ? "opacity-60" : ""}`}
+                                      >
+                                        {requirement.iconLink ? (
+                                          <img
+                                            src={requirement.iconLink}
+                                            alt={requirement.itemName}
+                                            className="h-8 w-8 object-contain"
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <div className="h-8 w-8 rounded bg-muted" />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-xs font-medium text-foreground/90 truncate">
+                                            {requirement.itemName}
+                                          </div>
+                                          <div className="text-[11px] text-muted-foreground">
+                                            {remainingCount === 0
+                                              ? "Complete"
+                                              : `${remainingCount} remaining`}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleStorylineObjectiveItemDelta(
+                                                objective,
+                                                -1,
+                                              );
+                                            }}
+                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={clampedTrackedCount <= 0}
+                                            aria-label={`Decrease ${requirement.itemName}`}
+                                          >
+                                            <Minus className="h-3 w-3 mx-auto" />
+                                          </button>
+                                          <span className="w-12 text-center text-xs tabular-nums">
+                                            {clampedTrackedCount}/
+                                            {requirement.requiredCount}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleStorylineObjectiveItemDelta(
+                                                objective,
+                                                1,
+                                              );
+                                            }}
+                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={
+                                              clampedTrackedCount >=
+                                              requirement.requiredCount
+                                            }
+                                            aria-label={`Increase ${requirement.itemName}`}
+                                          >
+                                            <Plus className="h-3 w-3 mx-auto" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {requirement.foundInRaid && (
+                                        <div className="text-[11px] text-muted-foreground mt-1">
+                                          Found in raid required
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                   {objective.progress && (
                                     <div className="flex items-center gap-2 ml-4">
                                       <Progress
@@ -345,6 +579,36 @@ export function StorylineQuestsView({
                               const isCompleted = completedObjectives.has(
                                 objective.id
                               );
+                              const requirement =
+                                getObjectiveItemRequirement(objective);
+                              const itemKey = requirement
+                                ? getStorylineObjectiveItemKey(
+                                    objective,
+                                    requirement,
+                                  )
+                                : "";
+                              const trackedCount =
+                                requirement && itemKey
+                                  ? taskObjectiveItemProgress[itemKey] ?? 0
+                                  : 0;
+                              const clampedTrackedCount = requirement
+                                ? Math.max(
+                                    0,
+                                    Math.min(
+                                      requirement.requiredCount,
+                                      trackedCount,
+                                    ),
+                                  )
+                                : 0;
+                              const remainingCount = requirement
+                                ? Math.max(
+                                    0,
+                                    requirement.requiredCount - clampedTrackedCount,
+                                  )
+                                : 0;
+                              const isRequirementComplete = requirement
+                                ? clampedTrackedCount >= requirement.requiredCount
+                                : false;
                               return (
                                 <div key={objective.id} className="space-y-1">
                                   <div className="flex items-start gap-2 text-sm">
@@ -367,6 +631,80 @@ export function StorylineQuestsView({
                                       {objective.description}
                                     </label>
                                   </div>
+                                  {requirement && (
+                                    <div className="ml-4">
+                                      <div
+                                        className={`flex items-center gap-2 rounded-md border bg-background/40 p-2 ${isRequirementComplete ? "opacity-60" : ""}`}
+                                      >
+                                        {requirement.iconLink ? (
+                                          <img
+                                            src={requirement.iconLink}
+                                            alt={requirement.itemName}
+                                            className="h-8 w-8 object-contain"
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <div className="h-8 w-8 rounded bg-muted" />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-xs font-medium text-foreground/90 truncate">
+                                            {requirement.itemName}
+                                          </div>
+                                          <div className="text-[11px] text-muted-foreground">
+                                            {remainingCount === 0
+                                              ? "Complete"
+                                              : `${remainingCount} remaining`}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleStorylineObjectiveItemDelta(
+                                                objective,
+                                                -1,
+                                              );
+                                            }}
+                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={clampedTrackedCount <= 0}
+                                            aria-label={`Decrease ${requirement.itemName}`}
+                                          >
+                                            <Minus className="h-3 w-3 mx-auto" />
+                                          </button>
+                                          <span className="w-12 text-center text-xs tabular-nums">
+                                            {clampedTrackedCount}/
+                                            {requirement.requiredCount}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleStorylineObjectiveItemDelta(
+                                                objective,
+                                                1,
+                                              );
+                                            }}
+                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            disabled={
+                                              clampedTrackedCount >=
+                                              requirement.requiredCount
+                                            }
+                                            aria-label={`Increase ${requirement.itemName}`}
+                                          >
+                                            <Plus className="h-3 w-3 mx-auto" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {requirement.foundInRaid && (
+                                        <div className="text-[11px] text-muted-foreground mt-1">
+                                          Found in raid required
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                   {objective.progress && (
                                     <div className="flex items-center gap-2 ml-4">
                                       <Progress
