@@ -53,6 +53,30 @@ const buildIconLink = (id?: string) =>
 const toTraderName = (name?: string): TraderName =>
   (name as TraderName) ?? "Prapor";
 
+const isDevOverlayWarningEnabled =
+  import.meta.env.DEV && import.meta.env.MODE !== "test";
+
+const normalizeItemKey = (item?: ObjectiveItem): string | null => {
+  if (!item) return null;
+  if (item.id) return `id:${item.id}`;
+
+  const normalizedName = item.name.trim().toLowerCase();
+  return normalizedName ? `name:${normalizedName}` : null;
+};
+
+const collectObjectiveItemKeys = (objectives?: ObjectiveLike[]): Set<string> => {
+  const keys = new Set<string>();
+
+  objectives?.forEach((objective) => {
+    objective.items?.forEach((item) => {
+      const key = normalizeItemKey(item);
+      if (key) keys.add(key);
+    });
+  });
+
+  return keys;
+};
+
 const normalizeObjectiveItems = (
   objective: TaskAddObjective,
 ): ObjectiveItem[] => {
@@ -194,9 +218,35 @@ export function applyTaskOverlay<T extends TaskOverlayTarget>(
   // Append missing objectives
   if (taskOverride.objectivesAdd && Array.isArray(taskOverride.objectivesAdd)) {
     const expanded = taskOverride.objectivesAdd.flatMap(expandObjectiveItems);
+    const existingItemKeys = collectObjectiveItemKeys(
+      result.objectives as ObjectiveLike[] | undefined,
+    );
+    const skippedOverlayItems: string[] = [];
+    const dedupedExpanded = expanded.filter((objective) => {
+      if (!objective.items || objective.items.length !== 1) return true;
+
+      const [item] = objective.items;
+      const key = normalizeItemKey(item);
+      if (!key) return true;
+
+      if (existingItemKeys.has(key)) {
+        skippedOverlayItems.push(item.name);
+        return false;
+      }
+
+      existingItemKeys.add(key);
+      return true;
+    });
+
+    if (skippedOverlayItems.length > 0 && isDevOverlayWarningEnabled) {
+      console.warn(
+        `[Overlay] Skipped duplicate overlay items for task ${baseTask.id}: ${skippedOverlayItems.join(", ")}`,
+      );
+    }
+
     result.objectives = [
       ...(result.objectives || []),
-      ...expanded,
+      ...dedupedExpanded,
     ] as TaskObjective[];
   }
 

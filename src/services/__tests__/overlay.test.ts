@@ -225,6 +225,51 @@ describe("Overlay Integration", () => {
                 "https://assets.tarkov.dev/69398e94ca94fd2877039504-icon.webp"
             );
         });
+
+        test("should skip duplicate collector items already returned by the API", () => {
+            const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+            const overlay: Overlay = {
+                tasks: {
+                    "5c51aac186f77432ea65c552": {
+                        objectivesAdd: [
+                            {
+                                description: "Hand over the found in raid Collector items",
+                                items: [{ id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" }]
+                            }
+                        ]
+                    }
+                },
+                $meta: { version: "1.0.0", generated: new Date().toISOString() }
+            };
+
+            const baseCollectorTask: Task = {
+                id: "5c51aac186f77432ea65c552",
+                name: "Collector",
+                minPlayerLevel: 1,
+                taskRequirements: [],
+                wikiLink: "",
+                map: { name: "Customs" },
+                maps: [],
+                trader: { name: "Fence" },
+                startRewards: { items: [] },
+                finishRewards: { items: [] },
+                objectives: [
+                    {
+                        description: "Hand over the found in raid item: Nut Sack balaclava",
+                        items: [{ id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" }]
+                    }
+                ]
+            };
+
+            const patched = applyTaskOverlay(baseCollectorTask, overlay);
+            const matchingObjectives = patched?.objectives?.filter((objective) =>
+                objective.items?.some((item) => item.id === "69398e94ca94fd2877039504")
+            );
+
+            expect(matchingObjectives).toHaveLength(1);
+            expect(warnSpy).not.toHaveBeenCalled();
+            warnSpy.mockRestore();
+        });
     });
 
     describe("Remote Fetching", () => {
