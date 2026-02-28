@@ -1,4 +1,5 @@
 import React, {
+  Fragment,
   useState,
   useMemo,
   useEffect,
@@ -102,6 +103,49 @@ interface CheckListViewProps {
     legacyObjectiveItemKey?: string,
   ) => void;
 }
+
+interface TaskDisplayGroup {
+  key: string;
+  tasks: Task[];
+  activeTask: Task;
+}
+
+const buildTaskMapSignature = (task: Task) => {
+  const mapNames =
+    task.maps.length > 0
+      ? task.maps.map((map) => map.name).sort()
+      : [task.map?.name ?? "No specific map"];
+
+  return mapNames.join("|");
+};
+
+const buildTaskObjectiveSignature = (task: Task) =>
+  JSON.stringify(
+    (task.objectives ?? []).map((objective) => ({
+      description: objective.description ?? "",
+      playerLevel: objective.playerLevel ?? null,
+      count: objective.count ?? null,
+      foundInRaid: objective.foundInRaid ?? null,
+      maps: (objective.maps ?? []).map((map) => map.name).sort(),
+      items: (objective.items ?? [])
+        .map((item) => item.id ?? item.name)
+        .sort(),
+    })),
+  );
+
+const buildLogicalTaskKey = (task: Task) =>
+  [
+    task.name,
+    task.trader.name,
+    task.factionName ?? "Any",
+    task.minPlayerLevel,
+    task.wikiLink,
+    buildTaskMapSignature(task),
+    buildTaskObjectiveSignature(task),
+    task.kappaRequired ? "kappa" : "no-kappa",
+    task.lightkeeperRequired ? "lightkeeper" : "no-lightkeeper",
+    task.isEvent ? "event" : "non-event",
+  ].join("::");
 
 export const CheckListView: React.FC<CheckListViewProps> = ({
   tasks,
@@ -316,54 +360,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     }
   }, [selectedTaskId]);
 
-  // Clicking a breadcrumb: expand proper group, select task (which opens its details)
-  const handleBreadcrumbClick = useCallback(
-    (taskId: string) => {
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-
-      if (task.isEvent) {
-        setExpandedGroups((prev) =>
-          prev.includes("Seasonal Events")
-            ? prev
-            : [...prev, "Seasonal Events"],
-        );
-        setSelectedTaskId(taskId);
-        setSearchTermImmediately(task.name);
-        return;
-      }
-
-      if (groupBy === "trader") {
-        const groupName = task.trader.name;
-        setExpandedGroups((prev) =>
-          prev.includes(groupName) ? prev : [...prev, groupName],
-        );
-      } else {
-        // For map grouping, expand all maps the task belongs to
-        if (task.maps && task.maps.length > 0) {
-          const mapNames = task.maps.map((m) => m.name);
-          setExpandedGroups((prev) => {
-            const newGroups = [...prev];
-            mapNames.forEach((name) => {
-              if (!newGroups.includes(name)) newGroups.push(name);
-            });
-            return newGroups;
-          });
-        } else {
-          const groupName = task.map?.name || "Anywhere";
-          setExpandedGroups((prev) =>
-            prev.includes(groupName) ? prev : [...prev, groupName],
-          );
-        }
-      }
-
-      setSelectedTaskId(taskId);
-      // Also reflect the clicked task in the search bar to filter the view
-      setSearchTermImmediately(task.name);
-    },
-    [tasks, groupBy, setSearchTermImmediately],
-  );
-
   const handleObjectiveItemDelta = useCallback(
     (
       objectiveItemKey: string,
@@ -537,6 +533,29 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     return [["Seasonal Events", filteredEventTasks], ...sortedGroups];
   }, [sortedGroups, hasEventTasks, filteredEventTasks]);
 
+  const logicalTaskGroupsByTaskId = useMemo(() => {
+    const grouped = new Map<string, Task[]>();
+
+    tasks.forEach((task) => {
+      const key = buildLogicalTaskKey(task);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.push(task);
+      } else {
+        grouped.set(key, [task]);
+      }
+    });
+
+    const byTaskId = new Map<string, Task[]>();
+    grouped.forEach((groupTasks) => {
+      groupTasks.forEach((task) => {
+        byTaskId.set(task.id, groupTasks);
+      });
+    });
+
+    return byTaskId;
+  }, [tasks]);
+
   const allGroupNames = useMemo(
     () => groupsWithEvents.map(([name]) => name),
     [groupsWithEvents],
@@ -544,6 +563,214 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   // Only use the explicitly expanded groups
   const finalExpandedGroups = expandedGroups;
   const areAllExpanded = finalExpandedGroups.length === allGroupNames.length;
+
+  const handleToggleAll = () => {
+    if (areAllExpanded) {
+      setExpandedGroups([]);
+    } else {
+      setExpandedGroups(allGroupNames);
+    }
+  };
+
+  const compareTasks = useCallback(
+    (a: Task, b: Task) => {
+      const compareByName = (left: Task, right: Task) =>
+        left.name.localeCompare(right.name, undefined, { numeric: true }) ||
+        left.id.localeCompare(right.id);
+      const compareByLevelAsc = (left: Task, right: Task) =>
+        left.minPlayerLevel - right.minPlayerLevel || compareByName(left, right);
+      const compareByLevelDesc = (left: Task, right: Task) =>
+        right.minPlayerLevel - left.minPlayerLevel || compareByName(left, right);
+      const compareByCompletion = (left: Task, right: Task) => {
+        const leftDone = completedTasks.has(left.id);
+        const rightDone = completedTasks.has(right.id);
+        if (leftDone === rightDone) return compareByName(left, right);
+        return leftDone ? 1 : -1;
+      };
+      const compareByWorkingOn = (left: Task, right: Task) => {
+        const leftWorkingOn = workingOnTasks.has(left.id);
+        const rightWorkingOn = workingOnTasks.has(right.id);
+        if (leftWorkingOn === rightWorkingOn) return compareByName(left, right);
+        return leftWorkingOn ? -1 : 1;
+      };
+      const compareByHasPrereqs = (left: Task, right: Task) => {
+        const leftHas = (left.taskRequirements?.length ?? 0) > 0;
+        const rightHas = (right.taskRequirements?.length ?? 0) > 0;
+        if (leftHas === rightHas) return compareByName(left, right);
+        return leftHas ? -1 : 1;
+      };
+      const compareByKappaRequired = (left: Task, right: Task) => {
+        const leftKappa = !!left.kappaRequired;
+        const rightKappa = !!right.kappaRequired;
+        if (leftKappa === rightKappa) return compareByName(left, right);
+        return leftKappa ? -1 : 1;
+      };
+
+      switch (sortMode) {
+        case "name-asc":
+          return compareByName(a, b);
+        case "level-asc":
+          return compareByLevelAsc(a, b);
+        case "level-desc":
+          return compareByLevelDesc(a, b);
+        case "complete-first":
+          return -compareByCompletion(a, b);
+        case "incomplete-first":
+          return compareByCompletion(a, b);
+        case "working-on-first":
+          return compareByWorkingOn(a, b);
+        case "has-prereqs-first":
+          return compareByHasPrereqs(a, b);
+        case "kappa-first":
+          return compareByKappaRequired(a, b);
+        default:
+          return compareByName(a, b);
+      }
+    },
+    [completedTasks, sortMode, workingOnTasks],
+  );
+
+  const getPreferredTask = useCallback(
+    (groupTasks: Task[], preferredTaskId?: string | null) => {
+      if (preferredTaskId) {
+        const preferredTask = groupTasks.find((task) => task.id === preferredTaskId);
+        if (preferredTask) return preferredTask;
+      }
+
+      const sorted = [...groupTasks].sort((a, b) => {
+        const aCompleted = completedTasks.has(a.id);
+        const bCompleted = completedTasks.has(b.id);
+        if (aCompleted !== bCompleted) return aCompleted ? -1 : 1;
+
+        const aWorking = workingOnTasks.has(a.id);
+        const bWorking = workingOnTasks.has(b.id);
+        if (aWorking !== bWorking) return aWorking ? -1 : 1;
+
+        const aUnlocked =
+          a.taskRequirements.length === 0 ||
+          a.taskRequirements.every((req) => completedTasks.has(req.task.id));
+        const bUnlocked =
+          b.taskRequirements.length === 0 ||
+          b.taskRequirements.every((req) => completedTasks.has(req.task.id));
+        if (aUnlocked !== bUnlocked) return aUnlocked ? -1 : 1;
+
+        const aCompletedPrereqs = a.taskRequirements.filter((req) =>
+          completedTasks.has(req.task.id),
+        ).length;
+        const bCompletedPrereqs = b.taskRequirements.filter((req) =>
+          completedTasks.has(req.task.id),
+        ).length;
+        if (aCompletedPrereqs !== bCompletedPrereqs) {
+          return bCompletedPrereqs - aCompletedPrereqs;
+        }
+
+        return compareTasks(a, b);
+      });
+
+      return sorted[0];
+    },
+    [compareTasks, completedTasks, workingOnTasks],
+  );
+
+  const resolveDisplayTaskId = useCallback(
+    (taskId: string) => {
+      const groupTasks = logicalTaskGroupsByTaskId.get(taskId);
+      if (!groupTasks) return taskId;
+      return getPreferredTask(groupTasks, taskId).id;
+    },
+    [getPreferredTask, logicalTaskGroupsByTaskId],
+  );
+
+  const isLogicalTaskCompleted = useCallback(
+    (taskId: string) => {
+      const groupTasks = logicalTaskGroupsByTaskId.get(taskId);
+      if (!groupTasks) return completedTasks.has(taskId);
+      return groupTasks.some((task) => completedTasks.has(task.id));
+    },
+    [completedTasks, logicalTaskGroupsByTaskId],
+  );
+
+  const collapseTaskVariants = useCallback(
+    (taskList: Task[], preferredTaskId?: string | null) => {
+      const grouped = new Map<string, Task[]>();
+
+      taskList.forEach((task) => {
+        const key = buildLogicalTaskKey(task);
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.push(task);
+        } else {
+          grouped.set(key, [task]);
+        }
+      });
+
+      return Array.from(grouped.entries()).map(([key, variantTasks]) => ({
+        key,
+        tasks: variantTasks,
+        activeTask: getPreferredTask(variantTasks, preferredTaskId),
+      }));
+    },
+    [getPreferredTask],
+  );
+
+  const getDisplayTaskGroups = useCallback(
+    (groupTasks: Task[]) =>
+      collapseTaskVariants(groupTasks, selectedTaskId).sort((a, b) =>
+        compareTasks(a.activeTask, b.activeTask),
+      ),
+    [collapseTaskVariants, compareTasks, selectedTaskId],
+  );
+
+  // Clicking a breadcrumb: expand proper group, select task (which opens its details)
+  const handleBreadcrumbClick = useCallback(
+    (taskId: string) => {
+      const displayTaskId = resolveDisplayTaskId(taskId);
+      const task =
+        tasks.find((t) => t.id === displayTaskId) ??
+        tasks.find((t) => t.id === taskId);
+      if (!task) return;
+
+      if (task.isEvent) {
+        setExpandedGroups((prev) =>
+          prev.includes("Seasonal Events")
+            ? prev
+            : [...prev, "Seasonal Events"],
+        );
+        setSelectedTaskId(displayTaskId);
+        setSearchTermImmediately(task.name);
+        return;
+      }
+
+      if (groupBy === "trader") {
+        const groupName = task.trader.name;
+        setExpandedGroups((prev) =>
+          prev.includes(groupName) ? prev : [...prev, groupName],
+        );
+      } else {
+        // For map grouping, expand all maps the task belongs to
+        if (task.maps && task.maps.length > 0) {
+          const mapNames = task.maps.map((m) => m.name);
+          setExpandedGroups((prev) => {
+            const newGroups = [...prev];
+            mapNames.forEach((name) => {
+              if (!newGroups.includes(name)) newGroups.push(name);
+            });
+            return newGroups;
+          });
+        } else {
+          const groupName = task.map?.name || "Anywhere";
+          setExpandedGroups((prev) =>
+            prev.includes(groupName) ? prev : [...prev, groupName],
+          );
+        }
+      }
+
+      setSelectedTaskId(displayTaskId);
+      // Also reflect the clicked task in the search bar to filter the view
+      setSearchTermImmediately(task.name);
+    },
+    [tasks, groupBy, resolveDisplayTaskId, setSearchTermImmediately],
+  );
 
   // Listen for global command search and apply to local search box (tasks scope)
   useEffect(() => {
@@ -561,46 +788,47 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       )
         return;
       setSearchTermImmediately(detail.term);
-      // Keep current UX of expanding all groups so results are visible
       setExpandedGroups(allGroupNames);
-      // If a specific task was chosen, open its details and ensure its group is expanded
       if (detail.taskId) {
-        const t = tasks.find((x) => x.id === detail.taskId);
-        if (t) {
-          if (t.isEvent) {
-            setExpandedGroups((prev) =>
-              prev.includes("Seasonal Events")
-                ? prev
-                : [...prev, "Seasonal Events"],
-            );
-            setSelectedTaskId(detail.taskId);
-            return;
-          }
-          if (groupBy === "trader") {
-            const groupName = t.trader.name;
-            setExpandedGroups((prev) =>
-              prev.includes(groupName) ? prev : [...prev, groupName],
-            );
-          } else {
-            // For map grouping, expand all maps the task belongs to
-            if (t.maps && t.maps.length > 0) {
-              const mapNames = t.maps.map((m) => m.name);
-              setExpandedGroups((prev) => {
-                const newGroups = [...prev];
-                mapNames.forEach((name) => {
-                  if (!newGroups.includes(name)) newGroups.push(name);
-                });
-                return newGroups;
-              });
-            } else {
-              const groupName = t.map?.name || "Anywhere";
-              setExpandedGroups((prev) =>
-                prev.includes(groupName) ? prev : [...prev, groupName],
-              );
-            }
-          }
-          setSelectedTaskId(detail.taskId);
+        const task = tasks.find((candidate) => candidate.id === detail.taskId);
+        if (!task) return;
+
+        const displayTaskId = resolveDisplayTaskId(detail.taskId);
+        const displayTask =
+          tasks.find((candidate) => candidate.id === displayTaskId) ?? task;
+
+        if (task.isEvent) {
+          setExpandedGroups((prev) =>
+            prev.includes("Seasonal Events")
+              ? prev
+              : [...prev, "Seasonal Events"],
+          );
+          setSelectedTaskId(displayTaskId);
+          return;
         }
+
+        if (groupBy === "trader") {
+          const groupName = displayTask.trader.name;
+          setExpandedGroups((prev) =>
+            prev.includes(groupName) ? prev : [...prev, groupName],
+          );
+        } else if (displayTask.maps && displayTask.maps.length > 0) {
+          const mapNames = displayTask.maps.map((map) => map.name);
+          setExpandedGroups((prev) => {
+            const newGroups = [...prev];
+            mapNames.forEach((name) => {
+              if (!newGroups.includes(name)) newGroups.push(name);
+            });
+            return newGroups;
+          });
+        } else {
+          const groupName = displayTask.map?.name || "Anywhere";
+          setExpandedGroups((prev) =>
+            prev.includes(groupName) ? prev : [...prev, groupName],
+          );
+        }
+
+        setSelectedTaskId(displayTaskId);
       }
     };
     window.addEventListener(
@@ -612,73 +840,13 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         "taskTracker:globalSearch",
         handler as EventListener,
       );
-  }, [allGroupNames, setSearchTermImmediately, tasks, groupBy]);
-
-  const handleToggleAll = () => {
-    if (areAllExpanded) {
-      setExpandedGroups([]);
-    } else {
-      setExpandedGroups(allGroupNames);
-    }
-  };
-
-  const getSortedTasks = useCallback(
-    (groupTasks: Task[]) => {
-      const sorted = [...groupTasks];
-      const compareByName = (a: Task, b: Task) =>
-        a.name.localeCompare(b.name, undefined, { numeric: true });
-      const compareByLevelAsc = (a: Task, b: Task) =>
-        a.minPlayerLevel - b.minPlayerLevel || compareByName(a, b);
-      const compareByLevelDesc = (a: Task, b: Task) =>
-        b.minPlayerLevel - a.minPlayerLevel || compareByName(a, b);
-      const compareByCompletion = (a: Task, b: Task) => {
-        const aDone = completedTasks.has(a.id);
-        const bDone = completedTasks.has(b.id);
-        if (aDone === bDone) return compareByName(a, b);
-        return aDone ? 1 : -1;
-      };
-      const compareByWorkingOn = (a: Task, b: Task) => {
-        const aWorkingOn = workingOnTasks.has(a.id);
-        const bWorkingOn = workingOnTasks.has(b.id);
-        if (aWorkingOn === bWorkingOn) return compareByName(a, b);
-        return aWorkingOn ? -1 : 1;
-      };
-      const compareByHasPrereqs = (a: Task, b: Task) => {
-        const aHas = (a.taskRequirements?.length ?? 0) > 0;
-        const bHas = (b.taskRequirements?.length ?? 0) > 0;
-        if (aHas === bHas) return compareByName(a, b);
-        return aHas ? -1 : 1;
-      };
-      const compareByKappaRequired = (a: Task, b: Task) => {
-        const aKappa = !!a.kappaRequired;
-        const bKappa = !!b.kappaRequired;
-        if (aKappa === bKappa) return compareByName(a, b);
-        return aKappa ? -1 : 1;
-      };
-
-      switch (sortMode) {
-        case "name-asc":
-          return sorted.sort(compareByName);
-        case "level-asc":
-          return sorted.sort(compareByLevelAsc);
-        case "level-desc":
-          return sorted.sort(compareByLevelDesc);
-        case "complete-first":
-          return sorted.sort((a, b) => -compareByCompletion(a, b));
-        case "incomplete-first":
-          return sorted.sort(compareByCompletion);
-        case "working-on-first":
-          return sorted.sort(compareByWorkingOn);
-        case "has-prereqs-first":
-          return sorted.sort(compareByHasPrereqs);
-        case "kappa-first":
-          return sorted.sort(compareByKappaRequired);
-        default:
-          return sorted;
-      }
-    },
-    [completedTasks, sortMode, workingOnTasks],
-  );
+  }, [
+    allGroupNames,
+    groupBy,
+    resolveDisplayTaskId,
+    setSearchTermImmediately,
+    tasks,
+  ]);
 
   return (
     <div className="p-4 bg-background text-foreground">
@@ -836,47 +1004,225 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         <div className="sticky top-16 z-10 mb-3 border rounded-md bg-card p-3">
           {(() => {
             const taskMap = new Map(tasks.map((t) => [t.id, t]));
-            const currentTask = taskMap.get(selectedTaskId);
+            const selectedTaskVariants =
+              logicalTaskGroupsByTaskId.get(selectedTaskId) ??
+              (taskMap.get(selectedTaskId) ? [taskMap.get(selectedTaskId)!] : []);
+            const currentTask =
+              getPreferredTask(selectedTaskVariants, selectedTaskId) ??
+              taskMap.get(selectedTaskId);
             if (!currentTask) return null;
 
-            // Get direct predecessors (tasks this one requires)
-            const predecessors = currentTask.taskRequirements
-              .map((req) => taskMap.get(req.task.id))
-              .filter((t): t is Task => !!t)
+            const selectedTaskIds = new Set(
+              selectedTaskVariants.map((task) => task.id),
+            );
+
+            // Get direct predecessors (tasks any variant requires)
+            const predecessorCandidates = selectedTaskVariants.flatMap((task) =>
+              task.taskRequirements
+                .map((req) => {
+                  const displayTaskId = resolveDisplayTaskId(req.task.id);
+                  return taskMap.get(displayTaskId) ?? taskMap.get(req.task.id);
+                })
+                .filter((task): task is Task => !!task),
+            );
+            const predecessors = collapseTaskVariants(predecessorCandidates)
+              .map((group) => group.activeTask)
               .sort((a, b) => a.name.localeCompare(b.name));
 
-            // Get direct successors (tasks that require this one)
-            const successors = tasks
+            // Get direct successors (tasks that require any current variant)
+            const successorCandidates = tasks
               .filter((t) =>
                 t.taskRequirements?.some(
-                  (req) => req.task.id === selectedTaskId,
+                  (req) => selectedTaskIds.has(req.task.id),
                 ),
-              )
+              );
+            const successors = collapseTaskVariants(successorCandidates)
+              .map((group) => group.activeTask)
               .sort((a, b) => a.name.localeCompare(b.name));
+            const showsAlternativePreviousPaths =
+              selectedTaskVariants.length > 1 && predecessors.length > 1;
+            const predecessorNodeHeight = 34;
+            const predecessorGap = 8;
+            const predecessorColumnWidth = 256;
+            const previousConnectorWidth = 88;
+            const currentColumnWidth = 104;
+            const leadsArrowColumnWidth = 16;
+            const connectorHeight =
+              predecessors.length * predecessorNodeHeight +
+              Math.max(0, predecessors.length - 1) * predecessorGap;
+            const connectorCenterY = predecessorNodeHeight / 2;
 
-            return (
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Previous tasks */}
-                {predecessors.length > 0 && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        Previous
+            if (showsAlternativePreviousPaths) {
+              return (
+                <div className="overflow-x-auto">
+                  <div
+                    className="grid w-max gap-x-2 gap-y-3"
+                    style={{
+                      gridTemplateColumns: `${predecessorColumnWidth}px ${previousConnectorWidth}px ${currentColumnWidth}px ${leadsArrowColumnWidth}px max-content`,
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-slate-400/85">
+                        Previous Paths
                       </span>
-                      <div className="flex flex-wrap gap-1">
-                        {predecessors.map((t) => (
+                    </div>
+                    <div />
+                    <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-slate-400/85">
+                      Current
+                    </span>
+                    <div />
+                    <span className="text-[9px] font-medium uppercase tracking-[0.22em] text-slate-400/85">
+                      Leads to
+                    </span>
+
+                    <div className="flex flex-col gap-2">
+                      {predecessors.map((t) => (
+                        <span
+                          key={t.id}
+                          className={cn(
+                            "inline-flex h-[36px] w-[16rem] items-center rounded-md px-3 text-xs cursor-pointer transition-colors",
+                            "bg-gray-800 hover:bg-gray-600",
+                            isLogicalTaskCompleted(t.id) &&
+                              "line-through opacity-60",
+                          )}
+                          onClick={() => handleBreadcrumbClick(t.id)}
+                        >
+                          <span className="truncate">{t.name}</span>
+                        </span>
+                      ))}
+                    </div>
+
+                    <div
+                      className="relative"
+                      style={{ height: `${connectorHeight}px` }}
+                    >
+                      <svg
+                        className="absolute inset-0 h-full w-full overflow-visible"
+                        viewBox={`0 0 ${previousConnectorWidth} ${connectorHeight}`}
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        {predecessors.map((task, index) => {
+                          const startY =
+                            predecessorNodeHeight / 2 +
+                            index * (predecessorNodeHeight + predecessorGap);
+                          return (
+                            <path
+                              key={task.id}
+                              d={`M0 ${startY} C 26 ${startY} 28 ${connectorCenterY} ${previousConnectorWidth - 16} ${connectorCenterY}`}
+                              stroke="rgba(226, 232, 240, 0.88)"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                          );
+                        })}
+                        <path
+                          d={`M${previousConnectorWidth - 18} ${connectorCenterY - 6} L${previousConnectorWidth - 4} ${connectorCenterY} L${previousConnectorWidth - 18} ${connectorCenterY + 6}`}
+                          fill="rgba(226, 232, 240, 0.88)"
+                        />
+                      </svg>
+                    </div>
+
+                    <div
+                      className="flex items-start pt-1.5"
+                      style={{ minHeight: `${connectorHeight}px` }}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs cursor-pointer transition-colors text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+                          isLogicalTaskCompleted(selectedTaskId) &&
+                            "line-through opacity-60",
+                        )}
+                        onClick={() => handleBreadcrumbClick(selectedTaskId)}
+                      >
+                        <span className="truncate">{currentTask.name}</span>
+                      </span>
+                    </div>
+
+                    <div
+                      className="flex items-start justify-center pt-[7px]"
+                      style={{ minHeight: `${connectorHeight}px` }}
+                    >
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+
+                    <div
+                      className="flex items-start pt-1.5"
+                      style={{ minHeight: `${connectorHeight}px` }}
+                    >
+                      <div className="flex max-w-[22rem] flex-wrap gap-1">
+                        {successors.map((t) => (
                           <span
                             key={t.id}
                             className={cn(
-                              "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
-                              "bg-gray-800 hover:bg-gray-600",
-                              completedTasks.has(t.id) &&
+                              "text-xs px-2 py-1 rounded-md cursor-pointer transition-colors",
+                              "bg-gray-700 hover:bg-gray-600",
+                              isLogicalTaskCompleted(t.id) &&
                                 "line-through opacity-60",
                             )}
                             onClick={() => handleBreadcrumbClick(t.id)}
                           >
                             {t.name}
                           </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Previous tasks */}
+                {predecessors.length > 0 && (
+                  <>
+                    <div
+                      className={cn(
+                        "flex flex-col gap-1",
+                        showsAlternativePreviousPaths &&
+                          "rounded-md border border-dashed border-amber-500/30 bg-amber-500/5 px-2 py-2",
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                          {showsAlternativePreviousPaths
+                            ? "Previous Paths"
+                            : "Previous"}
+                        </span>
+                        {showsAlternativePreviousPaths && (
+                          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                            Any one
+                          </span>
+                        )}
+                      </div>
+                      {showsAlternativePreviousPaths && (
+                        <span className="text-[10px] text-muted-foreground">
+                          Different branches can unlock this task.
+                        </span>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1">
+                        {predecessors.map((t, index) => (
+                          <Fragment key={t.id}>
+                            {showsAlternativePreviousPaths && index > 0 && (
+                              <span className="px-1 text-[10px] font-semibold uppercase tracking-wide text-amber-400/80">
+                                or
+                              </span>
+                            )}
+                            <span
+                              className={cn(
+                                "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
+                                showsAlternativePreviousPaths
+                                  ? "bg-slate-800 hover:bg-slate-700"
+                                  : "bg-gray-800 hover:bg-gray-600",
+                                isLogicalTaskCompleted(t.id) &&
+                                  "line-through opacity-60",
+                              )}
+                              onClick={() => handleBreadcrumbClick(t.id)}
+                            >
+                              {t.name}
+                            </span>
+                          </Fragment>
                         ))}
                       </div>
                     </div>
@@ -893,7 +1239,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                     className={cn(
                       "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                       "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
-                      completedTasks.has(selectedTaskId) &&
+                      isLogicalTaskCompleted(selectedTaskId) &&
                         "line-through opacity-60",
                     )}
                     onClick={() => handleBreadcrumbClick(selectedTaskId)}
@@ -917,7 +1263,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                             className={cn(
                               "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                               "bg-gray-700 hover:bg-gray-600",
-                              completedTasks.has(t.id) &&
+                              isLogicalTaskCompleted(t.id) &&
                                 "line-through opacity-60",
                             )}
                             onClick={() => handleBreadcrumbClick(t.id)}
@@ -943,11 +1289,11 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         onValueChange={setExpandedGroups}
       >
         {groupsWithEvents.map(([groupName, groupTasks]) => {
-          const sortedGroupTasks = getSortedTasks(groupTasks);
-          const completedCount = groupTasks.filter((t) =>
-            completedTasks.has(t.id),
+          const displayTaskGroups = getDisplayTaskGroups(groupTasks);
+          const completedCount = displayTaskGroups.filter((group) =>
+            group.tasks.some((task) => completedTasks.has(task.id)),
           ).length;
-          const totalCount = groupTasks.length;
+          const totalCount = displayTaskGroups.length;
           const progress =
             totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
           const isEventGroup = groupName === "Seasonal Events";
@@ -994,9 +1340,14 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 border-t">
                   <div className="pr-2 space-y-1">
-                    {sortedGroupTasks.map((task) => {
-                      const isCompleted = completedTasks.has(task.id);
-                      const isDetailsOpen = selectedTaskId === task.id;
+                    {displayTaskGroups.map((group) => {
+                      const task = group.activeTask;
+                      const isCompleted = group.tasks.some((variant) =>
+                        completedTasks.has(variant.id),
+                      );
+                      const isDetailsOpen = group.tasks.some(
+                        (variant) => variant.id === selectedTaskId,
+                      );
                       const objectiveProgress = objectiveProgressByTaskId.get(
                         task.id,
                       );
@@ -1064,14 +1415,18 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                         achievementRewardBadges.length > 0);
                       return (
                         <div
-                          key={task.id}
-                          ref={(el) => itemRefs.current.set(task.id, el)}
+                          key={group.key}
+                          ref={(el) => {
+                            group.tasks.forEach((variant) => {
+                              itemRefs.current.set(variant.id, el);
+                            });
+                          }}
                         >
                         <Collapsible
                           open={isDetailsOpen}
                           onOpenChange={(open) => {
                             if (open) setSelectedTaskId(task.id);
-                            else if (selectedTaskId === task.id)
+                            else if (isDetailsOpen)
                               setSelectedTaskId(null);
                           }}
                         >
@@ -1097,25 +1452,33 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                 }}
                                 className={cn(
                                   "p-1 rounded-sm transition-colors",
-                                  workingOnTasks.has(task.id)
+                                  group.tasks.some((variant) =>
+                                    workingOnTasks.has(variant.id),
+                                  )
                                     ? "text-blue-500 hover:text-blue-600"
                                     : "text-muted-foreground/40 hover:text-muted-foreground",
                                 )}
                                 title={
-                                  workingOnTasks.has(task.id)
+                                  group.tasks.some((variant) =>
+                                    workingOnTasks.has(variant.id),
+                                  )
                                     ? "Remove from working on"
                                     : "Mark as working on"
                                 }
                                 aria-label={
-                                  workingOnTasks.has(task.id)
+                                  group.tasks.some((variant) =>
+                                    workingOnTasks.has(variant.id),
+                                  )
                                     ? "Remove from working on"
                                     : "Mark as working on"
                                 }
                               >
-                                <Target
-                                  className="h-4 w-4"
-                                  fill={
-                                    workingOnTasks.has(task.id)
+                                  <Target
+                                    className="h-4 w-4"
+                                    fill={
+                                    group.tasks.some((variant) =>
+                                      workingOnTasks.has(variant.id),
+                                    )
                                       ? "currentColor"
                                       : "none"
                                   }

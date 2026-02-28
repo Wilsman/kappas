@@ -181,21 +181,28 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
       });
     });
 
-    // Build parent-child relationships
+    // Build parent-child relationships. A task can have multiple prerequisites,
+    // but rendering it under every parent duplicates the same card in the tree.
+    // Attach each task once to the first visible prerequisite and let the
+    // selected-task breadcrumb show the full predecessor list.
     filteredTasks.forEach(task => {
       const node = nodeMap.get(task.id)!;
       
       if (task.taskRequirements.length === 0) {
         rootNodes.push(node);
       } else {
-        // Add this task as a child to its dependencies
-        task.taskRequirements.forEach(req => {
-          const parentNode = nodeMap.get(req.task.id);
-          if (parentNode) {
-            parentNode.children.push(node);
-            node.level = Math.max(node.level, parentNode.level + 1);
-          }
-        });
+        const visibleParents = task.taskRequirements
+          .map(req => nodeMap.get(req.task.id))
+          .filter((parentNode): parentNode is TreeNode => !!parentNode);
+
+        if (visibleParents.length === 0) {
+          rootNodes.push(node);
+          return;
+        }
+
+        const parentNode = visibleParents[0];
+        parentNode.children.push(node);
+        node.level = parentNode.level + 1;
       }
     });
 
