@@ -1,5 +1,2 @@
 name = "task-tracker"
-
-[build]
-command = "npm run build"
-output = "dist"
+pages_build_output_dir = "dist"

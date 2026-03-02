@@ -86,6 +86,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "tree"
     | "grouped"
     | "collector"
+    | "tracked-items"
     | "flow"
     | "prestiges"
     | "achievements"
@@ -638,13 +639,31 @@ export function AppSidebar({
 
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  isActive={viewMode === "collector"}
-                  onClick={() => onSetViewMode("collector")}
+                  isActive={
+                    viewMode === "collector" ||
+                    viewMode === "tracked-items" ||
+                    viewMode === "hideout-requirements"
+                  }
+                  onClick={() => onSetViewMode("tracked-items")}
                 >
                   <Package />
                   <span>Items</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub className="mt-1">
+                  <li>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={viewMode === "tracked-items"}
+                    >
+                      <a
+                        className="cursor-pointer"
+                        onClick={() => onSetViewMode("tracked-items")}
+                      >
+                        <ListTodo />
+                        <span>Item Tracker</span>
+                      </a>
+                    </SidebarMenuSubButton>
+                  </li>
                   <li>
                     <SidebarMenuSubButton
                       asChild

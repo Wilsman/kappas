@@ -104,12 +104,6 @@ interface CheckListViewProps {
   ) => void;
 }
 
-interface TaskDisplayGroup {
-  key: string;
-  tasks: Task[];
-  activeTask: Task;
-}
-
 const buildTaskMapSignature = (task: Task) => {
   const mapNames =
     task.maps.length > 0

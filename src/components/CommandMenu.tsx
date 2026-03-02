@@ -37,6 +37,7 @@ interface CommandMenuProps {
     | "tree"
     | "grouped"
     | "collector"
+    | "tracked-items"
     | "flow"
     | "prestiges"
     | "achievements"
@@ -612,7 +613,11 @@ export function CommandMenu(props: CommandMenuProps) {
       setOpen(false);
     },
     navigateCollector() {
-      onSetViewMode("collector");
+      onSetViewMode("tracked-items");
+      setOpen(false);
+    },
+    navigateTrackedItems() {
+      onSetViewMode("tracked-items");
       setOpen(false);
     },
     navigateCollectorItems() {
@@ -1377,7 +1382,17 @@ export function CommandMenu(props: CommandMenuProps) {
 
             <CommandGroup heading="Items">
               <CommandItem value="items" onSelect={handle.navigateCollector}>
-                Items {viewMode === "collector" ? "(current)" : ""}
+                Items{" "}
+                {viewMode === "collector" || viewMode === "tracked-items"
+                  ? "(current)"
+                  : ""}
+              </CommandItem>
+              <CommandItem
+                value="tracked-items"
+                onSelect={handle.navigateTrackedItems}
+              >
+                Item Tracker{" "}
+                {viewMode === "tracked-items" ? "(current)" : ""}
               </CommandItem>
               <CommandItem
                 value="collector-items"

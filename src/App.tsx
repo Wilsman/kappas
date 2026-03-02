@@ -132,6 +132,11 @@ const HideoutRequirementsView = lazy(() =>
     default: m.HideoutRequirementsView,
   })),
 );
+const TrackedItemsView = lazy(() =>
+  import("./components/TrackedItemsView").then((m) => ({
+    default: m.TrackedItemsView,
+  })),
+);
 const StorylineContainer = lazy(() =>
   import("./components/storyline-map").then((m) => ({
     default: m.StorylineContainer,
@@ -359,6 +364,7 @@ function App() {
     | "tree"
     | "grouped"
     | "collector"
+    | "tracked-items"
     | "flow"
     | "prestiges"
     | "achievements"
@@ -439,7 +445,11 @@ function App() {
       // Both /Quests and /Quests/Checklist route to grouped checklist
       nextView = "grouped";
     } else if (parts[0] === "items") {
-      nextView = "collector";
+      if (!parts[1] || parts[1] === "trackeditems") {
+        nextView = "tracked-items";
+      } else {
+        nextView = "collector";
+      }
       if (parts[1] === "collectoritems") nextCollectorGroupBy = "collector";
       else if (parts[1] === "hideoutstations")
         nextCollectorGroupBy = "hideout-stations";
@@ -510,6 +520,8 @@ function App() {
     if (viewMode === "grouped") {
       // Default checklist view lives at root
       nextPath = "/";
+    } else if (viewMode === "tracked-items") {
+      nextPath = "/Items/TrackedItems";
     } else if (viewMode === "collector") {
       nextPath =
         collectorGroupBy === "hideout-stations"
@@ -2247,6 +2259,7 @@ function App() {
                 className={cn(
                   "flex-1 min-h-0 bg-background relative",
                   viewMode === "grouped" ||
+                    viewMode === "tracked-items" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
                     viewMode === "prestiges" ||
@@ -2288,6 +2301,24 @@ function App() {
                           onUpdateTaskObjectiveItemProgress={
                             handleUpdateTaskObjectiveItemProgress
                           }
+                        />
+                      ) : viewMode === "tracked-items" ? (
+                        <TrackedItemsView
+                          tasks={tasksWithEvents}
+                          completedTasks={completedTasks}
+                          completedTaskObjectives={completedTaskObjectives}
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
+                          hideoutStations={hideoutStations}
+                          completedHideoutItems={completedHideoutItems}
+                          hideoutItemQuantities={hideoutItemQuantities}
+                          onSetHideoutItems={handleSetHideoutItems}
+                          onUpdateHideoutItemQuantity={
+                            handleUpdateHideoutItemQuantity
+                          }
+                          playerLevel={playerLevel}
                         />
                       ) : viewMode === "collector" ? (
                         <CollectorView
