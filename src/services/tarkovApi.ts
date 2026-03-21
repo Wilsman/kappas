@@ -758,6 +758,7 @@ export async function fetchCombinedData(
 
     return {
       ...task,
+      wikiLink: task.wikiLink ?? "",
       maps,
     };
   });

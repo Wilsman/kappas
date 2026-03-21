@@ -11508,7 +11508,7 @@ export const sampleData: TaskData = {
         lightkeeperRequired: false,
         map: null,
         maps: [],
-        wikiLink: "https://escapefromtarkov.fandom.com/wiki/Immunity",
+        wikiLink: "https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)",
         name: "Immunity",
         trader: {
           name: "Fence",
@@ -12264,4 +12264,3 @@ sampleData.data.tasks.push(
     ],
   }
 );
-

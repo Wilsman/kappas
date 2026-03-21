@@ -217,6 +217,61 @@ describe('fetchCombinedData', () => {
     expect(task.maps.map((m: { name: string }) => m.name)).toContain('Woods');
     expect(task.maps.map((m: { name: string }) => m.name)).toContain('Factory');
   });
+
+  it('applies task wiki link overrides from the fetched overlay', async () => {
+    const apiResponse = {
+      data: {
+        tasks: [
+          {
+            id: '6663148ca9290f9e0806cca1',
+            minPlayerLevel: 1,
+            kappaRequired: false,
+            lightkeeperRequired: false,
+            map: null,
+            taskRequirements: [],
+            trader: { name: 'Fence', imageLink: 'img' },
+            wikiLink: 'https://escapefromtarkov.fandom.com/wiki/Immunity',
+            name: 'Immunity',
+            objectives: [],
+          },
+        ],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    };
+
+    const overlayResponse = {
+      tasks: {
+        '6663148ca9290f9e0806cca1': {
+          wikiLink: 'https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)',
+        },
+      },
+      $meta: {
+        version: '1.19',
+        generated: '2026-03-21T21:38:28.266Z',
+      },
+    };
+
+    (globalThis as unknown as { fetch: Mock }).fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(apiResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(overlayResponse),
+      });
+
+    const result = await fetchCombinedData();
+
+    expect(result.tasks.data.tasks[0].wikiLink).toBe(
+      'https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)'
+    );
+  });
 });
 
 describe('Cache functionality', () => {
