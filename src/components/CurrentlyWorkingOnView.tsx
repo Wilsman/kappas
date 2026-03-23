@@ -44,6 +44,14 @@ import {
   getTaskObjectiveItemProgress,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
+import {
+  areLogicalPrerequisitesCompleted,
+  buildLogicalTaskGroupsByTaskId,
+  buildLogicalTaskKey,
+  getLogicalCompletedPrerequisiteCount,
+  isLogicalTaskCompleted,
+  isLogicalTaskCompletable,
+} from "@/utils/taskVariants";
 
 interface CurrentlyWorkingOnViewProps {
   tasks: Task[];
@@ -111,6 +119,22 @@ export function CurrentlyWorkingOnView({
     new Set(),
   );
   const [showAllNextTasks, setShowAllNextTasks] = useState(false);
+  const logicalTaskGroupsByTaskId = useMemo(
+    () => buildLogicalTaskGroupsByTaskId(tasks),
+    [tasks],
+  );
+  const workingOnLogicalKeys = useMemo(
+    () =>
+      new Set(
+        Array.from(workingOnTasks)
+          .map((taskId) => {
+            const task = tasks.find((entry) => entry.id === taskId);
+            return task ? buildLogicalTaskKey(task) : null;
+          })
+          .filter((key): key is string => key !== null),
+      ),
+    [tasks, workingOnTasks],
+  );
 
   const toggleTaskExpanded = (taskId: string) => {
     setExpandedTasks((prev) => {
@@ -168,23 +192,80 @@ export function CurrentlyWorkingOnView({
 
   // Filter tasks that are marked as working on
   const activeTasks = useMemo(() => {
-    return tasks.filter((task) => workingOnTasks.has(task.id));
-  }, [tasks, workingOnTasks]);
+    const preferredTaskByLogicalKey = new Map<string, Task>();
+
+    tasks.forEach((task) => {
+      const key = buildLogicalTaskKey(task);
+      if (!workingOnLogicalKeys.has(key)) return;
+
+      const existing = preferredTaskByLogicalKey.get(key);
+      if (!existing || task.id.localeCompare(existing.id) < 0) {
+        preferredTaskByLogicalKey.set(key, task);
+      }
+    });
+
+    return Array.from(preferredTaskByLogicalKey.values());
+  }, [tasks, workingOnLogicalKeys]);
 
   const nextTasks = useMemo(() => {
     const level = Number.isFinite(playerLevel) ? playerLevel : 1;
-    return tasks.filter((task) => {
-      if (completedTasks.has(task.id)) return false;
-      if (workingOnTasks.has(task.id)) return false;
-      if (task.minPlayerLevel > level) return false;
-      if (task.taskRequirements && task.taskRequirements.length > 0) {
-        return task.taskRequirements.every((req) =>
-          completedTasks.has(req.task.id),
-        );
+    const preferredTaskByLogicalKey = new Map<string, Task>();
+
+    const compareTasks = (left: Task, right: Task) => {
+      const leftUnlocked = areLogicalPrerequisitesCompleted(
+        left,
+        completedTasks,
+        logicalTaskGroupsByTaskId,
+      );
+      const rightUnlocked = areLogicalPrerequisitesCompleted(
+        right,
+        completedTasks,
+        logicalTaskGroupsByTaskId,
+      );
+      if (leftUnlocked !== rightUnlocked) return leftUnlocked ? -1 : 1;
+
+      const leftPrereqCount = getLogicalCompletedPrerequisiteCount(
+        left,
+        completedTasks,
+        logicalTaskGroupsByTaskId,
+      );
+      const rightPrereqCount = getLogicalCompletedPrerequisiteCount(
+        right,
+        completedTasks,
+        logicalTaskGroupsByTaskId,
+      );
+      if (leftPrereqCount !== rightPrereqCount) {
+        return rightPrereqCount - leftPrereqCount;
       }
-      return true;
+
+      return (
+        left.name.localeCompare(right.name, undefined, { numeric: true }) ||
+        left.id.localeCompare(right.id)
+      );
+    };
+
+    tasks.forEach((task) => {
+      if (!isLogicalTaskCompletable(task, completedTasks, logicalTaskGroupsByTaskId)) {
+        return;
+      }
+      const key = buildLogicalTaskKey(task);
+      if (workingOnLogicalKeys.has(key)) return;
+      if (task.minPlayerLevel > level) return;
+
+      const existing = preferredTaskByLogicalKey.get(key);
+      if (!existing || compareTasks(task, existing) < 0) {
+        preferredTaskByLogicalKey.set(key, task);
+      }
     });
-  }, [tasks, completedTasks, workingOnTasks, playerLevel]);
+
+    return Array.from(preferredTaskByLogicalKey.values());
+  }, [
+    tasks,
+    completedTasks,
+    playerLevel,
+    logicalTaskGroupsByTaskId,
+    workingOnLogicalKeys,
+  ]);
 
   const objectiveProgressByTaskId = useMemo(() => {
     const map = new Map<string, { completed: number; total: number }>();
@@ -464,7 +545,11 @@ export function CurrentlyWorkingOnView({
                 </div>
                 <div className="space-y-2 ml-6">
                   {mapTasks.map((task) => {
-                    const isTaskCompleted = completedTasks.has(task.id);
+                    const isTaskCompleted = isLogicalTaskCompleted(
+                      task.id,
+                      completedTasks,
+                      logicalTaskGroupsByTaskId,
+                    );
                     const isExpanded = expandedTasks.has(task.id);
                     const objectiveKeys = buildTaskObjectiveKeys(task);
                     const objectiveProgress = objectiveProgressByTaskId.get(

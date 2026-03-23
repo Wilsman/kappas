@@ -4,6 +4,10 @@ import { calculateTaskLevels } from '@/utils/taskUtils';
 import { TaskNode } from './TaskNode';
 import { ConnectionLine } from './ConnectionLine';
 import { TRADER_COLORS } from '@/data/traders';
+import {
+  buildLogicalTaskGroupsByTaskId,
+  isLogicalTaskCompleted,
+} from '@/utils/taskVariants';
 
 interface FlowViewProps {
   tasks: Task[];
@@ -43,6 +47,10 @@ export const FlowView: React.FC<FlowViewProps> = ({
 
   const levels = useMemo(() => calculateTaskLevels(filteredTasks), [filteredTasks]);
   const taskMap = useMemo(() => new Map(filteredTasks.map(t => [t.id, t])), [filteredTasks]);
+  const logicalTaskGroupsByTaskId = useMemo(
+    () => buildLogicalTaskGroupsByTaskId(filteredTasks),
+    [filteredTasks],
+  );
 
   // Determine trader order visible in this view
   const tradersInData = useMemo(() => {
@@ -222,7 +230,17 @@ export const FlowView: React.FC<FlowViewProps> = ({
             if (!from || !to || !fromTask) return null;
             const sameTrader = fromTask.trader.name === task.trader.name;
             if (!sameTrader && !showCrossTraderLinks) return null;
-            const isCompleted = completedTasks.has(task.id) && completedTasks.has(req.task.id);
+            const isCompleted =
+              isLogicalTaskCompleted(
+                task.id,
+                completedTasks,
+                logicalTaskGroupsByTaskId,
+              ) &&
+              isLogicalTaskCompleted(
+                req.task.id,
+                completedTasks,
+                logicalTaskGroupsByTaskId,
+              );
             return (
               <ConnectionLine
                 key={`${req.task.id}->${task.id}`}
@@ -238,7 +256,11 @@ export const FlowView: React.FC<FlowViewProps> = ({
         {/* Task nodes */}
         {filteredTasks.map(task => {
           const position = positions.get(task.id)!;
-          const isCompleted = completedTasks.has(task.id);
+          const isCompleted = isLogicalTaskCompleted(
+            task.id,
+            completedTasks,
+            logicalTaskGroupsByTaskId,
+          );
           return (
             <TaskNode
               key={task.id}
@@ -246,7 +268,13 @@ export const FlowView: React.FC<FlowViewProps> = ({
               isCompleted={isCompleted}
               onToggleComplete={onToggleComplete}
               position={position}
-              completedTasks={completedTasks}
+              isTaskCompleted={(taskId) =>
+                isLogicalTaskCompleted(
+                  taskId,
+                  completedTasks,
+                  logicalTaskGroupsByTaskId,
+                )
+              }
               isHighlighted={highlightedTaskId === task.id}
             />
           );
