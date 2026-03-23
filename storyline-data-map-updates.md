@@ -163,8 +163,8 @@ Defined in [endingData.ts](cci:7://file:///f:/task-tracker/src/components/storyl
 
 - Screenshot shows “hand 2 major evidence to Kerman, then stop working with him”
   - Code jumps from `Kerman-evidence-decision` directly to `1b3-no-help-lk` (no node)
-- Screenshot shows **48 hour timegate** between “place amulets” and “LK gives keycard”
-  - Code has no timegate node between `1b3-place-amulets` and `1b3-get-keycard`
+- Current player reports indicate the old **48 hour timegate** between “place amulets” and “LK gives keycard” has been removed
+  - Code should connect `1b3-place-amulets` directly to `1b3-get-keycard`
 - “U Turn Achievement” is a screenshot node; code includes it only as a note on:
   - `1b3-no-help-lk` note: `🏆 Achievement: U Turn`
 

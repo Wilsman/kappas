@@ -118,7 +118,6 @@ const storylineNodePositions = {
   "kill-30": { x: 1803, y: 2686 },
   amulet: { x: 1783, y: 2782 },
   place: { x: 1787, y: 2907 },
-  "tg-48d": { x: 1814, y: 3034 },
   "lk-key": { x: 1787, y: 3154 },
   "end-setup-debtor": { x: 1795, y: 3581 },
   "fail-debtor": { x: 1796, y: 3714 },
@@ -944,21 +943,11 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     },
   },
   {
-    id: "tg-48d",
-    type: "craft",
-    data: {
-      label: "48h timegate",
-      description: "Wait for Lightkeeper",
-      isTimeGate: true,
-      timeGateHours: 48,
-    },
-  },
-  {
     id: "lk-key",
     type: "story",
     data: {
       label: "Lightkeeper hands you a Keycard for Terminal",
-      description: "Key item received",
+      description: "Given immediately after planting the amulets",
     },
   },
 
@@ -1594,14 +1583,8 @@ export const initialEdges: Edge[] = [
     style: { stroke: "#a78bfa" },
   },
   {
-    id: "e-place-tg48d",
+    id: "e-place-lkkey",
     source: "place",
-    target: "tg-48d",
-    style: { stroke: "#a78bfa" },
-  },
-  {
-    id: "e-tg48d-lkkey",
-    source: "tg-48d",
     target: "lk-key",
     style: { stroke: "#a78bfa" },
   },
