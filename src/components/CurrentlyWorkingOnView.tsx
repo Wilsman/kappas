@@ -186,6 +186,14 @@ export function CurrentlyWorkingOnView({
   const nextTasks = useMemo(() => {
     const level = Number.isFinite(playerLevel) ? playerLevel : 1;
     const preferredTaskByLogicalKey = new Map<string, Task>();
+    const workingOnLogicalKeys = new Set(
+      Array.from(workingOnTasks)
+        .map((taskId) => {
+          const task = tasks.find((entry) => entry.id === taskId);
+          return task ? buildLogicalTaskKey(task) : null;
+        })
+        .filter((key): key is string => key !== null),
+    );
 
     const compareTasks = (left: Task, right: Task) => {
       const leftUnlocked = areLogicalPrerequisitesCompleted(
@@ -224,10 +232,10 @@ export function CurrentlyWorkingOnView({
       if (!isLogicalTaskCompletable(task, completedTasks, logicalTaskGroupsByTaskId)) {
         return;
       }
-      if (workingOnTasks.has(task.id)) return;
+      const key = buildLogicalTaskKey(task);
+      if (workingOnLogicalKeys.has(key)) return;
       if (task.minPlayerLevel > level) return;
 
-      const key = buildLogicalTaskKey(task);
       const existing = preferredTaskByLogicalKey.get(key);
       if (!existing || compareTasks(task, existing) < 0) {
         preferredTaskByLogicalKey.set(key, task);

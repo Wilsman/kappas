@@ -2,6 +2,7 @@ import type { Task } from "@/types";
 import { sampleData } from "@/data/sample-data";
 import {
   areLogicalPrerequisitesCompleted,
+  buildLogicalTaskKey,
   buildLogicalTaskGroupsByTaskId,
   isLogicalTaskCompleted,
   isLogicalTaskCompletable,
@@ -120,6 +121,23 @@ describe("task variant semantics", () => {
 
     expect(canComplete(batteryTask.id, completedTasks, dependencyMap)).toBe(
       false,
+    );
+  });
+
+  it("collapses working-on variants by logical task key", () => {
+    const batteryVariants = getTasksByName("Battery Change");
+    const workingOnTasks = new Set<string>([batteryVariants[0].id]);
+    const workingOnLogicalKeys = new Set(
+      Array.from(workingOnTasks)
+        .map((taskId) => {
+          const task = allTasks.find((entry) => entry.id === taskId);
+          return task ? buildLogicalTaskKey(task) : null;
+        })
+        .filter((key): key is string => key !== null),
+    );
+
+    expect(workingOnLogicalKeys.has(buildLogicalTaskKey(batteryVariants[1]))).toBe(
+      true,
     );
   });
 });
