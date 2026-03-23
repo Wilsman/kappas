@@ -111,16 +111,22 @@ describe("task variant semantics", () => {
     ).toBe(true);
   });
 
-  it("does not report already completed tasks as directly completable", () => {
+  it("blocks a task when a sibling logical variant is already completed", () => {
+    const logicalGroups = buildLogicalTaskGroupsByTaskId(allTasks);
     const dependencyMap = buildTaskDependencyMap(allTasks as Task[]);
-    const batteryTask = getTaskById("6744a728352b4da8e003eda9");
+    const batteryVariants = getTasksByName("Battery Change");
+    const batteryTask = batteryVariants[0];
     const completedTasks = new Set<string>([
       batteryTask.taskRequirements[0].task.id,
-      batteryTask.id,
+      batteryVariants[1].taskRequirements[0].task.id,
+      batteryVariants[1].id,
     ]);
 
+    expect(
+      isLogicalTaskCompletable(batteryTask, completedTasks, logicalGroups),
+    ).toBe(false);
     expect(canComplete(batteryTask.id, completedTasks, dependencyMap)).toBe(
-      false,
+      true,
     );
   });
 

@@ -123,6 +123,18 @@ export function CurrentlyWorkingOnView({
     () => buildLogicalTaskGroupsByTaskId(tasks),
     [tasks],
   );
+  const workingOnLogicalKeys = useMemo(
+    () =>
+      new Set(
+        Array.from(workingOnTasks)
+          .map((taskId) => {
+            const task = tasks.find((entry) => entry.id === taskId);
+            return task ? buildLogicalTaskKey(task) : null;
+          })
+          .filter((key): key is string => key !== null),
+      ),
+    [tasks, workingOnTasks],
+  );
 
   const toggleTaskExpanded = (taskId: string) => {
     setExpandedTasks((prev) => {
@@ -180,20 +192,24 @@ export function CurrentlyWorkingOnView({
 
   // Filter tasks that are marked as working on
   const activeTasks = useMemo(() => {
-    return tasks.filter((task) => workingOnTasks.has(task.id));
-  }, [tasks, workingOnTasks]);
+    const preferredTaskByLogicalKey = new Map<string, Task>();
+
+    tasks.forEach((task) => {
+      const key = buildLogicalTaskKey(task);
+      if (!workingOnLogicalKeys.has(key)) return;
+
+      const existing = preferredTaskByLogicalKey.get(key);
+      if (!existing || task.id.localeCompare(existing.id) < 0) {
+        preferredTaskByLogicalKey.set(key, task);
+      }
+    });
+
+    return Array.from(preferredTaskByLogicalKey.values());
+  }, [tasks, workingOnLogicalKeys]);
 
   const nextTasks = useMemo(() => {
     const level = Number.isFinite(playerLevel) ? playerLevel : 1;
     const preferredTaskByLogicalKey = new Map<string, Task>();
-    const workingOnLogicalKeys = new Set(
-      Array.from(workingOnTasks)
-        .map((taskId) => {
-          const task = tasks.find((entry) => entry.id === taskId);
-          return task ? buildLogicalTaskKey(task) : null;
-        })
-        .filter((key): key is string => key !== null),
-    );
 
     const compareTasks = (left: Task, right: Task) => {
       const leftUnlocked = areLogicalPrerequisitesCompleted(
@@ -246,9 +262,9 @@ export function CurrentlyWorkingOnView({
   }, [
     tasks,
     completedTasks,
-    workingOnTasks,
     playerLevel,
     logicalTaskGroupsByTaskId,
+    workingOnLogicalKeys,
   ]);
 
   const objectiveProgressByTaskId = useMemo(() => {
