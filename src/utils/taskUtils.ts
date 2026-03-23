@@ -38,6 +38,9 @@ export function buildTaskDependencyMap(tasks: Task[]): Record<string, string[]> 
 }
 
 export function canComplete(taskId: string, completedTasks: Set<string>, dependencyMap: Record<string, string[]>): boolean {
+  if (completedTasks.has(taskId)) {
+    return false;
+  }
   const dependencies = dependencyMap[taskId] || [];
   return dependencies.every(depId => completedTasks.has(depId));
 }
@@ -70,6 +73,9 @@ export function calculateTaskLevels(tasks: Task[]): Record<string, number> {
 }
 
 export function canCompleteTask(taskId: string, completedTasks: Set<string>, dependencyMap: Record<string, string[]>): boolean {
+  if (completedTasks.has(taskId)) {
+    return false;
+  }
   const dependencies = dependencyMap[taskId] || [];
   return dependencies.every(depId => completedTasks.has(depId));
 }

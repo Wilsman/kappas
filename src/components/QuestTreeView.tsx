@@ -7,9 +7,13 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { ChevronRight, ChevronDown, ExternalLink, Search, Filter, ArrowRight, Target } from 'lucide-react';
-import { buildTaskDependencyMap, canComplete } from '../utils/taskUtils';
 import { TRADER_COLORS } from '../data/traders';
 import { cn } from '@/lib/utils';
+import {
+  buildLogicalTaskGroupsByTaskId,
+  isLogicalTaskCompleted,
+  isLogicalTaskCompletable,
+} from '@/utils/taskVariants';
 
 interface QuestTreeViewProps {
   tasks: Task[];
@@ -94,8 +98,10 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
     return baseTasks;
   }, [tasks, showKappa, showLightkeeper, hiddenTraders, selectedTrader, searchTerm]);
 
-  // Build dependency map
-  const dependencyMap = useMemo(() => buildTaskDependencyMap(filteredTasks), [filteredTasks]);
+  const logicalTaskGroupsByTaskId = useMemo(
+    () => buildLogicalTaskGroupsByTaskId(filteredTasks),
+    [filteredTasks],
+  );
 
   // Get the dependency chain for a task (from root to task)
   const getTaskDependencyChain = useCallback((taskId: string, allTasks: Task[]): string[] => {
@@ -292,8 +298,16 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
   const renderTreeNode = useCallback((node: TreeNode, depth: number = 0): React.ReactNode => {
     const { task } = node;
     const isSeparator = task.id === 'late-game-separator';
-    const isCompleted = completedTasks.has(task.id);
-    const isCompletable = canComplete(task.id, completedTasks, dependencyMap);
+    const isCompleted = isLogicalTaskCompleted(
+      task.id,
+      completedTasks,
+      logicalTaskGroupsByTaskId,
+    );
+    const isCompletable = isLogicalTaskCompletable(
+      task,
+      completedTasks,
+      logicalTaskGroupsByTaskId,
+    );
     const isExpanded = isSeparator ? true : expandedNodes.has(task.id);
     const hasChildren = node.children.length > 0;
     const isHighlighted = highlightedTaskId === task.id;
@@ -525,7 +539,17 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
         )}
       </div>
     );
-  }, [completedTasks, dependencyMap, expandedNodes, highlightedTaskId, selectedTaskId, searchResults, searchTerm, onToggleComplete, toggleExpanded]);
+  }, [
+    completedTasks,
+    expandedNodes,
+    highlightedTaskId,
+    logicalTaskGroupsByTaskId,
+    onToggleComplete,
+    searchResults,
+    searchTerm,
+    selectedTaskId,
+    toggleExpanded,
+  ]);
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -601,7 +625,9 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
 
           {/* Stats */}
           <div className="ml-auto text-sm text-muted-foreground">
-            {filteredTasks.filter((task) => completedTasks.has(task.id)).length}{" "}
+            {filteredTasks.filter((task) =>
+              isLogicalTaskCompleted(task.id, completedTasks, logicalTaskGroupsByTaskId),
+            ).length}{" "}
             / {filteredTasks.length} completed
           </div>
         </div>
@@ -614,10 +640,13 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
             const taskMap = new Map(tasks.map((t) => [t.id, t]));
             const currentTask = taskMap.get(selectedTaskId);
             if (!currentTask) return null;
+            const selectedTaskVariants =
+              logicalTaskGroupsByTaskId.get(selectedTaskId) ?? [currentTask];
+            const selectedTaskIds = new Set(selectedTaskVariants.map((task) => task.id));
 
             // Get direct predecessors (tasks this one requires)
-            const predecessors = currentTask.taskRequirements
-              .map((req) => taskMap.get(req.task.id))
+            const predecessors = selectedTaskVariants
+              .flatMap((task) => task.taskRequirements.map((req) => taskMap.get(req.task.id)))
               .filter((t): t is Task => !!t)
               .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -625,7 +654,7 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
             const successors = tasks
               .filter((t) =>
                 t.taskRequirements?.some(
-                  (req) => req.task.id === selectedTaskId
+                  (req) => selectedTaskIds.has(req.task.id)
                 )
               )
               .sort((a, b) => a.name.localeCompare(b.name));
@@ -646,7 +675,11 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
                             className={cn(
                               "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                               "bg-gray-800 hover:bg-gray-600",
-                              completedTasks.has(t.id) &&
+                              isLogicalTaskCompleted(
+                                t.id,
+                                completedTasks,
+                                logicalTaskGroupsByTaskId,
+                              ) &&
                                 "line-through opacity-60"
                             )}
                             onClick={() => setSelectedTaskId(t.id)}
@@ -669,7 +702,11 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
                     className={cn(
                       "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                       "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
-                      completedTasks.has(selectedTaskId) &&
+                      isLogicalTaskCompleted(
+                        selectedTaskId,
+                        completedTasks,
+                        logicalTaskGroupsByTaskId,
+                      ) &&
                         "line-through opacity-60"
                     )}
                     onClick={() => setSelectedTaskId(selectedTaskId)}
@@ -693,7 +730,11 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
                             className={cn(
                               "text-xs px-2 py-1 rounded cursor-pointer transition-colors",
                               "bg-gray-700 hover:bg-gray-600",
-                              completedTasks.has(t.id) &&
+                              isLogicalTaskCompleted(
+                                t.id,
+                                completedTasks,
+                                logicalTaskGroupsByTaskId,
+                              ) &&
                                 "line-through opacity-60"
                             )}
                             onClick={() => setSelectedTaskId(t.id)}

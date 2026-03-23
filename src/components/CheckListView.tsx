@@ -73,6 +73,13 @@ import {
   getTaskObjectiveItemProgress,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
+import {
+  areLogicalPrerequisitesCompleted,
+  buildLogicalTaskGroupsByTaskId,
+  buildLogicalTaskKey,
+  getLogicalCompletedPrerequisiteCount,
+  isLogicalTaskCompleted as getIsLogicalTaskCompleted,
+} from "@/utils/taskVariants";
 
 interface CheckListViewProps {
   tasks: Task[];
@@ -103,43 +110,6 @@ interface CheckListViewProps {
     legacyObjectiveItemKey?: string,
   ) => void;
 }
-
-const buildTaskMapSignature = (task: Task) => {
-  const mapNames =
-    task.maps.length > 0
-      ? task.maps.map((map) => map.name).sort()
-      : [task.map?.name ?? "No specific map"];
-
-  return mapNames.join("|");
-};
-
-const buildTaskObjectiveSignature = (task: Task) =>
-  JSON.stringify(
-    (task.objectives ?? []).map((objective) => ({
-      description: objective.description ?? "",
-      playerLevel: objective.playerLevel ?? null,
-      count: objective.count ?? null,
-      foundInRaid: objective.foundInRaid ?? null,
-      maps: (objective.maps ?? []).map((map) => map.name).sort(),
-      items: (objective.items ?? [])
-        .map((item) => item.id ?? item.name)
-        .sort(),
-    })),
-  );
-
-const buildLogicalTaskKey = (task: Task) =>
-  [
-    task.name,
-    task.trader.name,
-    task.factionName ?? "Any",
-    task.minPlayerLevel,
-    task.wikiLink,
-    buildTaskMapSignature(task),
-    buildTaskObjectiveSignature(task),
-    task.kappaRequired ? "kappa" : "no-kappa",
-    task.lightkeeperRequired ? "lightkeeper" : "no-lightkeeper",
-    task.isEvent ? "event" : "non-event",
-  ].join("::");
 
 export const CheckListView: React.FC<CheckListViewProps> = ({
   tasks,
@@ -387,27 +357,42 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     [tasks],
   );
   const hasEventTasks = eventTasks.length > 0;
+  const logicalTaskGroupsByTaskId = useMemo(
+    () => buildLogicalTaskGroupsByTaskId(tasks),
+    [tasks],
+  );
 
   const buildNextQuestIds = useCallback(
     (taskList: Task[]) => {
-      const completed = completedTasks;
       const level = Number.isFinite(playerLevel) ? playerLevel : 1;
-      return new Set(
-        taskList
-          .filter((task) => {
-            if (completed.has(task.id)) return false;
-            if (task.minPlayerLevel > level) return false;
-            if (task.taskRequirements?.length > 0) {
-              return task.taskRequirements.every((req) =>
-                completed.has(req.task.id),
-              );
-            }
-            return true;
-          })
-          .map((task) => task.id),
-      );
+      const nextIds = new Set<string>();
+      const seenLogicalKeys = new Set<string>();
+
+      taskList.forEach((task) => {
+        if (task.minPlayerLevel > level) return;
+        if (
+          !getIsLogicalTaskCompleted(
+            task.id,
+            completedTasks,
+            logicalTaskGroupsByTaskId,
+          ) &&
+          areLogicalPrerequisitesCompleted(
+            task,
+            completedTasks,
+            logicalTaskGroupsByTaskId,
+          )
+        ) {
+          const logicalKey = buildLogicalTaskKey(task);
+          if (!seenLogicalKeys.has(logicalKey)) {
+            seenLogicalKeys.add(logicalKey);
+            nextIds.add(task.id);
+          }
+        }
+      });
+
+      return nextIds;
     },
-    [completedTasks, playerLevel],
+    [completedTasks, logicalTaskGroupsByTaskId, playerLevel],
   );
 
   // Apply filters
@@ -448,7 +433,16 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
           if (task.minPlayerLevel > lvl) return false;
         }
         // Completed filter
-        if (!showCompleted && completedTasks.has(task.id)) return false;
+        if (
+          !showCompleted &&
+          getIsLogicalTaskCompleted(
+            task.id,
+            completedTasks,
+            logicalTaskGroupsByTaskId,
+          )
+        ) {
+          return false;
+        }
         // Next quests filter (only immediate successors)
         if (showNextOnly && !nextIds.has(task.id)) return false;
         // Search filter
@@ -477,6 +471,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       playerLevel,
       showCompleted,
       completedTasks,
+      logicalTaskGroupsByTaskId,
       showNextOnly,
     ],
   );
@@ -526,29 +521,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     if (!hasEventTasks || filteredEventTasks.length === 0) return sortedGroups;
     return [["Seasonal Events", filteredEventTasks], ...sortedGroups];
   }, [sortedGroups, hasEventTasks, filteredEventTasks]);
-
-  const logicalTaskGroupsByTaskId = useMemo(() => {
-    const grouped = new Map<string, Task[]>();
-
-    tasks.forEach((task) => {
-      const key = buildLogicalTaskKey(task);
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.push(task);
-      } else {
-        grouped.set(key, [task]);
-      }
-    });
-
-    const byTaskId = new Map<string, Task[]>();
-    grouped.forEach((groupTasks) => {
-      groupTasks.forEach((task) => {
-        byTaskId.set(task.id, groupTasks);
-      });
-    });
-
-    return byTaskId;
-  }, [tasks]);
 
   const allGroupNames = useMemo(
     () => groupsWithEvents.map(([name]) => name),
@@ -640,20 +612,28 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         const bWorking = workingOnTasks.has(b.id);
         if (aWorking !== bWorking) return aWorking ? -1 : 1;
 
-        const aUnlocked =
-          a.taskRequirements.length === 0 ||
-          a.taskRequirements.every((req) => completedTasks.has(req.task.id));
-        const bUnlocked =
-          b.taskRequirements.length === 0 ||
-          b.taskRequirements.every((req) => completedTasks.has(req.task.id));
+        const aUnlocked = areLogicalPrerequisitesCompleted(
+          a,
+          completedTasks,
+          logicalTaskGroupsByTaskId,
+        );
+        const bUnlocked = areLogicalPrerequisitesCompleted(
+          b,
+          completedTasks,
+          logicalTaskGroupsByTaskId,
+        );
         if (aUnlocked !== bUnlocked) return aUnlocked ? -1 : 1;
 
-        const aCompletedPrereqs = a.taskRequirements.filter((req) =>
-          completedTasks.has(req.task.id),
-        ).length;
-        const bCompletedPrereqs = b.taskRequirements.filter((req) =>
-          completedTasks.has(req.task.id),
-        ).length;
+        const aCompletedPrereqs = getLogicalCompletedPrerequisiteCount(
+          a,
+          completedTasks,
+          logicalTaskGroupsByTaskId,
+        );
+        const bCompletedPrereqs = getLogicalCompletedPrerequisiteCount(
+          b,
+          completedTasks,
+          logicalTaskGroupsByTaskId,
+        );
         if (aCompletedPrereqs !== bCompletedPrereqs) {
           return bCompletedPrereqs - aCompletedPrereqs;
         }
@@ -663,7 +643,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
 
       return sorted[0];
     },
-    [compareTasks, completedTasks, workingOnTasks],
+    [compareTasks, completedTasks, logicalTaskGroupsByTaskId, workingOnTasks],
   );
 
   const resolveDisplayTaskId = useCallback(
@@ -676,11 +656,12 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   );
 
   const isLogicalTaskCompleted = useCallback(
-    (taskId: string) => {
-      const groupTasks = logicalTaskGroupsByTaskId.get(taskId);
-      if (!groupTasks) return completedTasks.has(taskId);
-      return groupTasks.some((task) => completedTasks.has(task.id));
-    },
+    (taskId: string) =>
+      getIsLogicalTaskCompleted(
+        taskId,
+        completedTasks,
+        logicalTaskGroupsByTaskId,
+      ),
     [completedTasks, logicalTaskGroupsByTaskId],
   );
 

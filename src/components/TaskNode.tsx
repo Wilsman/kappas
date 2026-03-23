@@ -10,7 +10,7 @@ interface TaskNodeProps {
   isCompleted: boolean;
   onToggleComplete: (taskId: string) => void;
   position: { x: number; y: number };
-  completedTasks: Set<string>;
+  isTaskCompleted: (taskId: string) => boolean;
   isHighlighted?: boolean;
 }
 
@@ -19,7 +19,7 @@ export const TaskNode: React.FC<TaskNodeProps> = ({
   isCompleted,
   onToggleComplete,
   position,
-  completedTasks,
+  isTaskCompleted,
   isHighlighted = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -150,7 +150,7 @@ export const TaskNode: React.FC<TaskNodeProps> = ({
                       <div
                         key={index}
                         className={`text-xs pl-2 border-l-2 ${
-                          completedTasks.has(req.task.id)
+                          isTaskCompleted(req.task.id)
                             ? 'text-green-400 border-green-500/50'
                             : 'text-foreground/90 border-border/50'
                         }`}
