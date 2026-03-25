@@ -658,6 +658,7 @@ const COMBINED_QUERY = `
       maps { name }
       description
       ... on TaskObjectiveItem { items { id name iconLink } count foundInRaid }
+      ... on TaskObjectiveShoot { count }
       ... on TaskObjectivePlayerLevel { playerLevel }
     }
   }

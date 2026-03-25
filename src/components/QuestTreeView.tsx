@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { ChevronRight, ChevronDown, ExternalLink, Search, Filter, ArrowRight, Target } from 'lucide-react';
 import { TRADER_COLORS } from '../data/traders';
 import { cn } from '@/lib/utils';
+import { formatTaskObjectiveLabel } from '@/utils/taskObjectives';
 import {
   buildLogicalTaskGroupsByTaskId,
   isLogicalTaskCompleted,
@@ -448,11 +449,7 @@ export const QuestTreeView: React.FC<QuestTreeViewProps> = ({
                             {task.objectives.map((objective, index) => (
                               <div key={index} className="text-sm text-muted-foreground">
                                 <span className="text-yellow-600 mr-1">{index + 1}.</span>
-                                {'playerLevel' in objective ? (
-                                  `Reach level ${objective.playerLevel}`
-                                ) : (
-                                  objective.description
-                                )}
+                                {formatTaskObjectiveLabel(objective)}
                               </div>
                             ))}
                           </div>

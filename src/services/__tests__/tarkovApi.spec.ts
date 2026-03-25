@@ -218,6 +218,51 @@ describe('fetchCombinedData', () => {
     expect(task.maps.map((m: { name: string }) => m.name)).toContain('Factory');
   });
 
+  it('preserves count for shoot objectives from the GraphQL response', async () => {
+    const apiResponse = {
+      data: {
+        tasks: [
+          {
+            id: 'intimidator',
+            minPlayerLevel: 45,
+            kappaRequired: true,
+            lightkeeperRequired: false,
+            map: null,
+            taskRequirements: [],
+            trader: { name: 'Prapor', imageLink: 'img' },
+            wikiLink: 'link',
+            name: 'Intimidator',
+            objectives: [
+              {
+                description: 'Eliminate Scavs with headshots',
+                count: 40,
+              },
+            ],
+            startRewards: { items: [] },
+            finishRewards: { items: [] },
+          },
+        ],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    };
+
+    mockFetchOnce(apiResponse);
+    const result = await fetchCombinedData();
+
+    expect(result.tasks.data.tasks[0].objectives?.[0]?.count).toBe(40);
+
+    const fetchSpy = globalThis.fetch as unknown as Mock;
+    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
+    const graphCall = calls.find((call) =>
+      String(call[0]).includes('https://api.tarkov.dev/graphql')
+    );
+    const init = (graphCall?.[1] ?? {}) as { body?: string };
+    const body = JSON.parse(init.body ?? '{}') as { query?: string };
+    expect(body.query).toContain('... on TaskObjectiveShoot { count }');
+  });
+
   it('applies task wiki link overrides from the fetched overlay', async () => {
     const apiResponse = {
       data: {

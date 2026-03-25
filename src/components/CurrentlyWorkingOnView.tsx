@@ -37,10 +37,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  buildLegacyTaskObjectiveProgressKey,
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveProgressKey,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
+  formatTaskObjectiveLabel,
+  getTaskObjectiveProgress,
   getTaskObjectiveItemProgress,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
@@ -170,6 +174,25 @@ export function CurrentlyWorkingOnView({
       objectiveItemKey,
       next,
       legacyObjectiveItemKey,
+    );
+  };
+
+  const handleObjectiveProgressDelta = (
+    objectiveProgressKey: string,
+    delta: number,
+    maxCount: number,
+    legacyObjectiveProgressKey?: string,
+  ) => {
+    const current = getTaskObjectiveProgress(
+      taskObjectiveItemProgress,
+      objectiveProgressKey,
+      legacyObjectiveProgressKey,
+    );
+    const next = Math.max(0, Math.min(maxCount, current + delta));
+    onUpdateTaskObjectiveItemProgress(
+      objectiveProgressKey,
+      next,
+      legacyObjectiveProgressKey,
     );
   };
 
@@ -728,6 +751,36 @@ export function CurrentlyWorkingOnView({
                                           1,
                                           obj.count ?? 1,
                                         );
+                                        const objectiveLabel =
+                                          formatTaskObjectiveLabel(obj);
+                                        const objectiveProgressKey =
+                                          buildTaskObjectiveProgressKey(
+                                            objectiveKey,
+                                          );
+                                        const legacyObjectiveProgressKey =
+                                          buildLegacyTaskObjectiveProgressKey(
+                                            task.id,
+                                            idx,
+                                          );
+                                        const currentObjectiveCount =
+                                          Math.min(
+                                            requiredCount,
+                                            getTaskObjectiveProgress(
+                                              taskObjectiveItemProgress,
+                                              objectiveProgressKey,
+                                              legacyObjectiveProgressKey,
+                                            ),
+                                          );
+                                        const isCountOnlyObjective =
+                                          !obj.items?.length &&
+                                          typeof obj.count === "number" &&
+                                          obj.count > 1;
+                                        const objectiveProgressRemaining =
+                                          Math.max(
+                                            0,
+                                            requiredCount -
+                                              currentObjectiveCount,
+                                          );
                                         const usesSharedPool =
                                           (obj.items?.length ?? 0) > 1 &&
                                           requiredCount > 1;
@@ -823,12 +876,67 @@ export function CurrentlyWorkingOnView({
                                                   </Tooltip>
                                                 </TooltipProvider>
                                               )}
-                                              {obj.description}
+                                              {objectiveLabel}
                                             </p>
-                                            {obj.count && obj.count > 1 && (
-                                              <span className="text-xs text-primary font-medium">
-                                                (×{obj.count})
-                                              </span>
+                                            {isCountOnlyObjective && (
+                                              <div className="mt-2 flex items-center gap-2">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleObjectiveProgressDelta(
+                                                      objectiveProgressKey,
+                                                      -1,
+                                                      requiredCount,
+                                                      legacyObjectiveProgressKey,
+                                                    );
+                                                  }}
+                                                  className={cn(
+                                                    "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                    currentObjectiveCount <= 0 &&
+                                                      "opacity-50 cursor-not-allowed",
+                                                  )}
+                                                  disabled={
+                                                    currentObjectiveCount <= 0
+                                                  }
+                                                  aria-label={`Decrease progress for ${objectiveLabel}`}
+                                                >
+                                                  <Minus className="h-3 w-3 mx-auto" />
+                                                </button>
+                                                <span className="w-16 text-center text-xs tabular-nums">
+                                                  {currentObjectiveCount}/{requiredCount}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleObjectiveProgressDelta(
+                                                      objectiveProgressKey,
+                                                      1,
+                                                      requiredCount,
+                                                      legacyObjectiveProgressKey,
+                                                    );
+                                                  }}
+                                                  className={cn(
+                                                    "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                    currentObjectiveCount >= requiredCount &&
+                                                      "opacity-50 cursor-not-allowed",
+                                                  )}
+                                                  disabled={
+                                                    currentObjectiveCount >=
+                                                    requiredCount
+                                                  }
+                                                  aria-label={`Increase progress for ${objectiveLabel}`}
+                                                >
+                                                  <Plus className="h-3 w-3 mx-auto" />
+                                                </button>
+                                                <span className="text-[11px] text-muted-foreground">
+                                                  {objectiveProgressRemaining ===
+                                                  0
+                                                    ? "Complete"
+                                                    : `${objectiveProgressRemaining} remaining`}
+                                                </span>
+                                              </div>
                                             )}
                                             {obj.items &&
                                               obj.items &&

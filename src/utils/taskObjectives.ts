@@ -67,12 +67,23 @@ export function buildTaskObjectiveItemProgressKey(
   return `${objectiveKey}::item::${encodeKeyPart(normalizePart(itemKey))}`;
 }
 
+export function buildTaskObjectiveProgressKey(objectiveKey: string): string {
+  return `${objectiveKey}::progress`;
+}
+
 export function buildLegacyTaskObjectiveItemProgressKey(
   taskId: string,
   objectiveIndex: number,
   itemKey: string,
 ): string {
   return `${taskId}::${objectiveIndex}::${itemKey}`;
+}
+
+export function buildLegacyTaskObjectiveProgressKey(
+  taskId: string,
+  objectiveIndex: number,
+): string {
+  return `${taskId}::${objectiveIndex}::progress`;
 }
 
 export function isTaskObjectiveCompleted(
@@ -96,4 +107,33 @@ export function getTaskObjectiveItemProgress(
   if (!legacyObjectiveItemKey) return 0;
   const legacyCount = taskObjectiveItemProgress[legacyObjectiveItemKey];
   return typeof legacyCount === "number" ? legacyCount : 0;
+}
+
+export function getTaskObjectiveProgress(
+  taskObjectiveItemProgress: Record<string, number>,
+  objectiveProgressKey: string,
+  legacyObjectiveProgressKey?: string,
+): number {
+  return getTaskObjectiveItemProgress(
+    taskObjectiveItemProgress,
+    objectiveProgressKey,
+    legacyObjectiveProgressKey,
+  );
+}
+
+export function formatTaskObjectiveLabel(
+  objective: Pick<TaskObjective, "description" | "playerLevel" | "count" | "items">,
+): string {
+  const baseLabel =
+    typeof objective.playerLevel === "number"
+      ? `Reach level ${objective.playerLevel}`
+      : (objective.description ?? "").trim();
+  const shouldAppendCount =
+    !objective.items?.length &&
+    typeof objective.count === "number" &&
+    objective.count > 1;
+
+  if (!shouldAppendCount) return baseLabel;
+  if (!baseLabel) return `x${objective.count}`;
+  return `${baseLabel} x${objective.count}`;
 }

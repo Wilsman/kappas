@@ -66,10 +66,14 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import {
+  buildLegacyTaskObjectiveProgressKey,
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveProgressKey,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
+  formatTaskObjectiveLabel,
+  getTaskObjectiveProgress,
   getTaskObjectiveItemProgress,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
@@ -341,6 +345,28 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
         objectiveItemKey,
         next,
         legacyObjectiveItemKey,
+      );
+    },
+    [onUpdateTaskObjectiveItemProgress, taskObjectiveItemProgress],
+  );
+
+  const handleObjectiveProgressDelta = useCallback(
+    (
+      objectiveProgressKey: string,
+      delta: number,
+      maxCount: number,
+      legacyObjectiveProgressKey?: string,
+    ) => {
+      const current = getTaskObjectiveProgress(
+        taskObjectiveItemProgress,
+        objectiveProgressKey,
+        legacyObjectiveProgressKey,
+      );
+      const next = Math.max(0, Math.min(maxCount, current + delta));
+      onUpdateTaskObjectiveItemProgress(
+        objectiveProgressKey,
+        next,
+        legacyObjectiveProgressKey,
       );
     },
     [onUpdateTaskObjectiveItemProgress, taskObjectiveItemProgress],
@@ -1624,6 +1650,36 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                             1,
                                             objective.count ?? 1,
                                           );
+                                          const objectiveLabel =
+                                            formatTaskObjectiveLabel(objective);
+                                          const objectiveProgressKey =
+                                            buildTaskObjectiveProgressKey(
+                                              objectiveKey,
+                                            );
+                                          const legacyObjectiveProgressKey =
+                                            buildLegacyTaskObjectiveProgressKey(
+                                              task.id,
+                                              index,
+                                            );
+                                          const currentObjectiveCount =
+                                            Math.min(
+                                              requiredCount,
+                                              getTaskObjectiveProgress(
+                                                taskObjectiveItemProgress,
+                                                objectiveProgressKey,
+                                                legacyObjectiveProgressKey,
+                                              ),
+                                            );
+                                          const isCountOnlyObjective =
+                                            !objective.items?.length &&
+                                            typeof objective.count === "number" &&
+                                            objective.count > 1;
+                                          const objectiveProgressRemaining =
+                                            Math.max(
+                                              0,
+                                              requiredCount -
+                                                currentObjectiveCount,
+                                            );
                                           const usesSharedPool =
                                             (objective.items?.length ?? 0) > 1 &&
                                             requiredCount > 1;
@@ -1737,9 +1793,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                         "line-through",
                                                     )}
                                                   >
-                                                    {"playerLevel" in objective
-                                                      ? `Reach level ${objective.playerLevel}`
-                                                      : objective.description}
+                                                    {objectiveLabel}
                                                   </span>
                                                   {objective.foundInRaid && (
                                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 font-medium ml-2">
@@ -1748,6 +1802,66 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                   )}
                                                 </span>
                                               </div>
+                                              {isCountOnlyObjective && (
+                                                <div className="mt-2 ml-6 flex items-center gap-2">
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleObjectiveProgressDelta(
+                                                        objectiveProgressKey,
+                                                        -1,
+                                                        requiredCount,
+                                                        legacyObjectiveProgressKey,
+                                                      );
+                                                    }}
+                                                    className={cn(
+                                                      "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                      currentObjectiveCount <= 0 &&
+                                                        "opacity-50 cursor-not-allowed",
+                                                    )}
+                                                    disabled={
+                                                      currentObjectiveCount <= 0
+                                                    }
+                                                    aria-label={`Decrease progress for ${objectiveLabel}`}
+                                                  >
+                                                    <Minus className="h-3 w-3 mx-auto" />
+                                                  </button>
+                                                  <span className="w-16 text-center text-xs tabular-nums">
+                                                    {currentObjectiveCount}/{requiredCount}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleObjectiveProgressDelta(
+                                                        objectiveProgressKey,
+                                                        1,
+                                                        requiredCount,
+                                                        legacyObjectiveProgressKey,
+                                                      );
+                                                    }}
+                                                    className={cn(
+                                                      "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                      currentObjectiveCount >= requiredCount &&
+                                                        "opacity-50 cursor-not-allowed",
+                                                    )}
+                                                    disabled={
+                                                      currentObjectiveCount >=
+                                                      requiredCount
+                                                    }
+                                                    aria-label={`Increase progress for ${objectiveLabel}`}
+                                                  >
+                                                    <Plus className="h-3 w-3 mx-auto" />
+                                                  </button>
+                                                  <span className="text-[11px] text-muted-foreground">
+                                                    {objectiveProgressRemaining ===
+                                                    0
+                                                      ? "Complete"
+                                                      : `${objectiveProgressRemaining} remaining`}
+                                                  </span>
+                                                </div>
+                                              )}
                                               {objective.items &&
                                                 objective.items.length > 0 && (
                                                   <div className="mt-2 ml-6 space-y-2">

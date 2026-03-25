@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '@/types';
 import {
+  buildLegacyTaskObjectiveProgressKey,
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveProgressKey,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
+  formatTaskObjectiveLabel,
   getTaskObjectiveItemProgress,
+  getTaskObjectiveProgress,
   isTaskObjectiveCompleted,
 } from '@/utils/taskObjectives';
 
@@ -93,5 +97,46 @@ describe('task objective key utilities', () => {
         legacyItemKey,
       ),
     ).toBe(4);
+  });
+
+  it('reads stable objective progress key first then falls back to legacy', () => {
+    const objectiveKey = buildTaskObjectiveKeys(
+      makeTask([{ description: 'Count objective', count: 40 }]),
+    )[0]!;
+    const stableProgressKey = buildTaskObjectiveProgressKey(objectiveKey);
+    const legacyProgressKey = buildLegacyTaskObjectiveProgressKey('task-1', 0);
+
+    expect(
+      getTaskObjectiveProgress({ [legacyProgressKey]: 12 }, stableProgressKey, legacyProgressKey),
+    ).toBe(12);
+    expect(
+      getTaskObjectiveProgress(
+        { [legacyProgressKey]: 12, [stableProgressKey]: 18 },
+        stableProgressKey,
+        legacyProgressKey,
+      ),
+    ).toBe(18);
+  });
+
+  it('formats count-only objectives with their required amount', () => {
+    expect(
+      formatTaskObjectiveLabel({
+        description: 'Eliminate Scavs with headshots',
+        count: 40,
+      }),
+    ).toBe('Eliminate Scavs with headshots x40');
+    expect(
+      formatTaskObjectiveLabel({
+        playerLevel: 15,
+        count: 1,
+      }),
+    ).toBe('Reach level 15');
+    expect(
+      formatTaskObjectiveLabel({
+        description: 'Hand over Salewas',
+        count: 3,
+        items: [{ id: 'salewa', name: 'Salewa' }],
+      }),
+    ).toBe('Hand over Salewas');
   });
 });

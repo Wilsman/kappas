@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/command";
 import type { Task, Achievement, HideoutStation } from "@/types";
 import { cn } from "@/lib/utils";
+import { formatTaskObjectiveLabel } from "@/utils/taskObjectives";
 
 type HideoutMatchEntry = {
   name: string;
@@ -674,7 +675,7 @@ export function CommandMenu(props: CommandMenuProps) {
       const kappaLabel = task.kappaRequired ? "Kappa" : null;
       const lightkeeperLabel = task.lightkeeperRequired ? "Lightkeeper" : null;
       const objectiveGroups = (task.objectives ?? []).map((obj) => {
-        const description = obj.description ?? "";
+        const description = formatTaskObjectiveLabel(obj);
         const firRequired = /found in raid|in-raid|\bfi?r\b/i.test(description);
         const action = /hand over|turn in|give/i.test(description)
           ? "Hand over"
