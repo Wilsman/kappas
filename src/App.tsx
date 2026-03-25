@@ -107,6 +107,11 @@ const CheckListView = lazy(() =>
     default: m.CheckListView,
   })),
 );
+const TaskDeskView = lazy(() =>
+  import("./components/TaskDeskView").then((m) => ({
+    default: m.TaskDeskView,
+  })),
+);
 const CollectorView = lazy(() =>
   import("./components/ItemTrackerView").then((m) => ({
     default: m.CollectorView,
@@ -363,6 +368,7 @@ function App() {
   const [viewMode, setViewMode] = useState<
     | "tree"
     | "grouped"
+    | "desk"
     | "collector"
     | "tracked-items"
     | "flow"
@@ -442,8 +448,12 @@ function App() {
       // root -> default to Quests Checklist
       nextView = "grouped";
     } else if (parts[0] === "quests") {
-      // Both /Quests and /Quests/Checklist route to grouped checklist
-      nextView = "grouped";
+      if (parts[1] === "desk" || parts[1] === "kanban") {
+        nextView = "desk";
+      } else {
+        // Both /Quests and /Quests/Checklist route to grouped checklist
+        nextView = "grouped";
+      }
     } else if (parts[0] === "items") {
       if (!parts[1] || parts[1] === "trackeditems") {
         nextView = "tracked-items";
@@ -520,6 +530,8 @@ function App() {
     if (viewMode === "grouped") {
       // Default checklist view lives at root
       nextPath = "/";
+    } else if (viewMode === "desk") {
+      nextPath = "/Quests/Kanban";
     } else if (viewMode === "tracked-items") {
       nextPath = "/Items/TrackedItems";
     } else if (viewMode === "collector") {
@@ -2257,9 +2269,11 @@ function App() {
               {/* Main Content */}
               <main
                 className={cn(
-                  "flex-1 min-h-0 bg-background relative",
-                  viewMode === "grouped" ||
-                    viewMode === "tracked-items" ||
+                  "flex-1 min-h-0 min-w-0 bg-background relative",
+                  viewMode === "desk"
+                    ? "overflow-hidden"
+                    : viewMode === "grouped" ||
+                        viewMode === "tracked-items" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
                     viewMode === "prestiges" ||
@@ -2286,6 +2300,33 @@ function App() {
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
                           showLightkeeper={showLightkeeper}
+                          onToggleComplete={handleToggleComplete}
+                          onTaskClick={handleTaskClick}
+                          mapFilter={selectedMap}
+                          groupBy={groupBy}
+                          onSetGroupBy={setGroupBy}
+                          activeProfileId={activeProfileId}
+                          playerLevel={playerLevel}
+                          workingOnTasks={workingOnTasks}
+                          onToggleWorkingOnTask={handleToggleWorkingOnTask}
+                          completedTaskObjectives={completedTaskObjectives}
+                          onToggleTaskObjective={handleToggleTaskObjective}
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
+                        />
+                      ) : viewMode === "desk" ? (
+                        <TaskDeskView
+                          key={`${activeProfileId}:${
+                            activeProfileFaction ?? "none"
+                          }:desk`}
+                          tasks={tasksWithEvents}
+                          achievements={achievements}
+                          completedTasks={completedTasks}
+                          hiddenTraders={hiddenTraders}
+                          focusMode={focusMode}
+                          onSetFocus={handleSetFocus}
                           onToggleComplete={handleToggleComplete}
                           onTaskClick={handleTaskClick}
                           mapFilter={selectedMap}
@@ -2474,7 +2515,7 @@ function App() {
                 defaultCollapsed={false}
                 width="20rem"
                 collapsedWidth="3rem"
-                className="hidden min-[988px]:flex"
+                className="hidden shrink-0 min-[988px]:flex"
               >
                 <div className="p-2 space-y-3">
                   <QuestProgressPanel

@@ -85,6 +85,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   viewMode:
     | "tree"
     | "grouped"
+    | "desk"
     | "collector"
     | "tracked-items"
     | "flow"
@@ -636,6 +637,16 @@ export function AppSidebar({
                 </li>
                 {/* Grouping controls moved into CheckListView header */}
               </SidebarMenuSub>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={viewMode === "desk"}
+                  onClick={() => onSetViewMode("desk")}
+                >
+                  <ListTodo />
+                  <span>Kanban</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
               <SidebarMenuItem>
                 <SidebarMenuButton
