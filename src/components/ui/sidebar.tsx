@@ -329,13 +329,13 @@ const SidebarInset = React.forwardRef<
   React.ComponentProps<"main">
 >(({ className, ...props }, ref) => {
   return (
-    <main
-      ref={ref}
-      className={cn(
-        "relative flex w-full flex-1 flex-col bg-background",
-        "min-[988px]:peer-data-[variant=inset]:m-2 min-[988px]:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 min-[988px]:peer-data-[variant=inset]:ml-0 min-[988px]:peer-data-[variant=inset]:rounded-xl min-[988px]:peer-data-[variant=inset]:shadow",
-        className
-      )}
+      <main
+        ref={ref}
+        className={cn(
+          "relative flex min-w-0 w-full flex-1 flex-col overflow-hidden bg-background",
+          "min-[988px]:peer-data-[variant=inset]:m-2 min-[988px]:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 min-[988px]:peer-data-[variant=inset]:ml-0 min-[988px]:peer-data-[variant=inset]:rounded-xl min-[988px]:peer-data-[variant=inset]:shadow",
+          className
+        )}
       {...props}
     />
   )
