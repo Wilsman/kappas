@@ -22,6 +22,8 @@ import StoryNode from "./StoryNode";
 import CraftNode from "./CraftNode";
 import DecisionNode from "./DecisionNode";
 import EndingNode from "./EndingNode";
+import AchievementNode from "./AchievementNode";
+import { StorylineViewSwitcher } from "./StorylineViewSwitcher";
 import {
   endingInfos,
   getEndingPathData,
@@ -35,14 +37,22 @@ const nodeTypes = {
   craft: CraftNode,
   decision: DecisionNode,
   ending: EndingNode,
+  achievement: AchievementNode,
 };
 
 interface EndingFlowViewProps {
   endingId: string;
   onBack: () => void;
+  onNavigateToEnding: (endingId: string) => void;
+  onNavigateToFullMap: () => void;
 }
 
-export function EndingFlowView({ endingId, onBack }: EndingFlowViewProps) {
+export function EndingFlowView({
+  endingId,
+  onBack,
+  onNavigateToEnding,
+  onNavigateToFullMap,
+}: EndingFlowViewProps) {
   const endingInfo = endingInfos.find((e) => e.id === endingId);
   const { nodes, edges, breakdown } = useMemo(
     () => getEndingPathData(endingId),
@@ -51,20 +61,20 @@ export function EndingFlowView({ endingId, onBack }: EndingFlowViewProps) {
 
   if (!endingInfo) {
     return (
-      <div className="h-full w-full flex items-center justify-center">
+      <div className="h-full min-h-0 w-full flex items-center justify-center">
         <p>Ending not found</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full relative">
+    <div className="h-full min-h-0 w-full relative overflow-hidden">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.3 }}
+        fitViewOptions={{ padding: 0.18 }}
         panOnScroll
         panOnDrag
         zoomOnScroll
@@ -118,6 +128,14 @@ export function EndingFlowView({ endingId, onBack }: EndingFlowViewProps) {
                   {endingInfo.tagline}
                 </p>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <StorylineViewSwitcher
+                currentViewId={endingId}
+                onSelectEnding={onNavigateToEnding}
+                onSelectFullMap={onNavigateToFullMap}
+              />
             </div>
 
             <p className="text-sm text-muted-foreground mb-4">

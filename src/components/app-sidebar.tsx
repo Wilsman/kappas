@@ -95,6 +95,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "hideout-requirements"
     | "current";
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void;
+  onOpenStorylineMap: () => void;
   onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
   focusMode: "all" | "kappa" | "lightkeeper";
   traders: string[];
@@ -133,6 +134,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({
   viewMode,
   onSetViewMode,
+  onOpenStorylineMap,
   onSetFocus,
   focusMode,
   traders,
@@ -543,17 +545,7 @@ export function AppSidebar({
                     >
                       <a
                         className="cursor-pointer"
-                        onClick={() => {
-                          // Navigate to the Choose Your Ending view specifically
-                          if (typeof window !== "undefined") {
-                            window.history.pushState(
-                              null,
-                              "",
-                              "/Storyline/Choose-Ending",
-                            );
-                            window.dispatchEvent(new PopStateEvent("popstate"));
-                          }
-                        }}
+                        onClick={onOpenStorylineMap}
                       >
                         <Map />
                         <span>Decision Map</span>

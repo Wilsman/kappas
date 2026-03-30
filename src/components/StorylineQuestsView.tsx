@@ -28,15 +28,39 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { STORYLINE_QUESTS, type StorylineObjective } from "@/data/storylineQuests";
+import {
+  STORYLINE_QUESTS,
+  type StorylineObjective,
+} from "@/data/storylineQuests";
 
-type StorylineItemRequirement = NonNullable<StorylineObjective["itemRequirement"]>;
+type StorylineItemRequirement = NonNullable<
+  StorylineObjective["itemRequirement"]
+>;
 
 const STORYLINE_TRACKER_ICONS = {
   dogtags: "https://assets.tarkov.dev/6662e9aca7e0b43baa3d5f74-icon.webp",
   dollars: "https://assets.tarkov.dev/5696686a4bdc2da3298b456a-icon.webp",
   roubles: "https://assets.tarkov.dev/5449016a4bdc2d6f028b456f-icon.webp",
 } as const;
+
+const STORYLINE_PATCH_SUMMARY = [
+  {
+    label: "Priest hunt",
+    value: "Reduced to 1 kill",
+  },
+  {
+    label: "Trader waits",
+    value: "Reduced by 40%",
+  },
+  {
+    label: "Tour unlocks",
+    value: "Survive once or visit 3x",
+  },
+  {
+    label: "Hideout crafts",
+    value: "Reduced by 40%",
+  },
+] as const;
 
 const parseRequiredCount = (value: string): number => {
   const parsed = Number.parseInt(value.replace(/,/g, ""), 10);
@@ -192,7 +216,7 @@ export function StorylineQuestsView({
   const openDialog = (
     questId: string,
     questName: string,
-    action: "complete" | "reset"
+    action: "complete" | "reset",
   ) => {
     setDialogState({ isOpen: true, questId, questName, action });
   };
@@ -246,10 +270,7 @@ export function StorylineQuestsView({
     const currentCount = taskObjectiveItemProgress[itemKey] ?? 0;
     const nextCount = Math.max(
       0,
-      Math.min(
-        requirement.requiredCount,
-        currentCount + delta,
-      ),
+      Math.min(requirement.requiredCount, currentCount + delta),
     );
     onUpdateTaskObjectiveItemProgress(itemKey, nextCount);
   };
@@ -295,6 +316,35 @@ export function StorylineQuestsView({
             <Package className="h-3 w-3 mr-1" />
             {completedCount}/{totalObjectives} Objectives ({progressPercent}%)
           </Badge>
+        </div>
+
+        <div className="rounded-xl border border-border/70 bg-gradient-to-br from-background to-muted/30 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                March 26, 2026 Patch Sync
+              </p>
+              <p className="text-sm text-foreground/90">
+                Latest storyline adjustments reflected in the checklist and
+                decision map.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {STORYLINE_PATCH_SUMMARY.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-lg border border-border/60 bg-background/80 px-3 py-2"
+              >
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {item.label}
+                </p>
+                <p className="mt-1 text-sm font-medium text-foreground/90">
+                  {item.value}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Quest Cards */}
@@ -386,7 +436,7 @@ export function StorylineQuestsView({
                           <div className="space-y-2 pl-6 border-l-2 border-green-500/30">
                             {mainObjectives.map((objective) => {
                               const isCompleted = completedObjectives.has(
-                                objective.id
+                                objective.id,
                               );
                               const requirement =
                                 getObjectiveItemRequirement(objective);
@@ -398,7 +448,7 @@ export function StorylineQuestsView({
                                 : "";
                               const trackedCount =
                                 requirement && itemKey
-                                  ? taskObjectiveItemProgress[itemKey] ?? 0
+                                  ? (taskObjectiveItemProgress[itemKey] ?? 0)
                                   : 0;
                               const clampedTrackedCount = requirement
                                 ? Math.max(
@@ -412,11 +462,13 @@ export function StorylineQuestsView({
                               const remainingCount = requirement
                                 ? Math.max(
                                     0,
-                                    requirement.requiredCount - clampedTrackedCount,
+                                    requirement.requiredCount -
+                                      clampedTrackedCount,
                                   )
                                 : 0;
                               const isRequirementComplete = requirement
-                                ? clampedTrackedCount >= requirement.requiredCount
+                                ? clampedTrackedCount >=
+                                  requirement.requiredCount
                                 : false;
                               return (
                                 <div key={objective.id} className="space-y-1">
@@ -433,14 +485,28 @@ export function StorylineQuestsView({
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          onToggleWorkingOnStorylineObjective(objective.id);
+                                          onToggleWorkingOnStorylineObjective(
+                                            objective.id,
+                                          );
                                         }}
                                         className={`p-0.5 rounded-sm transition-colors ${workingOnStorylineObjectives.has(objective.id) ? "text-blue-500 hover:text-blue-600" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
-                                        title={workingOnStorylineObjectives.has(objective.id) ? "Remove from working on" : "Mark as working on"}
+                                        title={
+                                          workingOnStorylineObjectives.has(
+                                            objective.id,
+                                          )
+                                            ? "Remove from working on"
+                                            : "Mark as working on"
+                                        }
                                       >
                                         <Target
                                           className="h-4 w-4"
-                                          fill={workingOnStorylineObjectives.has(objective.id) ? "currentColor" : "none"}
+                                          fill={
+                                            workingOnStorylineObjectives.has(
+                                              objective.id,
+                                            )
+                                              ? "currentColor"
+                                              : "none"
+                                          }
                                         />
                                       </button>
                                     )}
@@ -577,7 +643,7 @@ export function StorylineQuestsView({
                           <div className="space-y-2 pl-6 border-l-2 border-blue-500/30">
                             {optionalObjectives.map((objective) => {
                               const isCompleted = completedObjectives.has(
-                                objective.id
+                                objective.id,
                               );
                               const requirement =
                                 getObjectiveItemRequirement(objective);
@@ -589,7 +655,7 @@ export function StorylineQuestsView({
                                 : "";
                               const trackedCount =
                                 requirement && itemKey
-                                  ? taskObjectiveItemProgress[itemKey] ?? 0
+                                  ? (taskObjectiveItemProgress[itemKey] ?? 0)
                                   : 0;
                               const clampedTrackedCount = requirement
                                 ? Math.max(
@@ -603,11 +669,13 @@ export function StorylineQuestsView({
                               const remainingCount = requirement
                                 ? Math.max(
                                     0,
-                                    requirement.requiredCount - clampedTrackedCount,
+                                    requirement.requiredCount -
+                                      clampedTrackedCount,
                                   )
                                 : 0;
                               const isRequirementComplete = requirement
-                                ? clampedTrackedCount >= requirement.requiredCount
+                                ? clampedTrackedCount >=
+                                  requirement.requiredCount
                                 : false;
                               return (
                                 <div key={objective.id} className="space-y-1">

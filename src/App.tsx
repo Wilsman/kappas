@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useCallback,
+  useRef,
   lazy,
   Suspense,
 } from "react";
@@ -422,11 +423,67 @@ function App() {
   >("selector");
   const [selectedEndingId, setSelectedEndingId] = useState<string | null>(null);
   const [isRouteInitialized, setIsRouteInitialized] = useState(false);
+  const skipNextPathSyncRef = useRef(false);
 
   // Lightweight client-side routing for deep links like /Items/CollectorItems?search=...
   function normalizePath(pathname: string) {
     return pathname.replace(/\/+$/, "");
   }
+  const buildPath = useCallback(
+    (
+      nextView: typeof viewMode,
+      nextCollectorGroupBy: typeof collectorGroupBy,
+      nextStorylineView: "selector" | "ending" | "fullMap",
+      nextEndingId: string | null,
+    ) => {
+      if (nextView === "grouped") {
+        return "/";
+      }
+      if (nextView === "tracked-items") {
+        return "/Items/TrackedItems";
+      }
+      if (nextView === "collector") {
+        return nextCollectorGroupBy === "hideout-stations"
+          ? "/Items/HideoutStations"
+          : "/Items/CollectorItems";
+      }
+      if (nextView === "hideout-requirements") {
+        return "/Items/HideoutRequirements";
+      }
+      if (nextView === "prestiges") {
+        return "/Prestiges";
+      }
+      if (nextView === "achievements") {
+        return "/Achievements";
+      }
+      if (nextView === "storyline") {
+        return "/Storyline";
+      }
+      if (nextView === "storyline-map") {
+        if (nextStorylineView === "selector") {
+          return "/Storyline/Choose-Ending";
+        }
+        if (nextStorylineView === "ending" && nextEndingId) {
+          return `/Storyline/Ending/${nextEndingId}`;
+        }
+        if (nextStorylineView === "fullMap") {
+          return "/Storyline/Full-Map";
+        }
+        return "/Storyline/Choose-Ending";
+      }
+      if (nextView === "flow") {
+        return "/Quests/Flow";
+      }
+      if (nextView === "tree") {
+        return "/Quests/Tree";
+      }
+      if (nextView === "current") {
+        return "/Current";
+      }
+      return "/";
+    },
+    [],
+  );
   function parsePath(pathname: string) {
     const parts = normalizePath(pathname)
       .split("/")
@@ -484,6 +541,7 @@ function App() {
   // On initial load + popstate: sync state from URL path
   useEffect(() => {
     const applyFromLocation = () => {
+      skipNextPathSyncRef.current = true;
       const { pathname } = window.location;
       const {
         nextView,
@@ -493,9 +551,12 @@ function App() {
       } = parsePath(pathname);
       setViewMode(nextView);
       if (nextCollectorGroupBy) setCollectorGroupBy(nextCollectorGroupBy);
-      if (nextStorylineView) {
+      if (nextView === "storyline-map" && nextStorylineView) {
         setStorylineView(nextStorylineView);
         setSelectedEndingId(nextEndingId || null);
+      } else {
+        setStorylineView("selector");
+        setSelectedEndingId(null);
       }
     };
     applyFromLocation();
@@ -515,44 +576,17 @@ function App() {
   // When state changes via UI, update the path (preserving existing query string like ?search=...)
   useEffect(() => {
     if (!isRouteInitialized) return;
-
-    let nextPath = "/";
-    if (viewMode === "grouped") {
-      // Default checklist view lives at root
-      nextPath = "/";
-    } else if (viewMode === "tracked-items") {
-      nextPath = "/Items/TrackedItems";
-    } else if (viewMode === "collector") {
-      nextPath =
-        collectorGroupBy === "hideout-stations"
-          ? "/Items/HideoutStations"
-          : "/Items/CollectorItems";
-    } else if (viewMode === "hideout-requirements") {
-      nextPath = "/Items/HideoutRequirements";
-    } else if (viewMode === "prestiges") {
-      nextPath = "/Prestiges";
-    } else if (viewMode === "achievements") {
-      nextPath = "/Achievements";
-    } else if (viewMode === "storyline") {
-      nextPath = "/Storyline";
-    } else if (viewMode === "storyline-map") {
-      // Generate specific URLs for storyline views
-      if (storylineView === "selector") {
-        nextPath = "/Storyline/Choose-Ending";
-      } else if (storylineView === "ending" && selectedEndingId) {
-        nextPath = `/Storyline/Ending/${selectedEndingId}`;
-      } else if (storylineView === "fullMap") {
-        nextPath = "/Storyline/Full-Map";
-      } else {
-        nextPath = "/Storyline/Choose-Ending"; // fallback
-      }
-    } else if (viewMode === "flow") {
-      nextPath = "/Quests/Flow";
-    } else if (viewMode === "tree") {
-      nextPath = "/Quests/Tree";
-    } else if (viewMode === "current") {
-      nextPath = "/Current";
+    if (skipNextPathSyncRef.current) {
+      skipNextPathSyncRef.current = false;
+      return;
     }
+
+    const nextPath = buildPath(
+      viewMode,
+      collectorGroupBy,
+      storylineView,
+      selectedEndingId,
+    );
     const current = normalizePath(window.location.pathname);
     if (normalizePath(nextPath) !== current) {
       // Clear query string (e.g., ?search=...) when navigating to a new view/tab
@@ -560,12 +594,21 @@ function App() {
     }
   }, [
     isRouteInitialized,
+    buildPath,
     viewMode,
     groupBy,
     collectorGroupBy,
     storylineView,
     selectedEndingId,
   ]);
+
+  const handleOpenStorylineMap = useCallback(() => {
+    setStorylineView("selector");
+    setSelectedEndingId(null);
+    setViewMode("storyline-map");
+  }, []);
+
+  const usesViewportCanvas = viewMode === "storyline-map";
 
   // Note: preserve query params (e.g., ?tasksSearch=...) to enable deep links
   // When navigating between views we already replace the path without query above.
@@ -2050,6 +2093,7 @@ function App() {
         <AppSidebar
           viewMode={viewMode}
           onSetViewMode={setViewMode}
+          onOpenStorylineMap={handleOpenStorylineMap}
           onSetFocus={handleSetFocus}
           focusMode={focusMode}
           profiles={profiles}
@@ -2080,8 +2124,13 @@ function App() {
           side="left"
           isLoading={isLoading}
         />
-        <SidebarInset>
-          <div className="min-h-[100dvh] bg-background text-foreground flex flex-col overflow-hidden">
+        <SidebarInset className="min-h-0 overflow-hidden">
+          <div
+            className={cn(
+              "bg-background text-foreground flex flex-col overflow-hidden",
+              usesViewportCanvas ? "h-[100dvh] min-h-0" : "min-h-[100dvh]",
+            )}
+          >
             {/* Header */}
             <header className="border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
               <div className="px-2">
@@ -2258,6 +2307,7 @@ function App() {
               <main
                 className={cn(
                   "flex-1 min-h-0 bg-background relative",
+                  usesViewportCanvas && "flex flex-col",
                   viewMode === "grouped" ||
                     viewMode === "tracked-items" ||
                     viewMode === "collector" ||
@@ -2353,7 +2403,7 @@ function App() {
                           onSetCompletedObjectives={
                             handleSetCompletedStorylineObjectives
                           }
-                          onNavigateToMap={() => setViewMode("storyline-map")}
+                          onNavigateToMap={handleOpenStorylineMap}
                           workingOnStorylineObjectives={
                             workingOnStorylineObjectives
                           }
@@ -2517,6 +2567,7 @@ function App() {
         hideoutStations={hideoutStations}
         completedTasks={completedTasks}
         onSetViewMode={setViewMode}
+        onOpenStorylineMap={handleOpenStorylineMap}
         onSetGroupBy={setGroupBy}
         onSetCollectorGroupBy={setCollectorGroupBy}
         onClearTraderFilter={handleClearTraderFilter}

@@ -23,6 +23,7 @@ import AchievementNode from "./AchievementNode";
 import UnknownZone from "./UnknownZone";
 import { CostPanel } from "./CostPanel";
 import { EndingBreakdownPanel } from "./EndingBreakdownPanel";
+import { StorylineViewSwitcher } from "./StorylineViewSwitcher";
 import {
   initialNodes,
   initialEdges,
@@ -30,6 +31,7 @@ import {
   getPathBreakdown,
   getPathEdgeIds,
 } from "./storylineMapData";
+import { resolveTimingData } from "./timing";
 import {
   Map,
   ArrowLeft,
@@ -54,6 +56,7 @@ interface StorylineMapViewProps {
   currentNodeId?: string;
   onToggleNode: (id: string) => void;
   onBack?: () => void;
+  onNavigateToEnding?: (endingId: string) => void;
 }
 
 // Image export settings
@@ -173,6 +176,7 @@ export function StorylineMapView({
   currentNodeId,
   onToggleNode,
   onBack,
+  onNavigateToEnding,
 }: StorylineMapViewProps): JSX.Element {
   // Track selected node for path highlighting and breakdown view
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -197,39 +201,10 @@ export function StorylineMapView({
     };
   }, [selectedNodeId]);
 
-  // Helper to detect crafts and time gates from description or note
-  // Crafts: have "craft" in text (e.g., "55 hour craft", "6 hour craft")
-  // Time gates: hours without "craft" (e.g., "72 hour wait", pure waiting)
-  const detectWaitTimes = (data: Record<string, unknown>) => {
-    const description = data.description as string | undefined;
-    const note = data.note as string | undefined;
-    const combined = `${description || ""} ${note || ""}`;
-
-    // Check for craft mentions
-    const craftMatch = combined.match(/(\d+)\s*hour\s*craft/i);
-    const isCraft = !!craftMatch || /\bcraft\b/i.test(combined);
-    const craftHours = craftMatch ? parseInt(craftMatch[1], 10) : undefined;
-
-    // Check for general hour mentions (time gates are hours WITHOUT craft)
-    const hourMatch = combined.match(/(\d+)\s*hour/i);
-    const hasHours = !!hourMatch;
-    const hours = hourMatch ? parseInt(hourMatch[1], 10) : undefined;
-
-    // Time gate = has hours but NOT a craft (pure waiting)
-    const isTimeGate = hasHours && !isCraft;
-
-    return {
-      isCraft,
-      craftHours: isCraft ? craftHours || hours : undefined,
-      isTimeGate,
-      timeGateHours: isTimeGate ? hours : undefined,
-    };
-  };
-
   // Initialize nodes with completion status from props
   const initialNodesWithState = useMemo(() => {
     return initialNodes.map((node) => {
-      const waitTimeInfo = detectWaitTimes(
+      const waitTimeInfo = resolveTimingData(
         node.data as Record<string, unknown>
       );
       return {
@@ -325,7 +300,7 @@ export function StorylineMapView({
   }, [selectedNodeId]);
 
   return (
-    <div className="h-full w-full relative">
+    <div className="h-full min-h-0 w-full relative overflow-hidden">
       <ReactFlow
         nodes={nodes}
         edges={styledEdges}
@@ -410,6 +385,15 @@ export function StorylineMapView({
                   : "Export positions"}
               </Button>
             </div>
+            {onNavigateToEnding && (
+              <div className="mb-3">
+                <StorylineViewSwitcher
+                  currentViewId="full-map"
+                  onSelectEnding={onNavigateToEnding}
+                  onSelectFullMap={() => {}}
+                />
+              </div>
+            )}
             <div className="mb-2">
               <a
                 href="https://x.com/Callsign_Smokey"
