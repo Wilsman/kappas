@@ -2,6 +2,7 @@ import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { Trophy } from "lucide-react";
+import { formatDurationRange } from "./timing";
 
 export interface StoryNodeData {
   label: string;
@@ -14,8 +15,10 @@ export interface StoryNodeData {
   isUndetermined?: boolean;
   isTimeGate?: boolean;
   timeGateHours?: number;
+  timeGateHoursMax?: number;
   isCraft?: boolean;
   craftHours?: number;
+  craftHoursMax?: number;
   note?: string;
 }
 
@@ -25,6 +28,12 @@ function StoryNode({ data }: { data: StoryNodeData }) {
   const isCraft = data.isCraft;
   const hasWaitTime = isTimeGate || isCraft;
   const hasCostOrTime = hasCost || hasWaitTime;
+  const craftLabel = formatDurationRange(data.craftHours, data.craftHoursMax, " craft");
+  const waitLabel = formatDurationRange(
+    data.timeGateHours,
+    data.timeGateHoursMax,
+    " wait"
+  );
 
   return (
     <div
@@ -97,12 +106,12 @@ function StoryNode({ data }: { data: StoryNodeData }) {
           <div className="flex flex-wrap gap-1 mb-1">
             {isCraft && (
               <span className="inline-flex items-center gap-0.5 rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] font-medium text-cyan-400">
-                🔧 {data.craftHours ? `${data.craftHours}h craft` : "Craft"}
+                🔧 {craftLabel || "Craft"}
               </span>
             )}
             {isTimeGate && (
               <span className="inline-flex items-center gap-0.5 rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-medium text-rose-400">
-                ⏳ {data.timeGateHours ? `${data.timeGateHours}h wait` : "Wait"}
+                ⏳ {waitLabel || "Wait"}
               </span>
             )}
             {hasCost && (

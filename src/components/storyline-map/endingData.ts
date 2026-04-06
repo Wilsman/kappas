@@ -51,6 +51,153 @@ const ENDING_NODE_IDS = {
   debtor: ["debtor-ending"],
 };
 
+const ENDING_LAYOUT_X_GAP = 220;
+const ENDING_LAYOUT_Y_GAP = 112;
+
+function calculateEndingNodeDepths(pathNodes: Node[], pathEdges: Edge[]) {
+  const incomingCount = new Map<string, number>();
+  const outgoing = new Map<string, Edge[]>();
+  const nodesById = new Map(pathNodes.map((node) => [node.id, node]));
+
+  pathNodes.forEach((node) => {
+    incomingCount.set(node.id, 0);
+    outgoing.set(node.id, []);
+  });
+
+  pathEdges.forEach((edge) => {
+    incomingCount.set(edge.target, (incomingCount.get(edge.target) ?? 0) + 1);
+    outgoing.get(edge.source)?.push(edge);
+  });
+
+  const sortIdsByOriginalPosition = (leftId: string, rightId: string) => {
+    const leftPosition = nodesById.get(leftId)?.position ?? { x: 0, y: 0 };
+    const rightPosition = nodesById.get(rightId)?.position ?? { x: 0, y: 0 };
+
+    if (leftPosition.y !== rightPosition.y) {
+      return leftPosition.y - rightPosition.y;
+    }
+
+    return leftPosition.x - rightPosition.x;
+  };
+
+  outgoing.forEach((edges) => {
+    edges.sort((left, right) =>
+      sortIdsByOriginalPosition(left.target, right.target)
+    );
+  });
+
+  const queue = [...pathNodes]
+    .filter((node) => (incomingCount.get(node.id) ?? 0) === 0)
+    .sort((left, right) => sortIdsByOriginalPosition(left.id, right.id));
+
+  const depths = new Map<string, number>();
+  queue.forEach((node) => depths.set(node.id, 0));
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    const currentDepth = depths.get(current.id) ?? 0;
+
+    for (const edge of outgoing.get(current.id) ?? []) {
+      const nextDepth = currentDepth + 1;
+      depths.set(edge.target, Math.max(depths.get(edge.target) ?? 0, nextDepth));
+
+      const remainingIncoming = (incomingCount.get(edge.target) ?? 1) - 1;
+      incomingCount.set(edge.target, remainingIncoming);
+
+      if (remainingIncoming === 0) {
+        const nextNode = nodesById.get(edge.target);
+        if (nextNode) {
+          queue.push(nextNode);
+        }
+      }
+    }
+  }
+
+  return depths;
+}
+
+function compactEndingPathNodes(pathNodes: Node[], pathEdges: Edge[]): Node[] {
+  const depths = calculateEndingNodeDepths(pathNodes, pathEdges);
+  const parentIds = new Map<string, string[]>();
+  const assignedX = new Map<string, number>();
+  const nodesById = new Map(pathNodes.map((node) => [node.id, node]));
+  const nodesByDepth = new Map<number, Node[]>();
+
+  for (const edge of pathEdges) {
+    const parents = parentIds.get(edge.target) ?? [];
+    parents.push(edge.source);
+    parentIds.set(edge.target, parents);
+  }
+
+  for (const node of pathNodes) {
+    const depth = depths.get(node.id) ?? 0;
+    const nodesAtDepth = nodesByDepth.get(depth) ?? [];
+    nodesAtDepth.push(node);
+    nodesByDepth.set(depth, nodesAtDepth);
+  }
+
+  const depthLevels = [...nodesByDepth.keys()].sort((a, b) => a - b);
+
+  for (const depth of depthLevels) {
+    const nodesAtDepth = nodesByDepth.get(depth) ?? [];
+
+    nodesAtDepth.sort((left, right) => {
+      const leftParents = parentIds.get(left.id) ?? [];
+      const rightParents = parentIds.get(right.id) ?? [];
+
+      const getAverageParentX = (parents: string[], fallbackX: number) => {
+        const parentXs = parents
+          .map((parentId) => assignedX.get(parentId))
+          .filter((value): value is number => value !== undefined);
+
+        if (parentXs.length === 0) {
+          return fallbackX;
+        }
+
+        return parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length;
+      };
+
+      const leftFallback = nodesById.get(left.id)?.position?.x ?? 0;
+      const rightFallback = nodesById.get(right.id)?.position?.x ?? 0;
+      const leftAnchor = getAverageParentX(leftParents, leftFallback);
+      const rightAnchor = getAverageParentX(rightParents, rightFallback);
+
+      if (leftAnchor !== rightAnchor) {
+        return leftAnchor - rightAnchor;
+      }
+
+      const leftPosition = nodesById.get(left.id)?.position ?? { x: 0, y: 0 };
+      const rightPosition = nodesById.get(right.id)?.position ?? { x: 0, y: 0 };
+
+      if (leftPosition.y !== rightPosition.y) {
+        return leftPosition.y - rightPosition.y;
+      }
+
+      return leftPosition.x - rightPosition.x;
+    });
+
+    const xCenterOffset = ((nodesAtDepth.length - 1) * ENDING_LAYOUT_X_GAP) / 2;
+
+    nodesAtDepth.forEach((node, index) => {
+      assignedX.set(node.id, index * ENDING_LAYOUT_X_GAP - xCenterOffset);
+    });
+  }
+
+  return pathNodes.map((node) => {
+    const depth = depths.get(node.id) ?? 0;
+
+    return {
+      ...node,
+      position: {
+        x: assignedX.get(node.id) ?? 0,
+        y: depth * ENDING_LAYOUT_Y_GAP,
+      },
+    };
+  });
+}
+
 // Calculate stats for a specific ending by finding the shortest path
 function calculateEndingStats(endingNodeIds: string[]): {
   totalCraftHours: number;
@@ -285,9 +432,13 @@ export function getEndingPathData(endingId: string): {
 
   // Special handling for Savior ending to show both PVP and PVE paths
   if (endingId === "savior") {
-    // Find the PVP path
-    const pvpPathNodes = findPathToNode("pvp", initialNodes, initialEdges);
-    const pvePathNodes = findPathToNode("pve", initialNodes, initialEdges);
+    // Include both branch-specific objectives before the shared BTR convergence.
+    const pvpPathNodes = findPathToNode("coop", initialNodes, initialEdges);
+    const pvePathNodes = findPathToNode(
+      "kill-5-no-scav",
+      initialNodes,
+      initialEdges
+    );
 
     // Find the path from the convergence point (btr-04) to the ending
     const convergencePathNodes = findPathToNode(
@@ -319,14 +470,8 @@ export function getEndingPathData(endingId: string): {
     (e) => pathNodeIds.has(e.source) && pathNodeIds.has(e.target)
   );
 
-  // Re-position nodes for vertical layout
-  const repositionedNodes = pathNodes.map((node, idx) => ({
-    ...node,
-    position: { x: 0, y: idx * 120 },
-  }));
-
   return {
-    nodes: repositionedNodes,
+    nodes: compactEndingPathNodes(pathNodes, pathEdges),
     edges: pathEdges,
     breakdown: getPathBreakdown(pathNodes),
   };
@@ -360,10 +505,28 @@ export function formatUSD(amount: number): string {
 }
 
 export function formatHours(hours: number): string {
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24);
-    const remainingHours = hours % 24;
-    return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+  const totalMinutes = Math.round(hours * 60);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hoursRemainder = totalMinutes % (24 * 60);
+  const remainingHours = Math.floor(hoursRemainder / 60);
+  const remainingMinutes = hoursRemainder % 60;
+  const parts: string[] = [];
+
+  if (days > 0) {
+    parts.push(`${days}d`);
   }
-  return `${hours}h`;
+
+  if (remainingHours > 0) {
+    parts.push(`${remainingHours}h`);
+  }
+
+  if (remainingMinutes > 0) {
+    parts.push(`${remainingMinutes}m`);
+  }
+
+  if (parts.length > 0) {
+    return parts.join(" ");
+  }
+
+  return "0h";
 }

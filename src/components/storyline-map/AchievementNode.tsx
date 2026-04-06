@@ -38,17 +38,17 @@ export default function AchievementNode({
 
       <div
         className={`
-          relative px-4 py-3 rounded-lg border-2 bg-card shadow-lg transition-all duration-200
+          relative px-4 py-3 rounded-lg border-2 shadow-lg transition-all duration-200
           ${
             isCompleted
-              ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
-              : "border-amber-300 bg-amber-50/50 dark:bg-amber-950/10"
+              ? "border-amber-400 bg-gradient-to-br from-amber-950/65 to-amber-900/25"
+              : "border-amber-500/70 bg-gradient-to-br from-zinc-900 to-amber-950/35"
           }
           ${isCurrentStep ? "ring-2 ring-amber-500 ring-offset-2" : ""}
           ${isSelected ? "ring-2 ring-blue-500 ring-offset-2" : ""}
           ${
             isOnPath
-              ? "border-amber-400 shadow-amber-200/50 dark:shadow-amber-400/20"
+              ? "border-amber-400 shadow-amber-500/20"
               : ""
           }
           hover:shadow-xl hover:scale-105 cursor-pointer
@@ -62,7 +62,7 @@ export default function AchievementNode({
         {/* Content */}
         <div className="ml-6">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-bold text-sm text-amber-900 dark:text-amber-100">
+            <h3 className="font-bold text-sm text-amber-100">
               {label}
             </h3>
             {isCompleted && (
@@ -70,12 +70,12 @@ export default function AchievementNode({
             )}
           </div>
 
-          <p className="text-xs text-amber-800 dark:text-amber-200 mb-1">
+          <p className="text-xs text-amber-200/90 mb-1">
             {description}
           </p>
 
           {note && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 italic">
+            <p className="text-xs text-amber-300/80 italic">
               {note}
             </p>
           )}

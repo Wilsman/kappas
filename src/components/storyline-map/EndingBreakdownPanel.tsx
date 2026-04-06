@@ -2,6 +2,7 @@ import { Panel } from "@xyflow/react";
 import { X, Clock, Coins, Bitcoin, ChevronRight, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PathBreakdown } from "./storylineMapData";
+import { formatDurationRange } from "./timing";
 
 interface EndingBreakdownPanelProps {
   endingLabel: string;
@@ -20,7 +21,9 @@ export function EndingBreakdownPanel({
     totalCostBTC,
     totalCostUSD,
     totalCraftHours,
+    totalCraftHoursMax,
     totalTimeGateHours,
+    totalTimeGateHoursMax,
   } = breakdown;
 
   // Filter to show only significant steps (with costs, crafts, or time gates)
@@ -57,7 +60,9 @@ export function EndingBreakdownPanel({
                 <Wrench className="h-3.5 w-3.5" />
                 <span className="text-xs font-semibold">Crafts</span>
               </div>
-              <p className="text-sm font-bold">{totalCraftHours}h</p>
+              <p className="text-sm font-bold">
+                {formatDurationRange(totalCraftHours, totalCraftHoursMax)}
+              </p>
             </div>
           )}
           {totalTimeGateHours > 0 && (
@@ -66,7 +71,12 @@ export function EndingBreakdownPanel({
                 <Clock className="h-3.5 w-3.5" />
                 <span className="text-xs font-semibold">Wait</span>
               </div>
-              <p className="text-sm font-bold">{totalTimeGateHours}h</p>
+              <p className="text-sm font-bold">
+                {formatDurationRange(
+                  totalTimeGateHours,
+                  totalTimeGateHoursMax
+                )}
+              </p>
             </div>
           )}
           {totalCostRoubles > 0 && (
@@ -140,13 +150,21 @@ export function EndingBreakdownPanel({
                     {step.isCraft && step.craftHours && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] text-cyan-500">
                         <Wrench className="h-2.5 w-2.5" />
-                        {step.craftHours}h craft
+                        {formatDurationRange(
+                          step.craftHours,
+                          step.craftHoursMax
+                        )}{" "}
+                        craft
                       </span>
                     )}
                     {step.isTimeGate && step.timeGateHours && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] text-rose-500">
                         <Clock className="h-2.5 w-2.5" />
-                        {step.timeGateHours}h wait
+                        {formatDurationRange(
+                          step.timeGateHours,
+                          step.timeGateHoursMax
+                        )}{" "}
+                        wait
                       </span>
                     )}
                     {step.cost !== undefined && step.cost > 0 && (

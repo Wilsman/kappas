@@ -13,8 +13,10 @@ export interface PathStep {
   currency?: "roubles" | "btc" | "usd";
   isCraft?: boolean;
   craftHours?: number;
+  craftHoursMax?: number;
   isTimeGate?: boolean;
   timeGateHours?: number;
+  timeGateHoursMax?: number;
 }
 
 export interface PathBreakdown {
@@ -23,7 +25,9 @@ export interface PathBreakdown {
   totalCostBTC: number;
   totalCostUSD: number;
   totalCraftHours: number;
+  totalCraftHoursMax?: number;
   totalTimeGateHours: number;
+  totalTimeGateHoursMax?: number;
 }
 
 type StorylineNode = Node<Record<string, unknown>, string>;
@@ -34,94 +38,94 @@ type StorylineNodeInput = Omit<StorylineNode, "position"> & {
 const storylineNodePositions = {
   title: { x: 800, y: -500 },
   recover: { x: 800, y: -400 },
-  "keep-self": { x: 500, y: -280 },
-  "give-prapor-0": { x: 1074, y: -276 },
-  "prapor-comp": { x: 1042, y: -132 },
-  "lk-access": { x: 1070, y: -29 },
-  "talk-lk-0": { x: 1061, y: 55 },
-  "yellow-flare": { x: 1043, y: 145 },
-  "kill-15": { x: 1065, y: 255 },
-  "lk-case": { x: 1057, y: 356 },
-  "armored-hands": { x: 791, y: 457 },
-  "open-case": { x: 799, y: 546 },
-  "tg-48": { x: 790, y: 628 },
+  "keep-self": { x: 520, y: -280 },
+  "give-prapor-0": { x: 1080, y: -276 },
+  "prapor-comp": { x: 1080, y: -132 },
+  "lk-access": { x: 1080, y: -29 },
+  "talk-lk-0": { x: 1080, y: 55 },
+  "yellow-flare": { x: 1080, y: 145 },
+  "kill-15": { x: 1080, y: 255 },
+  "lk-case": { x: 1080, y: 356 },
+  "armored-hands": { x: 800, y: 457 },
+  "open-case": { x: 800, y: 546 },
+  "tg-48": { x: 800, y: 628 },
   "case-open": { x: 800, y: 728 },
   "dont-work": { x: 400, y: 850 },
   "work-together": { x: 1200, y: 850 },
-  "sl-shore": { x: 50, y: 1000 },
-  "sl-key-fail": { x: 50, y: 1100 },
-  "sl-300": { x: -212, y: 1228 },
-  "sl-500": { x: 315, y: 1225 },
-  "sl-tg": { x: 315, y: 1394 },
-  "sl-5": { x: 329, y: 1480 },
-  "sl-flash": { x: 302, y: 1576 },
-  "sl-kill-50": { x: 329, y: 1680 },
-  "sl-kill-4": { x: 331, y: 1768 },
-  "sl-48": { x: 326, y: 1856 },
-  "sl-note": { x: 31, y: 2006 },
-  "sl-easy": { x: 31, y: 2106 },
-  "end-setup-survivor": { x: 137, y: 3533 },
-  "fail-survivor": { x: 138, y: 3673 },
-  "survivor-ending": { x: 160, y: 3834 },
-  "wt-search": { x: 1193, y: 1011 },
-  "wt-keycard": { x: 1193, y: 1111 },
-  "tg-24": { x: 1197, y: 1189 },
-  "wt-pay-mech": { x: 1197, y: 1289 },
-  "wt-elekt": { x: 1192, y: 1442 },
-  "wt-activate": { x: 1192, y: 1542 },
-  "tg-50": { x: 1192, y: 1642 },
-  "wt-shore": { x: 1192, y: 1742 },
-  "hk-savior": { x: 724, y: 1877 },
+  "sl-shore": { x: 120, y: 1000 },
+  "sl-key-fail": { x: 120, y: 1100 },
+  "sl-300": { x: -120, y: 1228 },
+  "sl-500": { x: 360, y: 1225 },
+  "sl-tg": { x: 360, y: 1394 },
+  "sl-5": { x: 360, y: 1480 },
+  "sl-flash": { x: 360, y: 1576 },
+  "sl-kill-50": { x: 360, y: 1680 },
+  "sl-kill-4": { x: 360, y: 1768 },
+  "sl-48": { x: 360, y: 1856 },
+  "sl-note": { x: 120, y: 2006 },
+  "sl-easy": { x: 120, y: 2106 },
+  "end-setup-survivor": { x: 120, y: 3533 },
+  "fail-survivor": { x: 120, y: 3673 },
+  "survivor-ending": { x: 120, y: 3834 },
+  "wt-search": { x: 1200, y: 1011 },
+  "wt-keycard": { x: 1200, y: 1111 },
+  "tg-24": { x: 1200, y: 1189 },
+  "wt-pay-mech": { x: 1200, y: 1289 },
+  "wt-elekt": { x: 1200, y: 1442 },
+  "wt-activate": { x: 1200, y: 1542 },
+  "tg-50": { x: 1200, y: 1642 },
+  "wt-shore": { x: 1200, y: 1742 },
+  "hk-savior": { x: 760, y: 1877 },
   "nk-fallen": { x: 1200, y: 1850 },
-  "hk-debtor": { x: 1792, y: 1864 },
-  "audio-note": { x: 716, y: 2057 },
-  "complete-all": { x: 716, y: 2157 },
-  "tg-48b": { x: 746, y: 2271 },
-  trusted: { x: 716, y: 2374 },
-  "fence-4": { x: 716, y: 2474 },
-  pvp: { x: 613, y: 2601 },
-  pve: { x: 882, y: 2603 },
-  "kill-5-no-scav": { x: 852, y: 2705 },
-  coop: { x: 600, y: 2705 },
-  "btr-04": { x: 733, y: 2872 },
-  "warn-btr": { x: -424, y: 2577 },
-  "solar-savior": { x: 749, y: 3039 },
-  "build-72-savior": { x: 770, y: 3186 },
-  "final-craft-savior": { x: 770, y: 3286 },
-  "end-setup-savior": { x: 775, y: 3545 },
-  "fail-savior": { x: 775, y: 3678 },
-  "savior-ending": { x: 807, y: 3827 },
-  enough: { x: 1182, y: 2018 },
-  "talk-prapor": { x: 1223, y: 2129 },
+  "hk-debtor": { x: 1800, y: 1864 },
+  "audio-note": { x: 760, y: 2057 },
+  "complete-all": { x: 760, y: 2157 },
+  "tg-48b": { x: 760, y: 2271 },
+  trusted: { x: 760, y: 2374 },
+  "fence-4": { x: 760, y: 2474 },
+  pvp: { x: 620, y: 2601 },
+  pve: { x: 900, y: 2603 },
+  "kill-5-no-scav": { x: 900, y: 2705 },
+  coop: { x: 620, y: 2705 },
+  "btr-04": { x: 760, y: 2872 },
+  "warn-btr": { x: 420, y: 2577 },
+  "solar-savior": { x: 760, y: 3039 },
+  "build-72-savior": { x: 760, y: 3186 },
+  "final-craft-savior": { x: 760, y: 3286 },
+  "end-setup-savior": { x: 760, y: 3545 },
+  "fail-savior": { x: 760, y: 3678 },
+  "savior-ending": { x: 760, y: 3827 },
+  enough: { x: 1200, y: 2018 },
+  "talk-prapor": { x: 1200, y: 2129 },
   "case-back": { x: 1030, y: 2222 },
-  "no-case-back": { x: 1320, y: 2223 },
-  "repair-40": { x: 1350, y: 2353 },
-  "secure-cont": { x: 1320, y: 2443 },
-  "military-50": { x: 1320, y: 2543 },
+  "no-case-back": { x: 1360, y: 2223 },
+  "repair-40": { x: 1360, y: 2353 },
+  "secure-cont": { x: 1360, y: 2443 },
+  "military-50": { x: 1360, y: 2543 },
   "bio-case": { x: 1200, y: 2660 },
-  "usd-1m": { x: 1229, y: 2770 },
-  "will-blow": { x: 1214, y: 2941 },
-  "tg-48c": { x: 1222, y: 3044 },
-  "hash-usb": { x: 1193, y: 3141 },
-  "solar-fallen": { x: 1211, y: 3242 },
-  "build-72-fallen": { x: 1225, y: 3339 },
-  "final-craft-fallen": { x: 1213, y: 3442 },
-  "end-setup-fallen": { x: 1196, y: 3563 },
-  "fail-fallen": { x: 1196, y: 3698 },
-  "fallen-ending": { x: 1207, y: 3827 },
-  "hand-2-major": { x: 1776, y: 2053 },
-  "u-turn": { x: 1812, y: 2169 },
-  "talk-lk": { x: 1812, y: 2277 },
-  topo: { x: 1785, y: 2360 },
-  "tg-24b": { x: 1810, y: 2475 },
-  "hash-drive": { x: 1780, y: 2573 },
-  "kill-30": { x: 1803, y: 2686 },
-  amulet: { x: 1783, y: 2782 },
-  place: { x: 1787, y: 2907 },
-  "lk-key": { x: 1787, y: 3154 },
-  "end-setup-debtor": { x: 1795, y: 3581 },
-  "fail-debtor": { x: 1796, y: 3714 },
-  "debtor-ending": { x: 1807, y: 3827 },
+  "usd-1m": { x: 1200, y: 2770 },
+  "will-blow": { x: 1200, y: 2941 },
+  "tg-48c": { x: 1200, y: 3044 },
+  "hash-usb": { x: 1200, y: 3141 },
+  "solar-fallen": { x: 1200, y: 3242 },
+  "build-72-fallen": { x: 1200, y: 3339 },
+  "final-craft-fallen": { x: 1200, y: 3442 },
+  "end-setup-fallen": { x: 1200, y: 3563 },
+  "fail-fallen": { x: 1200, y: 3698 },
+  "fallen-ending": { x: 1200, y: 3827 },
+  "hand-2-major": { x: 1800, y: 2053 },
+  "u-turn": { x: 1800, y: 2169 },
+  "talk-lk": { x: 1800, y: 2277 },
+  topo: { x: 1800, y: 2360 },
+  "tg-24b": { x: 1800, y: 2475 },
+  "hash-drive": { x: 1800, y: 2573 },
+  "kill-30": { x: 1800, y: 2686 },
+  amulet: { x: 1800, y: 2782 },
+  place: { x: 1800, y: 2907 },
+  "lk-key": { x: 1800, y: 3154 },
+  "end-setup-debtor": { x: 1800, y: 3581 },
+  "fail-debtor": { x: 1800, y: 3714 },
+  "debtor-ending": { x: 1800, y: 3827 },
 } as const;
 
 function applyStorylineNodePositions(
@@ -258,10 +262,10 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "tg-48",
     type: "craft",
     data: {
-      label: "48h Craft at Workbench",
+      label: "25h Craft at Workbench",
       description: "Craft to open the case",
       isCraft: true,
-      craftHours: 48,
+      craftHours: 25,
     },
   },
   {
@@ -348,10 +352,10 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "sl-5",
     type: "craft",
     data: {
-      label: "5h Craft at Intel Centre",
+      label: "3h Craft at Intel Centre",
       description: "Process the data",
       isCraft: true,
-      craftHours: 5,
+      craftHours: 3,
     },
   },
   {
@@ -460,10 +464,11 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "tg-24",
     type: "craft",
     data: {
-      label: "24h timegate",
+      label: "12-24h timegate",
       description: "Wait for Mechanic",
       isTimeGate: true,
-      timeGateHours: 24,
+      timeGateHours: 12,
+      timeGateHoursMax: 24,
     },
   },
   {
@@ -497,10 +502,10 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "tg-50",
     type: "craft",
     data: {
-      label: "50h Craft at Intel Centre",
+      label: "23h 30m Craft at Intel Centre",
       description: "Process the RFID card",
       isCraft: true,
-      craftHours: 50,
+      craftHours: 23.5,
     },
   },
   {
@@ -562,10 +567,11 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "tg-48b",
     type: "craft",
     data: {
-      label: "48h timegate",
-      description: "Wait for Kerman",
+      label: "24-48h timegate",
+      description: "Wait for Kerman's trusted contact",
       isTimeGate: true,
-      timeGateHours: 48,
+      timeGateHours: 24,
+      timeGateHoursMax: 48,
     },
   },
   {
@@ -648,10 +654,10 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "build-72-savior",
     type: "craft",
     data: {
-      label: "72h build time",
+      label: "43h build time",
       description: "Solar Power construction",
       isCraft: true,
-      craftHours: 72,
+      craftHours: 43,
     },
   },
   {
@@ -661,6 +667,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
       label: "Final craft for the Keycard",
       description: "Prepare escape keycard",
       isCraft: true,
+      craftHours: 5.5,
     },
   },
 
@@ -680,9 +687,9 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     type: "story",
     data: {
       label: "If attempt fails:",
-      description: "Craft the Keycard again (11h), needs a new Blank RFID Card",
+      description: "Craft the Keycard again (5h 30m), needs a new Blank RFID Card",
       isCraft: true,
-      craftHours: 11,
+      craftHours: 5.5,
     },
   },
   {
@@ -819,10 +826,10 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "build-72-fallen",
     type: "craft",
     data: {
-      label: "72h build time",
+      label: "43h build time",
       description: "Solar Power construction",
       isCraft: true,
-      craftHours: 72,
+      craftHours: 43,
     },
   },
   {
@@ -832,6 +839,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
       label: "Final craft for the Keycard",
       description: "Prepare escape keycard",
       isCraft: true,
+      craftHours: 5.5,
     },
   },
 
@@ -851,9 +859,9 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     type: "story",
     data: {
       label: "If attempt fails:",
-      description: "Craft the Keycard again (11h), needs a new Blank RFID Card",
+      description: "Craft the Keycard again (5h 30m), needs a new Blank RFID Card",
       isCraft: true,
-      craftHours: 11,
+      craftHours: 5.5,
     },
   },
   {
@@ -1693,7 +1701,9 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
   let totalCostBTC = 0;
   let totalCostUSD = 0;
   let totalCraftHours = 0;
+  let totalCraftHoursMax = 0;
   let totalTimeGateHours = 0;
+  let totalTimeGateHoursMax = 0;
 
   const steps: PathStep[] = pathNodes.map((node) => {
     const data = node.data as Record<string, unknown>;
@@ -1701,8 +1711,11 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
     const currency = data.currency as PathStep["currency"] | undefined;
     const isCraft = data.isCraft as boolean;
     const craftHours = (data.craftHours as number) || 0;
+    const craftHoursMax = (data.craftHoursMax as number) || craftHours;
     const isTimeGate = data.isTimeGate as boolean;
     const timeGateHours = (data.timeGateHours as number) || 0;
+    const timeGateHoursMax =
+      (data.timeGateHoursMax as number) || timeGateHours;
 
     if (cost > 0) {
       // Use explicit currency when specified, otherwise detect from note
@@ -1733,10 +1746,12 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
 
     if (isCraft && craftHours) {
       totalCraftHours += craftHours;
+      totalCraftHoursMax += craftHoursMax;
     }
 
     if (isTimeGate && timeGateHours) {
       totalTimeGateHours += timeGateHours;
+      totalTimeGateHoursMax += timeGateHoursMax;
     }
 
     return {
@@ -1748,8 +1763,10 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
       currency,
       isCraft,
       craftHours,
+      craftHoursMax,
       isTimeGate,
       timeGateHours,
+      timeGateHoursMax,
     };
   });
 
@@ -1759,6 +1776,12 @@ export function getPathBreakdown(pathNodes: Node[]): PathBreakdown {
     totalCostBTC,
     totalCostUSD,
     totalCraftHours,
+    totalCraftHoursMax:
+      totalCraftHoursMax > totalCraftHours ? totalCraftHoursMax : undefined,
     totalTimeGateHours,
+    totalTimeGateHoursMax:
+      totalTimeGateHoursMax > totalTimeGateHours
+        ? totalTimeGateHoursMax
+        : undefined,
   };
 }

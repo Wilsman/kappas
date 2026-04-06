@@ -1,7 +1,8 @@
 import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import { cn } from "@/lib/utils";
-import { Hammer } from "lucide-react";
+import { Clock, Hammer } from "lucide-react";
+import { formatDurationRange } from "./timing";
 
 export interface CraftNodeData {
   label: string;
@@ -13,8 +14,10 @@ export interface CraftNodeData {
   isUndetermined?: boolean;
   isTimeGate?: boolean;
   timeGateHours?: number;
+  timeGateHoursMax?: number;
   isCraft?: boolean;
   craftHours?: number;
+  craftHoursMax?: number;
   note?: string;
 }
 
@@ -24,6 +27,16 @@ function CraftNode({ data }: { data: CraftNodeData }) {
   const isCraft = data.isCraft;
   const hasWaitTime = isTimeGate || isCraft;
   const hasCostOrTime = hasCost || hasWaitTime;
+  const craftDuration = formatDurationRange(
+    data.craftHours,
+    data.craftHoursMax,
+    " craft"
+  );
+  const waitDuration = formatDurationRange(
+    data.timeGateHours,
+    data.timeGateHoursMax,
+    " wait"
+  );
 
   return (
     <div
@@ -81,7 +94,16 @@ function CraftNode({ data }: { data: CraftNodeData }) {
         <div className="flex items-center gap-1 mb-2">
           <Hammer className="h-3 w-3 text-cyan-500" />
           <span className="text-xs font-medium text-cyan-600 dark:text-cyan-400">
-            {data.craftHours} hour craft
+            {craftDuration}
+          </span>
+        </div>
+      )}
+
+      {isTimeGate && data.timeGateHours && (
+        <div className="flex items-center gap-1 mb-2">
+          <Clock className="h-3 w-3 text-rose-500" />
+          <span className="text-xs font-medium text-rose-600 dark:text-rose-400">
+            {waitDuration}
           </span>
         </div>
       )}

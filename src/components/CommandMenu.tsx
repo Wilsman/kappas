@@ -58,6 +58,7 @@ interface CommandMenuProps {
   hideoutStations: HideoutStation[];
   completedTasks: Set<string>;
   onSetViewMode: (mode: CommandMenuProps["viewMode"]) => void;
+  onOpenStorylineMap: () => void;
   onSetGroupBy: (mode: "trader" | "map") => void;
   onSetCollectorGroupBy: (mode: "collector" | "hideout-stations") => void;
   onClearTraderFilter: () => void;
@@ -76,6 +77,7 @@ export function CommandMenu(props: CommandMenuProps) {
     hideoutStations,
     completedTasks,
     onSetViewMode,
+    onOpenStorylineMap,
     onSetGroupBy,
     onSetCollectorGroupBy,
   } = props;
@@ -644,7 +646,7 @@ export function CommandMenu(props: CommandMenuProps) {
       setOpen(false);
     },
     navigateStorylineMap() {
-      onSetViewMode("storyline-map");
+      onOpenStorylineMap();
       setOpen(false);
     },
   } as const;

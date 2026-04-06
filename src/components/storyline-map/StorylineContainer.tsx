@@ -56,32 +56,41 @@ export function StorylineContainer({
 
   if (viewMode === "selector") {
     return (
-      <EndingSelector
-        onSelectEnding={handleSelectEnding}
-        onViewFullMap={handleViewFullMap}
-      />
+      <div className="h-full min-h-0 w-full">
+        <EndingSelector
+          onSelectEnding={handleSelectEnding}
+          onViewFullMap={handleViewFullMap}
+        />
+      </div>
     );
   }
 
   if (viewMode === "ending" && selectedEndingId) {
     return (
-      <ReactFlowProvider>
-        <EndingFlowView
-          endingId={selectedEndingId}
-          onBack={handleBackToSelector}
-        />
-      </ReactFlowProvider>
+      <div className="h-full min-h-0 w-full">
+        <ReactFlowProvider>
+          <EndingFlowView
+            endingId={selectedEndingId}
+            onBack={handleBackToSelector}
+            onNavigateToEnding={handleSelectEnding}
+            onNavigateToFullMap={handleViewFullMap}
+          />
+        </ReactFlowProvider>
+      </div>
     );
   }
 
   return (
-    <ReactFlowProvider>
-      <StorylineMapView
-        completedNodes={completedNodes}
-        currentNodeId={currentNodeId}
-        onToggleNode={onToggleNode}
-        onBack={handleBackFromFullMap}
-      />
-    </ReactFlowProvider>
+    <div className="h-full min-h-0 w-full">
+      <ReactFlowProvider>
+        <StorylineMapView
+          completedNodes={completedNodes}
+          currentNodeId={currentNodeId}
+          onToggleNode={onToggleNode}
+          onBack={handleBackFromFullMap}
+          onNavigateToEnding={handleSelectEnding}
+        />
+      </ReactFlowProvider>
+    </div>
   );
 }
