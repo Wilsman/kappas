@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   Controls,
   Background,
   BackgroundVariant,
   Panel,
+  useNodesState,
+  useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -53,11 +55,19 @@ export function EndingFlowView({
   onNavigateToEnding,
   onNavigateToFullMap,
 }: EndingFlowViewProps) {
+  const [nodesLocked, setNodesLocked] = useState(false);
   const endingInfo = endingInfos.find((e) => e.id === endingId);
   const { nodes, edges, breakdown } = useMemo(
     () => getEndingPathData(endingId),
     [endingId]
   );
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(nodes);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(edges);
+
+  useEffect(() => {
+    setFlowNodes(nodes);
+    setFlowEdges(edges);
+  }, [edges, nodes, setFlowEdges, setFlowNodes]);
 
   if (!endingInfo) {
     return (
@@ -70,24 +80,28 @@ export function EndingFlowView({
   return (
     <div className="h-full min-h-0 w-full relative overflow-hidden">
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={flowNodes}
+        edges={flowEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.18 }}
         panOnScroll
         panOnDrag
         zoomOnScroll
+        selectionOnDrag={!nodesLocked}
         minZoom={0.3}
         maxZoom={2}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
+        nodesDraggable={!nodesLocked}
+        nodesConnectable={!nodesLocked}
+        elementsSelectable={!nodesLocked}
         className="bg-background"
       >
         <Controls
           className="!bg-card !border-border !shadow-lg [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground hover:[&>button]:!bg-muted"
-          showInteractive={false}
+          showInteractive
+          onInteractiveChange={(interactive) => setNodesLocked(!interactive)}
         />
         <Background
           variant={BackgroundVariant.Dots}
@@ -242,7 +256,9 @@ export function EndingFlowView({
         <Panel position="bottom-center" className="!mb-4">
           <div className="px-4 py-2 rounded-full bg-card/70 backdrop-blur-sm border border-border/50 shadow-lg">
             <p className="text-xs text-muted-foreground">
-              Scroll to zoom • Drag to pan
+              {nodesLocked
+                ? "Nodes locked • Scroll to zoom • Drag to pan"
+                : "Nodes unlocked • Drag nodes to reposition"}
             </p>
           </div>
         </Panel>

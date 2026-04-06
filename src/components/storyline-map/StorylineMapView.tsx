@@ -180,8 +180,8 @@ export function StorylineMapView({
 }: StorylineMapViewProps): JSX.Element {
   // Track selected node for path highlighting and breakdown view
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  // Start with interactivity locked by default
-  const [nodesLocked, setNodesLocked] = useState(true);
+  // Start with node positions unlocked by default
+  const [nodesLocked, setNodesLocked] = useState(false);
 
   const [isExportingPositions, setIsExportingPositions] = useState(false);
   const [didCopyPositions, setDidCopyPositions] = useState(false);
@@ -278,14 +278,14 @@ export function StorylineMapView({
     setSelectedNodeId((prev) => (prev === node.id ? null : node.id));
   }, []);
 
-  // Double-click to toggle completion (when unlocked)
+  // Double-click to toggle completion
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if ((node.type === "story" || node.type === "craft") && !nodesLocked) {
+      if (node.type === "story" || node.type === "craft") {
         onToggleNode(node.id);
       }
     },
-    [onToggleNode, nodesLocked]
+    [onToggleNode]
   );
 
   // Compute path breakdown for selected node
@@ -450,7 +450,9 @@ export function StorylineMapView({
         <Panel position="bottom-center" className="!mb-4">
           <div className="px-4 py-2 rounded-full bg-card/70 backdrop-blur-sm border border-border/50 shadow-lg">
             <p className="text-xs text-muted-foreground">
-              Click node to see path • Ctrl+scroll to zoom
+              {nodesLocked
+                ? "Nodes locked • Click to inspect • Ctrl+scroll to zoom"
+                : "Nodes unlocked • Drag to reposition • Ctrl+scroll to zoom"}
             </p>
           </div>
         </Panel>
