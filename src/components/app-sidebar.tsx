@@ -504,9 +504,6 @@ export function AppSidebar({
                 >
                   <Target />
                   <span>Currently Working On</span>
-                  <span className="ml-auto rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-400">
-                    NEW
-                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -637,6 +634,9 @@ export function AppSidebar({
                 >
                   <ListTodo />
                   <span>Kanban</span>
+                  <span className="ml-auto rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-400">
+                    NEW
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 

@@ -445,6 +445,9 @@ function App() {
       if (nextView === "grouped") {
         return "/";
       }
+      if (nextView === "desk") {
+        return "/Quests/Kanban";
+      }
       if (nextView === "tracked-items") {
         return "/Items/TrackedItems";
       }
