@@ -152,16 +152,15 @@ const buildTaskPrerequisiteDepthMap = (tasks: Task[]) => {
     visiting.add(taskId);
 
     const task = tasksById.get(taskId);
-    const depth =
-      task?.taskRequirements?.length
-        ? Math.max(
-            ...task.taskRequirements.map((requirement) => {
-              const requirementId = requirement.task?.id;
-              if (!requirementId) return 1;
-              return getDepth(requirementId) + 1;
-            }),
-          )
-        : 0;
+    const depth = task?.taskRequirements?.length
+      ? Math.max(
+          ...task.taskRequirements.map((requirement) => {
+            const requirementId = requirement.task?.id;
+            if (!requirementId) return 1;
+            return getDepth(requirementId) + 1;
+          }),
+        )
+      : 0;
 
     visiting.delete(taskId);
     memo.set(taskId, depth);
@@ -293,7 +292,8 @@ export function buildTrackedItems({
       const taskSourceDedupKey = buildTaskSourceDedupKey(source);
       if (taskSourceDedupKey) {
         const duplicateIndex = existing.sources.findIndex(
-          (candidate) => buildTaskSourceDedupKey(candidate) === taskSourceDedupKey,
+          (candidate) =>
+            buildTaskSourceDedupKey(candidate) === taskSourceDedupKey,
         );
 
         if (duplicateIndex >= 0) {
@@ -338,7 +338,8 @@ export function buildTrackedItems({
           };
 
           existing.sources[duplicateIndex] = mergedSource;
-          existing.totalCurrent += mergedCurrentCount - previousSource.currentCount;
+          existing.totalCurrent +=
+            mergedCurrentCount - previousSource.currentCount;
           existing.totalRemaining +=
             mergedRemainingCount - previousSource.remainingCount;
           existing.minTaskLevel = minDefinedNumber(
@@ -376,7 +377,9 @@ export function buildTrackedItems({
       );
       existing.taskSourceCount += source.sourceType === "task" ? 1 : 0;
       existing.hideoutSourceCount += source.sourceType === "hideout" ? 1 : 0;
-      existing.foundInRaidRequired += source.foundInRaid ? source.requiredCount : 0;
+      existing.foundInRaidRequired += source.foundInRaid
+        ? source.requiredCount
+        : 0;
       existing.actionableSourceCount += source.actionable ? 1 : 0;
       existing.hasAlternativeSources =
         existing.hasAlternativeSources || source.isAlternative;
@@ -438,15 +441,18 @@ export function buildTrackedItems({
         objectiveKey,
         legacyObjectiveKey,
       );
-      const usesSharedPool =
-        objective.items.length > 1 && requiredCount > 1;
+      const usesSharedPool = objective.items.length > 1 && requiredCount > 1;
 
       const pooledCounts = objective.items.map((item) => {
         const sourceItemKey = item.id || item.name;
         return getTaskObjectiveItemProgress(
           taskObjectiveItemProgress,
           buildTaskObjectiveItemProgressKey(objectiveKey, sourceItemKey),
-          buildLegacyTaskObjectiveItemProgressKey(task.id, index, sourceItemKey),
+          buildLegacyTaskObjectiveItemProgressKey(
+            task.id,
+            index,
+            sourceItemKey,
+          ),
         );
       });
       const totalPooledCount = Math.min(
@@ -470,9 +476,10 @@ export function buildTrackedItems({
           objectiveItemKey,
           legacyObjectiveItemKey,
         );
-        const currentCount = objectiveCompleted && !usesSharedPool
-          ? requiredCount
-          : Math.min(requiredCount, persistedCount);
+        const currentCount =
+          objectiveCompleted && !usesSharedPool
+            ? requiredCount
+            : Math.min(requiredCount, persistedCount);
         const maxCountForItem = usesSharedPool
           ? Math.max(
               currentCount,
@@ -524,10 +531,15 @@ export function buildTrackedItems({
     });
 
     groupedTaskSources.forEach((sources) => {
-      if (sources.length === 2 && sources.every((source) => !source.isAlternative)) {
+      if (
+        sources.length === 2 &&
+        sources.every((source) => !source.isAlternative)
+      ) {
         const [first, second] = sources;
         const firstKind = classifyTaskItemObjective(first.objectiveDescription);
-        const secondKind = classifyTaskItemObjective(second.objectiveDescription);
+        const secondKind = classifyTaskItemObjective(
+          second.objectiveDescription,
+        );
         const canMergeFindAndHandOver =
           new Set([firstKind, secondKind]).size === 2 &&
           [firstKind, secondKind].includes("acquire") &&
@@ -548,7 +560,10 @@ export function buildTrackedItems({
             id: `${first.id}::merged-find-hand-over`,
             objectiveDescription: "Find and hand over",
             currentCount: mergedCurrentCount,
-            remainingCount: Math.max(0, first.requiredCount - mergedCurrentCount),
+            remainingCount: Math.max(
+              0,
+              first.requiredCount - mergedCurrentCount,
+            ),
             objectiveProgressTargets: mergedTargets,
             objectiveItemKey: mergedTargets[0]?.objectiveItemKey,
             legacyObjectiveItemKey: mergedTargets[0]?.legacyObjectiveItemKey,
@@ -577,7 +592,8 @@ export function buildTrackedItems({
   hideoutStations.forEach((station) => {
     station.levels.forEach((level) => {
       const itemKeys = level.itemRequirements.map(
-        (requirement) => `${station.name}-${level.level}-${requirement.item.name}`,
+        (requirement) =>
+          `${station.name}-${level.level}-${requirement.item.name}`,
       );
       const levelComplete =
         itemKeys.length > 0 &&
@@ -609,6 +625,14 @@ export function buildTrackedItems({
           hideoutItemQuantities,
         );
 
+        const foundInRaid = Boolean(
+          requirement.attributes?.some(
+            (attr) =>
+              (attr.type === "foundInRaid" || attr.name === "foundInRaid") &&
+              attr.value === "true",
+          ),
+        );
+
         addSource(requirement.item.name, requirement.item.iconLink, {
           id: `hideout::${station.name}::${level.level}::${requirement.item.name}`,
           itemName: requirement.item.name,
@@ -619,7 +643,7 @@ export function buildTrackedItems({
           requiredCount: requirement.count,
           currentCount,
           remainingCount: Math.max(0, requirement.count - currentCount),
-          foundInRaid: false,
+          foundInRaid,
           actionable,
           isAlternative: false,
           iconLink: requirement.item.iconLink,
@@ -629,42 +653,43 @@ export function buildTrackedItems({
     });
   });
 
-  return [...itemsByKey.values()]
-    .map((item) => ({
-      ...item,
-      sources: [...item.sources].sort((left, right) => {
-        if (left.sourceType !== right.sourceType) {
-          return left.sourceType === "task" ? -1 : 1;
+  return [...itemsByKey.values()].map((item) => ({
+    ...item,
+    sources: [...item.sources].sort((left, right) => {
+      if (left.sourceType !== right.sourceType) {
+        return left.sourceType === "task" ? -1 : 1;
+      }
+      if (left.sourceType === "task" && right.sourceType === "task") {
+        const leftLevel = left.taskMinPlayerLevel ?? Number.POSITIVE_INFINITY;
+        const rightLevel = right.taskMinPlayerLevel ?? Number.POSITIVE_INFINITY;
+        if (leftLevel !== rightLevel) {
+          return leftLevel - rightLevel;
         }
-        if (left.sourceType === "task" && right.sourceType === "task") {
-          const leftLevel = left.taskMinPlayerLevel ?? Number.POSITIVE_INFINITY;
-          const rightLevel = right.taskMinPlayerLevel ?? Number.POSITIVE_INFINITY;
-          if (leftLevel !== rightLevel) {
-            return leftLevel - rightLevel;
-          }
-          const leftDepth = left.taskPrerequisiteDepth ?? Number.POSITIVE_INFINITY;
-          const rightDepth = right.taskPrerequisiteDepth ?? Number.POSITIVE_INFINITY;
-          if (leftDepth !== rightDepth) {
-            return leftDepth - rightDepth;
-          }
+        const leftDepth =
+          left.taskPrerequisiteDepth ?? Number.POSITIVE_INFINITY;
+        const rightDepth =
+          right.taskPrerequisiteDepth ?? Number.POSITIVE_INFINITY;
+        if (leftDepth !== rightDepth) {
+          return leftDepth - rightDepth;
         }
-        if (left.sourceType === "hideout" && right.sourceType === "hideout") {
-          const leftLevel = left.hideoutLevel ?? Number.POSITIVE_INFINITY;
-          const rightLevel = right.hideoutLevel ?? Number.POSITIVE_INFINITY;
-          if (leftLevel !== rightLevel) {
-            return leftLevel - rightLevel;
-          }
+      }
+      if (left.sourceType === "hideout" && right.sourceType === "hideout") {
+        const leftLevel = left.hideoutLevel ?? Number.POSITIVE_INFINITY;
+        const rightLevel = right.hideoutLevel ?? Number.POSITIVE_INFINITY;
+        if (leftLevel !== rightLevel) {
+          return leftLevel - rightLevel;
         }
-        if (left.actionable !== right.actionable) {
-          return left.actionable ? -1 : 1;
-        }
-        if (left.foundInRaid !== right.foundInRaid) {
-          return left.foundInRaid ? -1 : 1;
-        }
-        if (left.remainingCount !== right.remainingCount) {
-          return right.remainingCount - left.remainingCount;
-        }
-        return left.sourceName.localeCompare(right.sourceName);
-      }),
-    }));
+      }
+      if (left.actionable !== right.actionable) {
+        return left.actionable ? -1 : 1;
+      }
+      if (left.foundInRaid !== right.foundInRaid) {
+        return left.foundInRaid ? -1 : 1;
+      }
+      if (left.remainingCount !== right.remainingCount) {
+        return right.remainingCount - left.remainingCount;
+      }
+      return left.sourceName.localeCompare(right.sourceName);
+    }),
+  }));
 }

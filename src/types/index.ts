@@ -190,12 +190,19 @@ export interface HideoutStationLevelRequirement {
   level: number;
 }
 
+export interface HideoutStationItemAttribute {
+  type: string;
+  name: string;
+  value: string;
+}
+
 export interface HideoutStationItemRequirement {
   count: number;
   item: {
     name: string;
     iconLink?: string;
   };
+  attributes?: HideoutStationItemAttribute[];
 }
 
 export interface HideoutStationLevel {

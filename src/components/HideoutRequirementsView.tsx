@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { HideoutStation } from "@/types";
 import { Button } from "./ui/button";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, CheckCircle } from "lucide-react";
 
 interface HideoutRequirementsViewProps {
   hideoutStations: HideoutStation[];
@@ -17,6 +17,7 @@ interface RequirementItem {
     stationName: string;
     level: number;
   }>;
+  foundInRaid: boolean;
 }
 
 export const HideoutRequirementsView: React.FC<
@@ -36,6 +37,15 @@ export const HideoutRequirementsView: React.FC<
             return;
           }
 
+          // Check if this requirement requires FiR
+          const foundInRaid = Boolean(
+            req.attributes?.some(
+              (attr) =>
+                (attr.type === "foundInRaid" || attr.name === "foundInRaid") &&
+                attr.value === "true",
+            ),
+          );
+
           const existing = itemMap.get(req.item.name);
           if (existing) {
             existing.totalCount += req.count;
@@ -43,6 +53,8 @@ export const HideoutRequirementsView: React.FC<
               stationName: station.name,
               level: level.level,
             });
+            // Mark as FiR if any source requires it
+            existing.foundInRaid = existing.foundInRaid || foundInRaid;
           } else {
             itemMap.set(req.item.name, {
               itemName: req.item.name,
@@ -54,6 +66,7 @@ export const HideoutRequirementsView: React.FC<
                   level: level.level,
                 },
               ],
+              foundInRaid,
             });
           }
         });
@@ -62,7 +75,7 @@ export const HideoutRequirementsView: React.FC<
 
     // Sort by total count descending
     return Array.from(itemMap.values()).sort(
-      (a, b) => b.totalCount - a.totalCount
+      (a, b) => b.totalCount - a.totalCount,
     );
   }, [hideoutStations, completedHideoutItems]);
 
@@ -101,17 +114,23 @@ export const HideoutRequirementsView: React.FC<
                 className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
               >
                 {/* Item Icon */}
-                {item.iconLink && (
-                  <img
-                    src={item.iconLink}
-                    alt={item.itemName}
-                    className="h-12 w-12 object-contain flex-shrink-0"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = "none";
-                    }}
-                  />
-                )}
+                <div className="relative">
+                  {item.iconLink && (
+                    <img
+                      src={item.iconLink}
+                      alt={item.itemName}
+                      className="h-12 w-12 object-contain flex-shrink-0"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = "none";
+                      }}
+                    />
+                  )}
+                  {/* FiR Badge */}
+                  {item.foundInRaid && (
+                    <CheckCircle className="absolute -top-1 -right-1 h-5 w-5 text-green-500 bg-background rounded-full" />
+                  )}
+                </div>
 
                 {/* Item Name */}
                 <div className="flex-1 min-w-0">

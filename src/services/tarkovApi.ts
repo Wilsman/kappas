@@ -64,7 +64,9 @@ const normalizeItemKey = (item?: ObjectiveItem): string | null => {
   return normalizedName ? `name:${normalizedName}` : null;
 };
 
-const collectObjectiveItemKeys = (objectives?: ObjectiveLike[]): Set<string> => {
+const collectObjectiveItemKeys = (
+  objectives?: ObjectiveLike[],
+): Set<string> => {
   const keys = new Set<string>();
 
   objectives?.forEach((objective) => {
@@ -349,15 +351,15 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
         standing: entry.standing,
       }));
 
-    const customizationRewards = (task.finishRewards?.customization ?? []).filter(
-      (entry) => !!entry?.name,
-    );
+    const customizationRewards = (
+      task.finishRewards?.customization ?? []
+    ).filter((entry) => !!entry?.name);
     const achievementRewards = (task.finishRewards?.achievement ?? []).filter(
       (entry) => !!entry?.name,
     );
-    const skillLevelRewards = (task.finishRewards?.skillLevelReward ?? []).filter(
-      (entry) => !!(entry?.name || entry?.skill?.name),
-    );
+    const skillLevelRewards = (
+      task.finishRewards?.skillLevelReward ?? []
+    ).filter((entry) => !!(entry?.name || entry?.skill?.name));
     const traderUnlockRewards = (task.finishRewards?.traderUnlock ?? []).filter(
       (entry) => !!entry?.name,
     );
@@ -578,6 +580,11 @@ const HIDEOUT_STATIONS_QUERY = `
             name
             iconLink
           }
+          attributes {
+            type
+            name
+            value
+          }
         }
       }
     }
@@ -684,7 +691,7 @@ const COMBINED_QUERY = `
       level
       skillRequirements { name skill { name } level }
       stationLevelRequirements { station { name } level }
-      itemRequirements { count item { name iconLink } }
+      itemRequirements { count item { name iconLink } attributes { type name value } }
     }
   }
 }

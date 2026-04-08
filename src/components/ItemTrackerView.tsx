@@ -17,6 +17,7 @@ import {
   Plus,
   CheckCheck,
   Target,
+  CheckCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HideoutStation } from "@/types";
@@ -66,7 +67,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     if (!searchTerm.trim()) return collectorItems;
     const term = searchTerm.toLowerCase();
     return collectorItems.filter((item) =>
-      item.name.toLowerCase().includes(term)
+      item.name.toLowerCase().includes(term),
     );
   }, [collectorItems, searchTerm]);
 
@@ -82,13 +83,13 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
         // Filter levels that have matching items
         const filteredLevels = station.levels.filter((level) => {
           const hasMatchingItems = level.itemRequirements.some((req) =>
-            req.item.name.toLowerCase().includes(term)
+            req.item.name.toLowerCase().includes(term),
           );
           const hasMatchingSkills = level.skillRequirements.some((req) =>
-            req.skill.name.toLowerCase().includes(term)
+            req.skill.name.toLowerCase().includes(term),
           );
           const hasMatchingStations = level.stationLevelRequirements.some(
-            (req) => req.station.name.toLowerCase().includes(term)
+            (req) => req.station.name.toLowerCase().includes(term),
           );
           return hasMatchingItems || hasMatchingSkills || hasMatchingStations;
         });
@@ -108,7 +109,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   const handleQuantityChange = (
     itemKey: string,
     delta: number,
-    maxQuantity: number
+    maxQuantity: number,
   ) => {
     const currentQty = hideoutItemQuantities[itemKey] || 0;
     const nextQty = Math.max(0, Math.min(maxQuantity, currentQty + delta));
@@ -134,11 +135,11 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   const handleMarkLevelComplete = (
     stationName: string,
     levelNum: number,
-    level: { itemRequirements: { count: number; item: { name: string } }[] }
+    level: { itemRequirements: { count: number; item: { name: string } }[] },
   ) => {
     const next = new Set(completedHideoutItems);
     const levelItemKeys = level.itemRequirements.map(
-      (req) => `${stationName}-${levelNum}-${req.item.name}`
+      (req) => `${stationName}-${levelNum}-${req.item.name}`,
     );
     const isLevelComplete = levelItemKeys.every((key) => next.has(key));
 
@@ -180,7 +181,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
 
   const sortedGroups = useMemo(
     () => Object.entries(itemsByGroup).sort(([a], [b]) => a.localeCompare(b)),
-    [itemsByGroup]
+    [itemsByGroup],
   );
 
   const allGroupNames = useMemo(() => {
@@ -194,7 +195,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
 
   // Start with Collector Items expanded by default, track initialization
   const [initializedGroupBy, setInitializedGroupBy] = useState<GroupBy | null>(
-    null
+    null,
   );
   useEffect(() => {
     if (initializedGroupBy !== groupBy) {
@@ -235,12 +236,12 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     };
     window.addEventListener(
       "taskTracker:globalSearch",
-      handler as EventListener
+      handler as EventListener,
     );
     return () =>
       window.removeEventListener(
         "taskTracker:globalSearch",
-        handler as EventListener
+        handler as EventListener,
       );
   }, [allGroupNames, setSearchTerm]);
 
@@ -300,7 +301,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
             // Calculate total completion for this station
             const totalStationItems = station.levels.reduce(
               (sum, level) => sum + level.itemRequirements.length,
-              0
+              0,
             );
             const completedStationItems = station.levels.reduce(
               (sum, level) => {
@@ -312,7 +313,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                   }).length
                 );
               },
-              0
+              0,
             );
             const stationProgress =
               totalStationItems > 0
@@ -358,7 +359,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                         (req) => {
                           const itemKey = `${station.name}-${level.level}-${req.item.name}`;
                           return completedHideoutItems.has(itemKey);
-                        }
+                        },
                       ).length;
                       const progress =
                         totalItems > 0
@@ -386,14 +387,14 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                   className={cn(
                                     "p-1 rounded-sm transition-colors",
                                     workingOnHideoutStations.has(
-                                      `${station.name}-${level.level}`
+                                      `${station.name}-${level.level}`,
                                     )
                                       ? "text-blue-500 hover:text-blue-600"
-                                      : "text-muted-foreground/40 hover:text-muted-foreground"
+                                      : "text-muted-foreground/40 hover:text-muted-foreground",
                                   )}
                                   title={
                                     workingOnHideoutStations.has(
-                                      `${station.name}-${level.level}`
+                                      `${station.name}-${level.level}`,
                                     )
                                       ? "Remove from working on"
                                       : "Mark as working on"
@@ -403,7 +404,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                     className="h-4 w-4"
                                     fill={
                                       workingOnHideoutStations.has(
-                                        `${station.name}-${level.level}`
+                                        `${station.name}-${level.level}`,
                                       )
                                         ? "currentColor"
                                         : "none"
@@ -419,7 +420,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                     handleMarkLevelComplete(
                                       station.name,
                                       level.level,
-                                      level
+                                      level,
                                     )
                                   }
                                   className="h-7 gap-1.5 text-xs"
@@ -473,7 +474,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                     >
                                       • {req.station.name} Level {req.level}
                                     </div>
-                                  )
+                                  ),
                                 )}
                               </div>
                             </div>
@@ -488,7 +489,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                               {level.itemRequirements.map((req, idx) => {
                                 const itemKey = `${station.name}-${level.level}-${req.item.name}`;
                                 const isCurrency = isCurrencyItem(
-                                  req.item.name
+                                  req.item.name,
                                 );
                                 const currentQty =
                                   hideoutItemQuantities[itemKey] || 0;
@@ -498,13 +499,21 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                 const progressText = isCurrency
                                   ? ""
                                   : `${currentQty}/${req.count}`;
+                                const foundInRaid = Boolean(
+                                  req.attributes?.some(
+                                    (attr) =>
+                                      (attr.type === "foundInRaid" ||
+                                        attr.name === "foundInRaid") &&
+                                      attr.value === "true",
+                                  ),
+                                );
 
                                 return (
                                   <div
                                     key={`${station.name}-${level.level}-${idx}`}
                                     className={cn(
                                       "flex flex-col gap-2 p-3 rounded-lg border hover:bg-muted/50 transition-colors",
-                                      isCompleted && "opacity-60"
+                                      isCompleted && "opacity-60",
                                     )}
                                   >
                                     <div className="flex items-start gap-2">
@@ -516,11 +525,11 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                           if (onUpdateHideoutItemQuantity) {
                                             onUpdateHideoutItemQuantity(
                                               itemKey,
-                                              isChecked ? req.count : 0
+                                              isChecked ? req.count : 0,
                                             );
                                           }
                                           const nextCompleted = new Set(
-                                            completedHideoutItems
+                                            completedHideoutItems,
                                           );
                                           if (isChecked)
                                             nextCompleted.add(itemKey);
@@ -533,7 +542,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                         htmlFor={`${station.name}-${level.level}-${req.item.name}`}
                                         className="flex-1 cursor-pointer"
                                       >
-                                        <div className="flex items-center justify-center mb-2">
+                                        <div className="flex items-center justify-center mb-2 relative">
                                           {req.item.iconLink && (
                                             <img
                                               src={req.item.iconLink}
@@ -546,12 +555,15 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                               }}
                                             />
                                           )}
+                                          {foundInRaid && (
+                                            <CheckCircle className="absolute -top-1 -right-1 h-5 w-5 text-green-500 bg-background rounded-full" />
+                                          )}
                                         </div>
                                         <div
                                           className={cn(
                                             "text-sm font-medium text-center mb-2",
                                             isCompleted &&
-                                              "line-through text-muted-foreground"
+                                              "line-through text-muted-foreground",
                                           )}
                                         >
                                           {req.item.name}
@@ -569,13 +581,13 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                                 handleQuantityChange(
                                                   itemKey,
                                                   -1,
-                                                  req.count
+                                                  req.count,
                                                 );
                                               }}
                                               className={cn(
                                                 "w-6 h-6 flex items-center justify-center rounded hover:bg-background/80 transition-colors",
                                                 currentQty <= 0 &&
-                                                  "opacity-50 cursor-not-allowed"
+                                                  "opacity-50 cursor-not-allowed",
                                               )}
                                               disabled={currentQty <= 0}
                                             >
@@ -591,13 +603,13 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                                 handleQuantityChange(
                                                   itemKey,
                                                   1,
-                                                  req.count
+                                                  req.count,
                                                 );
                                               }}
                                               className={cn(
                                                 "w-6 h-6 flex items-center justify-center rounded hover:bg-background/80 transition-colors",
                                                 currentQty >= req.count &&
-                                                  "opacity-50 cursor-not-allowed"
+                                                  "opacity-50 cursor-not-allowed",
                                               )}
                                               disabled={currentQty >= req.count}
                                             >
@@ -633,7 +645,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
         >
           {sortedGroups.map(([groupName, groupItems]) => {
             const completedCount = (groupItems as CollectorItem[]).filter(
-              (item) => completedCollectorItems.has(item.name)
+              (item) => completedCollectorItems.has(item.name),
             ).length;
             const totalCount = groupItems.length;
             const progress =
@@ -663,7 +675,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                         key={item.name}
                         className={cn(
                           "flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors",
-                          completedCollectorItems.has(item.name) && "opacity-60"
+                          completedCollectorItems.has(item.name) &&
+                            "opacity-60",
                         )}
                       >
                         <Checkbox
@@ -679,7 +692,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                           className={cn(
                             "flex-1 flex items-center gap-2 cursor-pointer",
                             completedCollectorItems.has(item.name) &&
-                              "line-through text-muted-foreground"
+                              "line-through text-muted-foreground",
                           )}
                         >
                           {item.img && (
