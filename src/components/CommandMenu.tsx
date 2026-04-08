@@ -19,6 +19,7 @@ type HideoutMatchEntry = {
   station: string;
   level: number;
   value: string;
+  foundInRaid: boolean;
 };
 
 type PreviewItem =
@@ -174,6 +175,7 @@ export function CommandMenu(props: CommandMenuProps) {
         icon?: string;
         station: string;
         level: number;
+        foundInRaid: boolean;
       }[];
     const out: {
       name: string;
@@ -181,18 +183,27 @@ export function CommandMenu(props: CommandMenuProps) {
       icon?: string;
       station: string;
       level: number;
+      foundInRaid: boolean;
     }[] = [];
     for (const st of hideoutStations ?? []) {
       for (const lvl of st.levels ?? []) {
         for (const req of lvl.itemRequirements ?? []) {
           const itemName = req.item?.name ?? "";
           if (!itemName || !itemName.toLowerCase().includes(q)) continue;
+          const foundInRaid = Boolean(
+            req.attributes?.some(
+              (attr) =>
+                (attr.type === "foundInRaid" || attr.name === "foundInRaid") &&
+                attr.value === "true",
+            ),
+          );
           out.push({
             name: itemName,
             count: req.count ?? 1,
             icon: req.item?.iconLink,
             station: st.name,
             level: lvl.level,
+            foundInRaid,
           });
         }
       }
@@ -735,19 +746,22 @@ export function CommandMenu(props: CommandMenuProps) {
         ...(task.startRewards?.items ?? []),
         ...(task.finishRewards?.items ?? []),
       ];
-      const traderStandingRewards = (task.finishRewards?.traderStanding ?? []).filter(
-        (rep) => typeof rep.standing === "number" && !!rep.trader?.name,
-      );
-      const skillLevelRewards = (task.finishRewards?.skillLevelReward ?? []).filter(
+      const traderStandingRewards = (
+        task.finishRewards?.traderStanding ?? []
+      ).filter((rep) => typeof rep.standing === "number" && !!rep.trader?.name);
+      const skillLevelRewards = (
+        task.finishRewards?.skillLevelReward ?? []
+      ).filter(
         (skill) =>
-          typeof skill.level === "number" && !!(skill.name || skill.skill?.name),
+          typeof skill.level === "number" &&
+          !!(skill.name || skill.skill?.name),
       );
-      const traderUnlockRewards = (task.finishRewards?.traderUnlock ?? []).filter(
-        (entry) => !!entry.name,
-      );
-      const customizationRewards = (task.finishRewards?.customization ?? []).filter(
-        (entry) => !!entry.name,
-      );
+      const traderUnlockRewards = (
+        task.finishRewards?.traderUnlock ?? []
+      ).filter((entry) => !!entry.name);
+      const customizationRewards = (
+        task.finishRewards?.customization ?? []
+      ).filter((entry) => !!entry.name);
       const achievementRewards = (task.finishRewards?.achievement ?? []).filter(
         (entry) => !!entry.name,
       );
@@ -1143,9 +1157,18 @@ export function CommandMenu(props: CommandMenuProps) {
                 )}
               </div>
               <div className="min-w-0">
-                <h3 className="text-xl font-bold leading-tight tracking-tight text-foreground truncate">
-                  {match.name}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-bold leading-tight tracking-tight text-foreground truncate">
+                    {match.name}
+                  </h3>
+                  {match.foundInRaid && (
+                    <ContextChip
+                      label="FiR"
+                      tone="info"
+                      className="text-[8px] px-1 py-0 h-4 shrink-0"
+                    />
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
                   Required for {match.station}
                 </p>
@@ -1394,8 +1417,7 @@ export function CommandMenu(props: CommandMenuProps) {
                 value="tracked-items"
                 onSelect={handle.navigateTrackedItems}
               >
-                Item Tracker{" "}
-                {viewMode === "tracked-items" ? "(current)" : ""}
+                Item Tracker {viewMode === "tracked-items" ? "(current)" : ""}
               </CommandItem>
               <CommandItem
                 value="collector-items"
