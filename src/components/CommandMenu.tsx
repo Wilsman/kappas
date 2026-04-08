@@ -8,9 +8,16 @@ import {
   CommandItem,
   CommandSeparator,
 } from "@/components/ui/command";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Task, Achievement, HideoutStation } from "@/types";
 import { cn } from "@/lib/utils";
 import { formatTaskObjectiveLabel } from "@/utils/taskObjectives";
+import { CheckCircle } from "lucide-react";
 
 type HideoutMatchEntry = {
   name: string;
@@ -1162,11 +1169,14 @@ export function CommandMenu(props: CommandMenuProps) {
                     {match.name}
                   </h3>
                   {match.foundInRaid && (
-                    <ContextChip
-                      label="FiR"
-                      tone="info"
-                      className="text-[8px] px-1 py-0 h-4 shrink-0"
-                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Found in Raid Required</p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
@@ -1358,466 +1368,471 @@ export function CommandMenu(props: CommandMenuProps) {
   };
 
   return (
-    <CommandDialog
-      open={open}
-      onOpenChange={setOpen}
-      commandProps={{ value: selectedValue, onValueChange: setSelectedValue }}
-    >
-      <CommandInput
-        placeholder="Type a command or search..."
-        value={query}
-        onValueChange={setQuery}
-      />
-      <div className="flex h-[70vh] items-stretch overflow-hidden relative">
-        <div className="flex-[1.4] flex flex-col min-w-0 border-r border-white/5 bg-black/10">
-          <CommandList className="flex-1 max-h-none overflow-y-auto custom-scrollbar">
-            <CommandEmpty>No results found.</CommandEmpty>
+    <TooltipProvider>
+      <CommandDialog
+        open={open}
+        onOpenChange={setOpen}
+        commandProps={{ value: selectedValue, onValueChange: setSelectedValue }}
+      >
+        <CommandInput
+          placeholder="Type a command or search..."
+          value={query}
+          onValueChange={setQuery}
+        />
+        <div className="flex h-[70vh] items-stretch overflow-hidden relative">
+          <div className="flex-[1.4] flex flex-col min-w-0 border-r border-white/5 bg-black/10">
+            <CommandList className="flex-1 max-h-none overflow-y-auto custom-scrollbar">
+              <CommandEmpty>No results found.</CommandEmpty>
 
-            <CommandGroup heading="Navigate">
-              <CommandItem value="quests" onSelect={handle.navigateGrouped}>
-                Quests{" "}
-                {viewMode === "grouped" ||
-                viewMode === "tree" ||
-                viewMode === "flow"
-                  ? "(current)"
-                  : ""}
-              </CommandItem>
-              <CommandItem
-                value="checklist-view"
-                onSelect={handle.navigateGrouped}
-              >
-                Checklist View {viewMode === "grouped" ? "(current)" : ""}
-              </CommandItem>
-              <CommandItem
-                value="by-trader"
-                onSelect={handle.navigateGroupedByTrader}
-              >
-                By Trader{" "}
-                {viewMode === "grouped" && groupBy === "trader"
-                  ? "(current)"
-                  : ""}
-              </CommandItem>
-              <CommandItem
-                value="by-map"
-                onSelect={handle.navigateGroupedByMap}
-              >
-                By Map{" "}
-                {viewMode === "grouped" && groupBy === "map" ? "(current)" : ""}
-              </CommandItem>
-            </CommandGroup>
+              <CommandGroup heading="Navigate">
+                <CommandItem value="quests" onSelect={handle.navigateGrouped}>
+                  Quests{" "}
+                  {viewMode === "grouped" ||
+                  viewMode === "tree" ||
+                  viewMode === "flow"
+                    ? "(current)"
+                    : ""}
+                </CommandItem>
+                <CommandItem
+                  value="checklist-view"
+                  onSelect={handle.navigateGrouped}
+                >
+                  Checklist View {viewMode === "grouped" ? "(current)" : ""}
+                </CommandItem>
+                <CommandItem
+                  value="by-trader"
+                  onSelect={handle.navigateGroupedByTrader}
+                >
+                  By Trader{" "}
+                  {viewMode === "grouped" && groupBy === "trader"
+                    ? "(current)"
+                    : ""}
+                </CommandItem>
+                <CommandItem
+                  value="by-map"
+                  onSelect={handle.navigateGroupedByMap}
+                >
+                  By Map{" "}
+                  {viewMode === "grouped" && groupBy === "map"
+                    ? "(current)"
+                    : ""}
+                </CommandItem>
+              </CommandGroup>
 
-            <CommandGroup heading="Items">
-              <CommandItem value="items" onSelect={handle.navigateCollector}>
-                Items{" "}
-                {viewMode === "collector" || viewMode === "tracked-items"
-                  ? "(current)"
-                  : ""}
-              </CommandItem>
-              <CommandItem
-                value="tracked-items"
-                onSelect={handle.navigateTrackedItems}
-              >
-                Item Tracker {viewMode === "tracked-items" ? "(current)" : ""}
-              </CommandItem>
-              <CommandItem
-                value="collector-items"
-                onSelect={handle.navigateCollectorItems}
-              >
-                Collector Items{" "}
-                {viewMode === "collector" && collectorGroupBy === "collector"
-                  ? "(current)"
-                  : ""}
-              </CommandItem>
-              <CommandItem
-                value="hideout-stations"
-                onSelect={handle.navigateHideoutStations}
-              >
-                Hideout Stations{" "}
-                {viewMode === "collector" &&
-                collectorGroupBy === "hideout-stations"
-                  ? "(current)"
-                  : ""}
-              </CommandItem>
-            </CommandGroup>
+              <CommandGroup heading="Items">
+                <CommandItem value="items" onSelect={handle.navigateCollector}>
+                  Items{" "}
+                  {viewMode === "collector" || viewMode === "tracked-items"
+                    ? "(current)"
+                    : ""}
+                </CommandItem>
+                <CommandItem
+                  value="tracked-items"
+                  onSelect={handle.navigateTrackedItems}
+                >
+                  Item Tracker {viewMode === "tracked-items" ? "(current)" : ""}
+                </CommandItem>
+                <CommandItem
+                  value="collector-items"
+                  onSelect={handle.navigateCollectorItems}
+                >
+                  Collector Items{" "}
+                  {viewMode === "collector" && collectorGroupBy === "collector"
+                    ? "(current)"
+                    : ""}
+                </CommandItem>
+                <CommandItem
+                  value="hideout-stations"
+                  onSelect={handle.navigateHideoutStations}
+                >
+                  Hideout Stations{" "}
+                  {viewMode === "collector" &&
+                  collectorGroupBy === "hideout-stations"
+                    ? "(current)"
+                    : ""}
+                </CommandItem>
+              </CommandGroup>
 
-            <CommandGroup heading="More">
-              <CommandItem
-                value="prestiges"
-                onSelect={handle.navigatePrestiges}
-              >
-                Prestiges {viewMode === "prestiges" ? "(current)" : ""}
-              </CommandItem>
-              <CommandItem
-                value="achievements"
-                onSelect={handle.navigateAchievements}
-              >
-                Achievements {viewMode === "achievements" ? "(current)" : ""}
-              </CommandItem>
-            </CommandGroup>
+              <CommandGroup heading="More">
+                <CommandItem
+                  value="prestiges"
+                  onSelect={handle.navigatePrestiges}
+                >
+                  Prestiges {viewMode === "prestiges" ? "(current)" : ""}
+                </CommandItem>
+                <CommandItem
+                  value="achievements"
+                  onSelect={handle.navigateAchievements}
+                >
+                  Achievements {viewMode === "achievements" ? "(current)" : ""}
+                </CommandItem>
+              </CommandGroup>
 
-            {hasQuery && (
-              <>
-                <CommandGroup heading="Search • Quests">
-                  {taskEntries.map(
-                    ({ task: t, context, contextType, value }) => {
-                      const statusLabel = completedTasks.has(t.id)
-                        ? "Done"
-                        : "Open";
-                      const kappaLabel = t.kappaRequired ? "Kappa" : null;
-                      const lightkeeperLabel = t.lightkeeperRequired
-                        ? "Lightkeeper"
-                        : null;
-                      return (
+              {hasQuery && (
+                <>
+                  <CommandGroup heading="Search • Quests">
+                    {taskEntries.map(
+                      ({ task: t, context, contextType, value }) => {
+                        const statusLabel = completedTasks.has(t.id)
+                          ? "Done"
+                          : "Open";
+                        const kappaLabel = t.kappaRequired ? "Kappa" : null;
+                        const lightkeeperLabel = t.lightkeeperRequired
+                          ? "Lightkeeper"
+                          : null;
+                        return (
+                          <CommandItem
+                            key={`task-${t.id}`}
+                            value={value}
+                            onSelect={() => {
+                              onSetViewMode("grouped");
+                              setTimeout(() => {
+                                window.dispatchEvent(
+                                  new CustomEvent("taskTracker:globalSearch", {
+                                    detail: {
+                                      term: t.name,
+                                      scope: "tasks",
+                                      taskId: t.id,
+                                    },
+                                  }),
+                                );
+                              }, 0);
+                              setOpen(false);
+                            }}
+                            className={cn(
+                              "py-3",
+                              t.isEvent &&
+                                "bg-amber-500/10 hover:bg-amber-500/15",
+                            )}
+                          >
+                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-bold text-sm truncate">
+                                  {renderHighlighted(t.name)}
+                                </span>
+                                {t.isEvent && (
+                                  <ContextChip label="Event" tone="warning" />
+                                )}
+                                <div className="flex gap-1 ml-auto shrink-0">
+                                  {kappaLabel && (
+                                    <div
+                                      className="h-1.5 w-1.5 rounded-full bg-amber-500"
+                                      title="Kappa Required"
+                                    />
+                                  )}
+                                  {lightkeeperLabel && (
+                                    <div
+                                      className="h-1.5 w-1.5 rounded-full bg-sky-500"
+                                      title="Lightkeeper Required"
+                                    />
+                                  )}
+                                  <div
+                                    className={cn(
+                                      "h-1.5 w-1.5 rounded-full",
+                                      statusLabel === "Done"
+                                        ? "bg-emerald-500/80"
+                                        : "bg-muted-foreground/30",
+                                    )}
+                                  />
+                                </div>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground flex items-center gap-2 min-w-0 font-medium uppercase tracking-tight">
+                                <span className="shrink-0">
+                                  {t.trader?.name ?? "Unknown"}
+                                </span>
+                                <span className="shrink-0">•</span>
+                                <span
+                                  className={cn(
+                                    "truncate",
+                                    contextType === "objective" &&
+                                      "text-sky-400/80",
+                                    contextType === "reward" &&
+                                      "text-emerald-400/80",
+                                    contextType === "unlock" &&
+                                      "text-amber-400/80",
+                                  )}
+                                >
+                                  {renderHighlighted(context)}
+                                </span>
+                              </div>
+                            </div>
+                          </CommandItem>
+                        );
+                      },
+                    )}
+                  </CommandGroup>
+
+                  <CommandGroup heading="Search • Prestiges">
+                    {["Prestige 1", "Prestige 2", "Prestige 3", "Prestige 4"]
+                      .filter((p) => p.toLowerCase().includes(queryLower))
+                      .map((title) => (
                         <CommandItem
-                          key={`task-${t.id}`}
-                          value={value}
+                          key={`prestige-${title}`}
+                          value={`prestige-${title}`}
                           onSelect={() => {
-                            onSetViewMode("grouped");
+                            onSetViewMode("prestiges");
                             setTimeout(() => {
                               window.dispatchEvent(
                                 new CustomEvent("taskTracker:globalSearch", {
-                                  detail: {
-                                    term: t.name,
-                                    scope: "tasks",
-                                    taskId: t.id,
-                                  },
+                                  detail: { term: title, scope: "prestiges" },
                                 }),
                               );
                             }, 0);
                             setOpen(false);
                           }}
-                          className={cn(
-                            "py-3",
-                            t.isEvent &&
-                              "bg-amber-500/10 hover:bg-amber-500/15",
-                          )}
                         >
-                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-bold text-sm truncate">
-                                {renderHighlighted(t.name)}
-                              </span>
-                              {t.isEvent && (
-                                <ContextChip label="Event" tone="warning" />
-                              )}
-                              <div className="flex gap-1 ml-auto shrink-0">
-                                {kappaLabel && (
-                                  <div
-                                    className="h-1.5 w-1.5 rounded-full bg-amber-500"
-                                    title="Kappa Required"
-                                  />
-                                )}
-                                {lightkeeperLabel && (
-                                  <div
-                                    className="h-1.5 w-1.5 rounded-full bg-sky-500"
-                                    title="Lightkeeper Required"
-                                  />
-                                )}
-                                <div
-                                  className={cn(
-                                    "h-1.5 w-1.5 rounded-full",
-                                    statusLabel === "Done"
-                                      ? "bg-emerald-500/80"
-                                      : "bg-muted-foreground/30",
-                                  )}
-                                />
-                              </div>
-                            </div>
-                            <div className="text-[10px] text-muted-foreground flex items-center gap-2 min-w-0 font-medium uppercase tracking-tight">
-                              <span className="shrink-0">
-                                {t.trader?.name ?? "Unknown"}
-                              </span>
-                              <span className="shrink-0">•</span>
-                              <span
-                                className={cn(
-                                  "truncate",
-                                  contextType === "objective" &&
-                                    "text-sky-400/80",
-                                  contextType === "reward" &&
-                                    "text-emerald-400/80",
-                                  contextType === "unlock" &&
-                                    "text-amber-400/80",
-                                )}
-                              >
-                                {renderHighlighted(context)}
-                              </span>
-                            </div>
-                          </div>
+                          {renderHighlighted(title)}
                         </CommandItem>
-                      );
-                    },
-                  )}
-                </CommandGroup>
+                      ))}
+                  </CommandGroup>
 
-                <CommandGroup heading="Search • Prestiges">
-                  {["Prestige 1", "Prestige 2", "Prestige 3", "Prestige 4"]
-                    .filter((p) => p.toLowerCase().includes(queryLower))
-                    .map((title) => (
+                  {(() => {
+                    // Group by station, then by level; render one group per station with non-focusable level headers
+                    const byStation: Record<
+                      string,
+                      Record<number, HideoutMatchEntry[]>
+                    > = {};
+                    for (const m of hideoutEntries) {
+                      byStation[m.station] ||= {} as Record<
+                        number,
+                        HideoutMatchEntry[]
+                      >;
+                      (byStation[m.station][m.level] ||= []).push(m);
+                    }
+
+                    return Object.keys(byStation)
+                      .sort((a, b) => a.localeCompare(b))
+                      .flatMap((station, idx, arr) => {
+                        const levelEntries = Object.entries(byStation[station])
+                          .map(([level, items]) => ({
+                            level: Number(level),
+                            items,
+                          }))
+                          .sort((a, b) => a.level - b.level);
+                        const nodes: React.ReactNode[] = [];
+                        for (const { level, items } of levelEntries) {
+                          nodes.push(
+                            <CommandGroup
+                              key={`hideout-group-${station}-lvl-${level}`}
+                              heading={`Search • Hideout • ${station} • Level ${level}`}
+                            >
+                              {items
+                                .slice()
+                                .sort((a, b) => a.name.localeCompare(b.name))
+                                .map((m) => (
+                                  <CommandItem
+                                    key={`hideout-${m.station}-${m.level}-${m.name}`}
+                                    value={m.value}
+                                    onSelect={() => {
+                                      onSetCollectorGroupBy("hideout-stations");
+                                      onSetViewMode("collector");
+                                      setTimeout(() => {
+                                        window.dispatchEvent(
+                                          new CustomEvent(
+                                            "taskTracker:globalSearch",
+                                            {
+                                              detail: {
+                                                term: m.name,
+                                                scope: "hideout",
+                                              },
+                                            },
+                                          ),
+                                        );
+                                      }, 0);
+                                      setOpen(false);
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="truncate">
+                                        {renderHighlighted(
+                                          `${m.name} ×${m.count}`,
+                                        )}
+                                      </span>
+                                      <div className="ml-auto flex items-center gap-1 shrink-0">
+                                        <ContextChip
+                                          label={`L${m.level}`}
+                                          tone="info"
+                                        />
+                                      </div>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>,
+                          );
+                        }
+                        if (idx < arr.length - 1)
+                          nodes.push(
+                            <CommandSeparator key={`hideout-sep-${station}`} />,
+                          );
+                        return nodes;
+                      });
+                  })()}
+
+                  <CommandGroup heading="Search • Achievements">
+                    {achievementEntries.map(({ achievement: a, value }) => (
                       <CommandItem
-                        key={`prestige-${title}`}
-                        value={`prestige-${title}`}
+                        key={`ach-${a.id}`}
+                        value={value}
                         onSelect={() => {
-                          onSetViewMode("prestiges");
+                          onSetViewMode("achievements");
                           setTimeout(() => {
                             window.dispatchEvent(
                               new CustomEvent("taskTracker:globalSearch", {
-                                detail: { term: title, scope: "prestiges" },
+                                detail: { term: a.name, scope: "achievements" },
                               }),
                             );
                           }, 0);
                           setOpen(false);
                         }}
+                        className="py-3"
                       >
-                        {renderHighlighted(title)}
-                      </CommandItem>
-                    ))}
-                </CommandGroup>
-
-                {(() => {
-                  // Group by station, then by level; render one group per station with non-focusable level headers
-                  const byStation: Record<
-                    string,
-                    Record<number, HideoutMatchEntry[]>
-                  > = {};
-                  for (const m of hideoutEntries) {
-                    byStation[m.station] ||= {} as Record<
-                      number,
-                      HideoutMatchEntry[]
-                    >;
-                    (byStation[m.station][m.level] ||= []).push(m);
-                  }
-
-                  return Object.keys(byStation)
-                    .sort((a, b) => a.localeCompare(b))
-                    .flatMap((station, idx, arr) => {
-                      const levelEntries = Object.entries(byStation[station])
-                        .map(([level, items]) => ({
-                          level: Number(level),
-                          items,
-                        }))
-                        .sort((a, b) => a.level - b.level);
-                      const nodes: React.ReactNode[] = [];
-                      for (const { level, items } of levelEntries) {
-                        nodes.push(
-                          <CommandGroup
-                            key={`hideout-group-${station}-lvl-${level}`}
-                            heading={`Search • Hideout • ${station} • Level ${level}`}
-                          >
-                            {items
-                              .slice()
-                              .sort((a, b) => a.name.localeCompare(b.name))
-                              .map((m) => (
-                                <CommandItem
-                                  key={`hideout-${m.station}-${m.level}-${m.name}`}
-                                  value={m.value}
-                                  onSelect={() => {
-                                    onSetCollectorGroupBy("hideout-stations");
-                                    onSetViewMode("collector");
-                                    setTimeout(() => {
-                                      window.dispatchEvent(
-                                        new CustomEvent(
-                                          "taskTracker:globalSearch",
-                                          {
-                                            detail: {
-                                              term: m.name,
-                                              scope: "hideout",
-                                            },
-                                          },
-                                        ),
-                                      );
-                                    }, 0);
-                                    setOpen(false);
-                                  }}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="truncate">
-                                      {renderHighlighted(
-                                        `${m.name} ×${m.count}`,
-                                      )}
-                                    </span>
-                                    <div className="ml-auto flex items-center gap-1 shrink-0">
-                                      <ContextChip
-                                        label={`L${m.level}`}
-                                        tone="info"
-                                      />
-                                    </div>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                          </CommandGroup>,
-                        );
-                      }
-                      if (idx < arr.length - 1)
-                        nodes.push(
-                          <CommandSeparator key={`hideout-sep-${station}`} />,
-                        );
-                      return nodes;
-                    });
-                })()}
-
-                <CommandGroup heading="Search • Achievements">
-                  {achievementEntries.map(({ achievement: a, value }) => (
-                    <CommandItem
-                      key={`ach-${a.id}`}
-                      value={value}
-                      onSelect={() => {
-                        onSetViewMode("achievements");
-                        setTimeout(() => {
-                          window.dispatchEvent(
-                            new CustomEvent("taskTracker:globalSearch", {
-                              detail: { term: a.name, scope: "achievements" },
-                            }),
-                          );
-                        }, 0);
-                        setOpen(false);
-                      }}
-                      className="py-3"
-                    >
-                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="font-bold text-sm truncate">
-                            {renderHighlighted(a.name)}
-                          </span>
-                          <div className="ml-auto flex gap-1 shrink-0">
-                            {a.rarity && (
-                              <div
-                                className={cn(
-                                  "h-1.5 w-1.5 rounded-full",
-                                  a.rarity.toLowerCase() === "legendary"
-                                    ? "bg-amber-400"
-                                    : "bg-sky-400",
-                                )}
-                              />
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
-                          {a.rarity ?? "Common"} Achievement • {a.side ?? "Any"}
-                        </div>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-
-                <CommandGroup heading="Search • Items">
-                  {itemEntries.map((i) => (
-                    <CommandItem
-                      key={`item-${i.name}`}
-                      value={i.value}
-                      onSelect={() => {
-                        onSetCollectorGroupBy("collector");
-                        onSetViewMode("collector");
-                        setTimeout(() => {
-                          window.dispatchEvent(
-                            new CustomEvent("taskTracker:globalSearch", {
-                              detail: { term: i.name, scope: "items" },
-                            }),
-                          );
-                        }, 0);
-                        setOpen(false);
-                      }}
-                      className="py-3"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 w-full">
-                        <div className="h-8 w-8 shrink-0 rounded bg-black/20 border border-border/50 flex items-center justify-center p-1">
-                          {i.img ? (
-                            <img
-                              src={i.img}
-                              alt=""
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-                          )}
-                        </div>
                         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 w-full">
                             <span className="font-bold text-sm truncate">
-                              {renderHighlighted(i.name)}
+                              {renderHighlighted(a.name)}
                             </span>
                             <div className="ml-auto flex gap-1 shrink-0">
-                              {i.flags?.kappa && (
+                              {a.rarity && (
                                 <div
-                                  className="h-1.5 w-1.5 rounded-full bg-amber-500"
-                                  title="Kappa Item"
-                                />
-                              )}
-                              {i.flags?.lightkeeper && (
-                                <div
-                                  className="h-1.5 w-1.5 rounded-full bg-sky-500"
-                                  title="Lightkeeper Item"
+                                  className={cn(
+                                    "h-1.5 w-1.5 rounded-full",
+                                    a.rarity.toLowerCase() === "legendary"
+                                      ? "bg-amber-400"
+                                      : "bg-sky-400",
+                                  )}
                                 />
                               )}
                             </div>
                           </div>
                           <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
-                            Collector Item
+                            {a.rarity ?? "Common"} Achievement •{" "}
+                            {a.side ?? "Any"}
                           </div>
                         </div>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-
-                {queryLower.includes("prestige") && (
-                  <CommandGroup heading="Search • Navigate">
-                    <CommandItem
-                      value="go-prestiges"
-                      onSelect={handle.navigatePrestiges}
-                    >
-                      Go to Prestiges
-                    </CommandItem>
+                      </CommandItem>
+                    ))}
                   </CommandGroup>
-                )}
-              </>
-            )}
 
-            <CommandSeparator />
+                  <CommandGroup heading="Search • Items">
+                    {itemEntries.map((i) => (
+                      <CommandItem
+                        key={`item-${i.name}`}
+                        value={i.value}
+                        onSelect={() => {
+                          onSetCollectorGroupBy("collector");
+                          onSetViewMode("collector");
+                          setTimeout(() => {
+                            window.dispatchEvent(
+                              new CustomEvent("taskTracker:globalSearch", {
+                                detail: { term: i.name, scope: "items" },
+                              }),
+                            );
+                          }, 0);
+                          setOpen(false);
+                        }}
+                        className="py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 w-full">
+                          <div className="h-8 w-8 shrink-0 rounded bg-black/20 border border-border/50 flex items-center justify-center p-1">
+                            {i.img ? (
+                              <img
+                                src={i.img}
+                                alt=""
+                                className="h-full w-full object-contain"
+                              />
+                            ) : (
+                              <div className="h-1 w-1 rounded-full bg-muted-foreground/40" />
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm truncate">
+                                {renderHighlighted(i.name)}
+                              </span>
+                              <div className="ml-auto flex gap-1 shrink-0">
+                                {i.flags?.kappa && (
+                                  <div
+                                    className="h-1.5 w-1.5 rounded-full bg-amber-500"
+                                    title="Kappa Item"
+                                  />
+                                )}
+                                {i.flags?.lightkeeper && (
+                                  <div
+                                    className="h-1.5 w-1.5 rounded-full bg-sky-500"
+                                    title="Lightkeeper Item"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
+                              Collector Item
+                            </div>
+                          </div>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
 
-            <CommandGroup heading="Links">
-              <CommandItem
-                value="storyline-quests"
-                onSelect={handle.navigateStoryline}
-              >
-                1.0 Storyline Quests{" "}
-                {viewMode === "storyline" ? "(current)" : ""}
-              </CommandItem>
-              <CommandItem
-                value="storyline-map"
-                onSelect={handle.navigateStorylineMap}
-              >
-                Storyline Decision Map{" "}
-                {viewMode === "storyline-map" ? "(current)" : ""}
-              </CommandItem>
-            </CommandGroup>
-          </CommandList>
+                  {queryLower.includes("prestige") && (
+                    <CommandGroup heading="Search • Navigate">
+                      <CommandItem
+                        value="go-prestiges"
+                        onSelect={handle.navigatePrestiges}
+                      >
+                        Go to Prestiges
+                      </CommandItem>
+                    </CommandGroup>
+                  )}
+                </>
+              )}
 
-          <div className="flex gap-4 bg-white/[0.02] border-t border-white/5 py-2.5 px-4 shrink-0 transition-colors">
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
-              <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
-                Kappa
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.4)]" />
-              <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
-                Lightkeeper
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-              <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
-                Completed
-              </span>
+              <CommandSeparator />
+
+              <CommandGroup heading="Links">
+                <CommandItem
+                  value="storyline-quests"
+                  onSelect={handle.navigateStoryline}
+                >
+                  1.0 Storyline Quests{" "}
+                  {viewMode === "storyline" ? "(current)" : ""}
+                </CommandItem>
+                <CommandItem
+                  value="storyline-map"
+                  onSelect={handle.navigateStorylineMap}
+                >
+                  Storyline Decision Map{" "}
+                  {viewMode === "storyline-map" ? "(current)" : ""}
+                </CommandItem>
+              </CommandGroup>
+            </CommandList>
+
+            <div className="flex gap-4 bg-white/[0.02] border-t border-white/5 py-2.5 px-4 shrink-0 transition-colors">
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
+                <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
+                  Kappa
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.4)]" />
+                <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
+                  Lightkeeper
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
+                  Completed
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="hidden md:flex flex-1 h-full flex-col gap-3 bg-black/20 p-6 overflow-y-auto self-stretch custom-scrollbar backdrop-blur-md">
-          {renderPreview()}
+          <div className="hidden md:flex flex-1 h-full flex-col gap-3 bg-black/20 p-6 overflow-y-auto self-stretch custom-scrollbar backdrop-blur-md">
+            {renderPreview()}
+          </div>
         </div>
-      </div>
-    </CommandDialog>
+      </CommandDialog>
+    </TooltipProvider>
   );
 }
