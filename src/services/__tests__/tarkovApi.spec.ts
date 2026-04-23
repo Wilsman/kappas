@@ -145,6 +145,48 @@ describe('fetchCombinedData', () => {
     await expect(fetchCombinedData()).rejects.toThrow(/GraphQL error: boom/);
   });
 
+  it('uses partial task data when GraphQL returns recoverable field errors', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const apiResponse = {
+      data: {
+        tasks: [
+          {
+            id: 't-partial',
+            minPlayerLevel: 1,
+            kappaRequired: false,
+            lightkeeperRequired: false,
+            map: null,
+            taskRequirements: [],
+            trader: { name: 'Prapor', imageLink: 'img' },
+            wikiLink: 'link',
+            name: 'Partial Task',
+            startRewards: { items: [] },
+            finishRewards: {
+              customization: [{ id: 'c1', name: null, imageLink: 'img' }],
+              items: [],
+            },
+            objectives: [],
+          },
+        ],
+        achievements: [],
+        hideoutStations: [],
+      },
+      errors: [
+        { message: 'Missing translation for key 707265736574000000000254 Name' },
+      ],
+    };
+
+    mockFetchOnce(apiResponse);
+    const result = await fetchCombinedData();
+
+    expect(result.tasks.data.tasks[0].id).toBe('t-partial');
+    expect(result.collectorItems.data.task.objectives).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[Tarkov API] GraphQL returned partial data; continuing with available task payload.',
+      apiResponse.errors,
+    );
+  });
+
   it('handles missing optional fields with defaults', async () => {
     const partialResponse = {
       data: {

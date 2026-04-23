@@ -16,6 +16,7 @@ import { TraderName } from "../data/traders";
 const TARKOV_API_URL = "https://api.tarkov.dev/graphql";
 export const OVERLAY_URL =
   "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
+const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
 
 type TaskOverlayTarget = Task | CollectorItemsData["data"]["task"];
 type TaskRequirement = Task["taskRequirements"][number];
@@ -487,6 +488,18 @@ interface CombinedApiData {
   errors?: { message: string }[];
 }
 
+function formatGraphQLErrors(errors: { message: string }[]): string {
+  return errors.map((e) => e.message).join(", ");
+}
+
+function hasUsableCombinedTaskData(
+  result: CombinedApiData,
+): result is CombinedApiData & {
+  data: CombinedApiData["data"] & { tasks: TaskData["data"]["tasks"] };
+} {
+  return Array.isArray(result.data?.tasks);
+}
+
 // Simple localStorage cache for combined API payload
 export const API_CACHE_KEY = "taskTracker_api_cache_v2";
 export const API_CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
@@ -547,9 +560,7 @@ export async function fetchAchievements(): Promise<AchievementsData> {
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   const result = await response.json();
   if (result.errors) {
-    throw new Error(
-      `GraphQL error: ${result.errors.map((e: { message: string }) => e.message).join(", ")}`,
-    );
+    throw new Error(`GraphQL error: ${formatGraphQLErrors(result.errors)}`);
   }
   return { data: { achievements: result.data.achievements ?? [] } };
 }
@@ -733,8 +744,13 @@ export async function fetchCombinedData(
   const result: CombinedApiData = await response.json();
 
   if (result.errors) {
-    throw new Error(
-      `GraphQL error: ${result.errors.map((e: { message: string }) => e.message).join(", ")}`,
+    if (!hasUsableCombinedTaskData(result)) {
+      throw new Error(`GraphQL error: ${formatGraphQLErrors(result.errors)}`);
+    }
+
+    console.warn(
+      "[Tarkov API] GraphQL returned partial data; continuing with available task payload.",
+      result.errors,
     );
   }
 
@@ -784,7 +800,10 @@ export async function fetchCombinedData(
             result.data.task,
             overlay,
           ) as CollectorItemsData["data"]["task"])
-        : result.data.task,
+        : {
+            id: COLLECTOR_TASK_ID,
+            objectives: [],
+          },
     },
   };
 
@@ -827,9 +846,7 @@ export async function fetchHideoutStations(): Promise<{
   const result = await response.json();
 
   if (result.errors) {
-    throw new Error(
-      `GraphQL error: ${result.errors.map((e: { message: string }) => e.message).join(", ")}`,
-    );
+    throw new Error(`GraphQL error: ${formatGraphQLErrors(result.errors)}`);
   }
 
   return {

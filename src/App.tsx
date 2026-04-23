@@ -11,7 +11,13 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "./hooks/use-mobile";
-import { RotateCcw, BarChart3, Search } from "lucide-react";
+import {
+  RotateCcw,
+  BarChart3,
+  Search,
+  Copy,
+  ExternalLink,
+} from "lucide-react";
 import {
   Task,
   CollectorItemsData,
@@ -61,6 +67,14 @@ import {
   buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Helper to load data with retry logic for Chrome session restore scenarios
 async function loadWithRetry<T>(
@@ -158,6 +172,101 @@ import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { LazyLoadErrorBoundary } from "./components/LazyLoadErrorBoundary";
 import { STORYLINE_QUESTS } from "@/data/storylineQuests";
+import { Textarea } from "@/components/ui/textarea";
+
+const SUPPORT_DISCORD_URL = "https://discord.com/invite/3dFmr5qaJK";
+
+type RefreshErrorSource =
+  | "manual-refresh"
+  | "background-refresh"
+  | "initial-fetch"
+  | "initialization";
+
+type RefreshErrorDialogState = {
+  source: RefreshErrorSource;
+  title: string;
+  summary: string;
+  errorMessage: string;
+  reportText: string;
+};
+
+type RefreshErrorDialogDebugOptions = {
+  source?: RefreshErrorSource;
+  message?: string;
+  details?: string;
+  hasCachedData?: boolean;
+};
+
+function getRefreshErrorSourceLabel(source: RefreshErrorSource): string {
+  switch (source) {
+    case "manual-refresh":
+      return "Manual refresh";
+    case "background-refresh":
+      return "Background refresh";
+    case "initial-fetch":
+      return "Initial data load";
+    case "initialization":
+      return "App initialization";
+    default:
+      return "Refresh";
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown error";
+  }
+}
+
+function getErrorStack(error: unknown): string | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+  return error.stack ?? null;
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to legacy copy path */
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+declare global {
+  interface Window {
+    showRefreshErrorDialog?: (
+      options?: RefreshErrorDialogDebugOptions,
+    ) => void;
+  }
+}
 
 function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -169,6 +278,8 @@ function App() {
     string | undefined
   >(undefined);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [refreshErrorDialog, setRefreshErrorDialog] =
+    useState<RefreshErrorDialogState | null>(null);
 
   useEffect(() => {
     const nextFaction = profiles.find((p) => p.id === activeProfileId)?.faction;
@@ -321,28 +432,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
-
-  const handleRefresh = useCallback(async () => {
-    try {
-      setIsRefreshing(true);
-      const {
-        tasks: tasksData,
-        collectorItems: collectorData,
-        achievements: achievementsData,
-        hideoutStations,
-        overlay: overlayData,
-      } = await fetchCombinedData();
-      setAllTasks(tasksData.data.tasks);
-      setApiCollectorItems(collectorData);
-      setAchievements(achievementsData.data.achievements);
-      setHideoutStations(hideoutStations.data.hideoutStations);
-      setOverlay(overlayData);
-    } catch (err) {
-      console.error("Manual refresh error", err);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, []);
   const [showKappa, setShowKappa] = useState(false);
   const [showLightkeeper, setShowLightkeeper] = useState(false);
   const [apiCollectorItems, setApiCollectorItems] =
@@ -411,6 +500,126 @@ function App() {
     Set<string>
   >(new Set());
   const [hideoutStations, setHideoutStations] = useState<HideoutStation[]>([]);
+  const buildRefreshErrorDialogState = useCallback(
+    ({
+      source,
+      errorMessage,
+      errorStack,
+      hasCachedData,
+      details,
+    }: {
+      source: RefreshErrorSource;
+      errorMessage: string;
+      errorStack?: string | null;
+      hasCachedData: boolean;
+      details?: string;
+    }): RefreshErrorDialogState => {
+      const report = {
+        timestamp: new Date().toISOString(),
+        source,
+        sourceLabel: getRefreshErrorSourceLabel(source),
+        message: errorMessage,
+        stack: errorStack ?? null,
+        hasCachedData,
+        details: details ?? null,
+        activeProfileId: activeProfileId || null,
+        currentPath:
+          typeof window !== "undefined" ? window.location.href : null,
+        userAgent:
+          typeof navigator !== "undefined" ? navigator.userAgent : null,
+        dataSnapshot: {
+          taskCount: allTasks.length,
+          achievementCount: achievements.length,
+          hideoutStationCount: hideoutStations.length,
+        },
+      };
+
+      return {
+        source,
+        title: "Data refresh issue",
+        summary: hasCachedData
+          ? "The latest Tarkov data could not be refreshed. Your cached data is still available, but it may be stale."
+          : "The app could not load fresh Tarkov data, so some views may be empty until the API issue clears.",
+        errorMessage,
+        reportText: JSON.stringify(report, null, 2),
+      };
+    },
+    [
+      achievements.length,
+      activeProfileId,
+      allTasks.length,
+      hideoutStations.length,
+    ],
+  );
+  const reportRefreshError = useCallback(
+    (source: RefreshErrorSource, error: unknown, hasCachedData: boolean) => {
+      const errorMessage = getErrorMessage(error);
+      const errorStack = getErrorStack(error);
+      setRefreshErrorDialog(
+        buildRefreshErrorDialogState({
+          source,
+          errorMessage,
+          errorStack,
+          hasCachedData,
+        }),
+      );
+    },
+    [buildRefreshErrorDialogState],
+  );
+  const handleCopyRefreshErrorReport = useCallback(async () => {
+    if (!refreshErrorDialog) return;
+    const copied = await copyTextToClipboard(refreshErrorDialog.reportText);
+    if (copied) {
+      toast.success("Error report copied to clipboard");
+      return;
+    }
+    toast.error("Failed to copy error report");
+  }, [refreshErrorDialog]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.showRefreshErrorDialog = (options = {}) => {
+      setRefreshErrorDialog(
+        buildRefreshErrorDialogState({
+          source: options.source ?? "manual-refresh",
+          errorMessage:
+            options.message ??
+            "GraphQL error: Manually triggered support dialog preview",
+          errorStack: null,
+          hasCachedData: options.hasCachedData ?? allTasks.length > 0,
+          details:
+            options.details ??
+            "Manually opened from the browser console for support dialog verification.",
+        }),
+      );
+    };
+
+    return () => {
+      delete window.showRefreshErrorDialog;
+    };
+  }, [allTasks.length, buildRefreshErrorDialogState]);
+  const handleRefresh = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      const {
+        tasks: tasksData,
+        collectorItems: collectorData,
+        achievements: achievementsData,
+        hideoutStations,
+        overlay: overlayData,
+      } = await fetchCombinedData();
+      setAllTasks(tasksData.data.tasks);
+      setApiCollectorItems(collectorData);
+      setAchievements(achievementsData.data.achievements);
+      setHideoutStations(hideoutStations.data.hideoutStations);
+      setOverlay(overlayData);
+    } catch (err) {
+      console.error("Manual refresh error", err);
+      reportRefreshError("manual-refresh", err, allTasks.length > 0);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [allTasks.length, reportRefreshError]);
 
   // Working on items (currently working towards)
   const [workingOnTasks, setWorkingOnTasks] = useState<Set<string>>(new Set());
@@ -1189,6 +1398,7 @@ function App() {
             overlayLoaded = true;
           } catch (err) {
             console.error("API refresh error", err);
+            reportRefreshError("background-refresh", err, Boolean(cached));
             if (!cached) {
               // No cache and API failed → empty state
               setAllTasks([]);
@@ -1216,6 +1426,7 @@ function App() {
             overlayLoaded = true;
           } catch (err) {
             console.error("API fetch error", err);
+            reportRefreshError("initial-fetch", err, false);
             setAllTasks([]);
             setApiCollectorItems(null);
             setAchievements([]);
@@ -1240,12 +1451,13 @@ function App() {
         setIsLoading(false);
       } catch (err) {
         console.error("Init error", err);
+        reportRefreshError("initialization", err, Boolean(loadCombinedCache()));
         // Ensure UI doesn't get stuck loading on init errors
         setIsLoading(false);
       }
     };
     void init();
-  }, []);
+  }, [reportRefreshError]);
 
   // Validate and cleanup orphaned working-on task IDs
   // This runs after tasks are loaded to detect any saved task IDs that no longer exist
@@ -2651,6 +2863,75 @@ function App() {
         isOpen={showOnboarding}
         onClose={handleCloseOnboarding}
       />
+      <Dialog
+        open={refreshErrorDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRefreshErrorDialog(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{refreshErrorDialog?.title}</DialogTitle>
+            <DialogDescription>
+              {refreshErrorDialog?.summary}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+              <span className="font-medium">
+                {refreshErrorDialog
+                  ? getRefreshErrorSourceLabel(refreshErrorDialog.source)
+                  : "Refresh"}
+                :
+              </span>{" "}
+              {refreshErrorDialog?.errorMessage ?? "Unknown error"}
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Copy this report and paste it into our Discord support channel so
+                we can compare the exact API failure.
+              </p>
+              <Textarea
+                readOnly
+                value={refreshErrorDialog?.reportText ?? ""}
+                className="min-h-[260px] font-mono text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCopyRefreshErrorReport}
+              disabled={!refreshErrorDialog}
+            >
+              <Copy className="h-4 w-4" />
+              Copy error report
+            </Button>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRefreshErrorDialog(null)}
+              >
+                Close
+              </Button>
+              <Button asChild>
+                <a
+                  href={SUPPORT_DISCORD_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Join Discord
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Toaster position="bottom-right" richColors />
     </NuqsAdapter>
   );
