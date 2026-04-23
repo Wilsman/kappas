@@ -69,7 +69,7 @@ async function fetchTarkovDevTasks(): Promise<TarkovTask[]> {
     console.log(`${colors.cyan}⏳ Fetching tasks from Tarkov Dev API...${colors.reset}`);
 
     const query = `{
-    tasks(lang: en) {
+    tasks(lang: en, gameMode: regular) {
       id
       name
       minPlayerLevel

@@ -13,10 +13,19 @@ import {
   TaskAddRewardItem,
 } from "../types";
 import { TraderName } from "../data/traders";
+import {
+  DEFAULT_GAME_MODE,
+  normalizeGameMode,
+  type GameMode,
+} from "@/utils/gameMode";
+import { taskStorage } from "@/utils/indexedDB";
 const TARKOV_API_URL = "https://api.tarkov.dev/graphql";
 export const OVERLAY_URL =
   "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
 const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
+
+// Track localStorage quota state to avoid repeated failed attempts
+let localStorageQuotaExceeded = false;
 
 type TaskOverlayTarget = Task | CollectorItemsData["data"]["task"];
 type TaskRequirement = Task["taskRequirements"][number];
@@ -502,6 +511,8 @@ function hasUsableCombinedTaskData(
 
 // Simple localStorage cache for combined API payload
 export const API_CACHE_KEY = "taskTracker_api_cache_v2";
+export const API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v3";
+export const SHARED_CACHE_KEY = "taskTracker_shared_cache_v3";
 export const API_CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
 
 export interface CombinedCachePayload {
@@ -516,38 +527,184 @@ interface StoredCache {
   payload: CombinedCachePayload;
 }
 
-export function loadCombinedCache(): CombinedCachePayload | null {
+interface TaskOnlyCache {
+  updatedAt: number;
+  payload: { tasks: TaskData };
+}
+
+interface SharedCacheData {
+  updatedAt: number;
+  collectorItems: CollectorItemsData;
+  achievements: AchievementsData;
+  hideoutStations: { data: HideoutStationsData };
+}
+
+export function buildCombinedCacheKey(gameMode: GameMode): string {
+  return `${API_CACHE_KEY_PREFIX}::${gameMode}`;
+}
+
+function readStoredCache(key: string): StoredCache | null {
   try {
-    const raw = localStorage.getItem(API_CACHE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed: StoredCache = JSON.parse(raw);
     if (!parsed?.payload) return null;
-    return parsed.payload;
+    return parsed;
   } catch {
     return null;
   }
 }
 
-export function isCombinedCacheFresh(
-  ttlMs: number = API_CACHE_TTL_MS,
-): boolean {
-  try {
-    const raw = localStorage.getItem(API_CACHE_KEY);
-    if (!raw) return false;
-    const parsed: StoredCache = JSON.parse(raw);
-    if (!parsed?.updatedAt) return false;
-    return Date.now() - parsed.updatedAt < ttlMs;
-  } catch {
-    return false;
+export function loadCombinedCache(
+  gameMode: GameMode = DEFAULT_GAME_MODE,
+): CombinedCachePayload | null {
+  const normalizedGameMode = normalizeGameMode(gameMode);
+
+  // Try to load from new split cache format (shared + tasks in localStorage)
+  const sharedCacheRaw = localStorage.getItem(SHARED_CACHE_KEY);
+  const taskCacheKey = buildCombinedCacheKey(normalizedGameMode);
+  const taskCacheRaw = localStorage.getItem(taskCacheKey);
+
+  if (sharedCacheRaw && taskCacheRaw) {
+    try {
+      const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
+      const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
+
+      if (
+        sharedCache?.collectorItems &&
+        sharedCache?.achievements &&
+        sharedCache?.hideoutStations &&
+        taskCache?.payload?.tasks
+      ) {
+        return {
+          tasks: taskCache.payload.tasks,
+          collectorItems: sharedCache.collectorItems,
+          achievements: sharedCache.achievements,
+          hideoutStations: sharedCache.hideoutStations,
+        };
+      }
+    } catch {
+      // Fall through to legacy cache
+    }
   }
+
+  // Fallback to legacy cache for compatibility
+  const modeCache = readStoredCache(buildCombinedCacheKey(normalizedGameMode));
+  if (modeCache) return modeCache.payload;
+
+  if (normalizedGameMode === DEFAULT_GAME_MODE) {
+    return readStoredCache(API_CACHE_KEY)?.payload ?? null;
+  }
+
+  return null;
 }
 
-export function saveCombinedCache(payload: CombinedCachePayload): void {
+export function isCombinedCacheFresh(
+  gameMode: GameMode | number = DEFAULT_GAME_MODE,
+  ttlMs: number = API_CACHE_TTL_MS,
+): boolean {
+  if (typeof gameMode === "number") {
+    ttlMs = gameMode;
+    gameMode = DEFAULT_GAME_MODE;
+  }
+  const normalizedGameMode = normalizeGameMode(gameMode);
+
+  // Check new split cache format
+  const sharedCacheRaw = localStorage.getItem(SHARED_CACHE_KEY);
+  const taskCacheRaw = localStorage.getItem(
+    buildCombinedCacheKey(normalizedGameMode),
+  );
+
+  if (sharedCacheRaw && taskCacheRaw) {
+    try {
+      const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
+      const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
+
+      // Both must be fresh
+      if (sharedCache?.updatedAt && taskCache?.updatedAt) {
+        const now = Date.now();
+        const sharedFresh = now - sharedCache.updatedAt < ttlMs;
+        const taskFresh = now - taskCache.updatedAt < ttlMs;
+        return sharedFresh && taskFresh;
+      }
+    } catch {
+      // Fall through to legacy check
+    }
+  }
+
+  // Fallback to legacy cache
+  const modeCache = readStoredCache(buildCombinedCacheKey(normalizedGameMode));
+  if (modeCache?.updatedAt) {
+    return Date.now() - modeCache.updatedAt < ttlMs;
+  }
+
+  if (normalizedGameMode === DEFAULT_GAME_MODE) {
+    const legacyCache = readStoredCache(API_CACHE_KEY);
+    if (legacyCache?.updatedAt) {
+      return Date.now() - legacyCache.updatedAt < ttlMs;
+    }
+  }
+
+  return false;
+}
+
+export async function saveCombinedCache(
+  payload: CombinedCachePayload,
+  gameMode: GameMode = DEFAULT_GAME_MODE,
+): Promise<void> {
+  const normalizedGameMode = normalizeGameMode(gameMode);
+
+  // Save shared data to localStorage (smaller, shared across modes)
+  if (!localStorageQuotaExceeded) {
+    try {
+      const sharedData: SharedCacheData = {
+        updatedAt: Date.now(),
+        collectorItems: payload.collectorItems,
+        achievements: payload.achievements,
+        hideoutStations: payload.hideoutStations,
+      };
+      localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify(sharedData));
+    } catch (err) {
+      if (err instanceof Error && err.name === "QuotaExceededError") {
+        localStorageQuotaExceeded = true;
+      }
+      console.error(
+        "[Cache] Failed to save shared cache to localStorage:",
+        err,
+      );
+    }
+  }
+
+  // Save task data to localStorage (mode-specific, smaller now)
+  if (!localStorageQuotaExceeded) {
+    try {
+      const taskData: TaskOnlyCache = {
+        updatedAt: Date.now(),
+        payload: { tasks: payload.tasks },
+      };
+      localStorage.setItem(
+        buildCombinedCacheKey(normalizedGameMode),
+        JSON.stringify(taskData),
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === "QuotaExceededError") {
+        localStorageQuotaExceeded = true;
+      }
+      console.error("[Cache] Failed to save task cache to localStorage:", err);
+    }
+  }
+
+  // Also save tasks to IndexedDB as backup (async, no quota issues)
   try {
-    const toStore: StoredCache = { updatedAt: Date.now(), payload };
-    localStorage.setItem(API_CACHE_KEY, JSON.stringify(toStore));
-  } catch {
-    // ignore quota/storage errors
+    await taskStorage.saveTaskCache(
+      normalizedGameMode,
+      payload.tasks.data.tasks,
+    );
+  } catch (err) {
+    console.warn(
+      "[Cache] Failed to save task cache to IndexedDB (non-critical):",
+      err,
+    );
   }
 }
 
@@ -617,9 +774,9 @@ const ACHIEVEMENTS_QUERY = `
   }
 `;
 
-const COMBINED_QUERY = `
+const buildCombinedQuery = (gameMode: GameMode) => `
 {
-  tasks(lang: en) {
+  tasks(lang: en, gameMode: ${gameMode}) {
     id
     minPlayerLevel
     factionName
@@ -717,6 +874,7 @@ export type FetchStage =
   | "done";
 
 export async function fetchCombinedData(
+  gameMode: GameMode = DEFAULT_GAME_MODE,
   onStage?: (stage: FetchStage) => void,
 ): Promise<{
   tasks: TaskData;
@@ -725,6 +883,7 @@ export async function fetchCombinedData(
   hideoutStations: { data: HideoutStationsData };
   overlay: Overlay;
 }> {
+  const normalizedGameMode = normalizeGameMode(gameMode);
   onStage?.("request");
   const response = await fetch(TARKOV_API_URL, {
     method: "POST",
@@ -732,7 +891,7 @@ export async function fetchCombinedData(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      query: COMBINED_QUERY,
+      query: buildCombinedQuery(normalizedGameMode),
     }),
   });
 
@@ -821,7 +980,7 @@ export async function fetchCombinedData(
 
   const combined = { tasks, collectorItems, achievements, hideoutStations };
   // Save fresh data to cache for next startup
-  saveCombinedCache(combined);
+  await saveCombinedCache(combined, normalizedGameMode);
   onStage?.("done");
   return { ...combined, overlay };
 }

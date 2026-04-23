@@ -1,9 +1,16 @@
+import {
+  DEFAULT_GAME_MODE,
+  normalizeGameMode,
+  type GameMode,
+} from "@/utils/gameMode";
+
 export type Profile = {
   id: string;
   name: string;
   faction?: "USEC" | "BEAR";
   level?: number;
   edition?: string;
+  gameMode?: GameMode;
   createdAt: number;
 };
 
@@ -34,11 +41,14 @@ export function ensureProfiles(): { profiles: Profile[]; activeId: string } {
   const normalizedProfiles = profiles.map((profile) => {
     const needsFaction = !profile.faction;
     const needsEdition = !profile.edition;
-    if (!needsFaction && !needsEdition) return profile;
+    const normalizedGameMode = normalizeGameMode(profile.gameMode);
+    const needsGameMode = profile.gameMode !== normalizedGameMode;
+    if (!needsFaction && !needsEdition && !needsGameMode) return profile;
     return {
       ...profile,
       faction: profile.faction ?? "USEC",
       edition: profile.edition ?? DEFAULT_EDITION_ID,
+      gameMode: normalizedGameMode,
     };
   });
 
@@ -55,6 +65,7 @@ export function ensureProfiles(): { profiles: Profile[]; activeId: string } {
       faction: "USEC",
       level: 1,
       edition: DEFAULT_EDITION_ID,
+      gameMode: DEFAULT_GAME_MODE,
       createdAt: Date.now(),
     };
     profiles = [def];
@@ -88,7 +99,8 @@ export function createProfile(
   name: string,
   faction?: "USEC" | "BEAR",
   level?: number,
-  edition?: string
+  edition?: string,
+  gameMode?: GameMode,
 ): Profile {
   const list = loadProfiles();
   const p: Profile = {
@@ -97,6 +109,7 @@ export function createProfile(
     faction: faction || "USEC",
     level: level || 1,
     edition: edition || DEFAULT_EDITION_ID,
+    gameMode: normalizeGameMode(gameMode),
     createdAt: Date.now(),
   };
   list.push(p);
@@ -168,6 +181,15 @@ export function updateProfileEdition(id: string, edition: string) {
   const idx = list.findIndex((p) => p.id === id);
   if (idx >= 0) {
     list[idx] = { ...list[idx], edition };
+    saveProfiles(list);
+  }
+}
+
+export function updateProfileGameMode(id: string, gameMode: GameMode) {
+  const list = loadProfiles();
+  const idx = list.findIndex((p) => p.id === id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], gameMode: normalizeGameMode(gameMode) };
     saveProfiles(list);
   }
 }

@@ -33,6 +33,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import type { Profile } from "@/utils/profile";
+import { GAME_MODE_LABELS, GAME_MODES, type GameMode } from "@/utils/gameMode";
 import type { Edition } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,11 +115,13 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   activeProfileId: string;
   editions: Edition[];
   activeEditionId?: string;
+  activeGameMode: GameMode;
   onSwitchProfile: (id: string) => void;
   onCreateProfile: (name?: string) => void;
   onRenameProfile: (id: string, name: string) => void;
   onUpdateFaction: (id: string, faction: "USEC" | "BEAR") => void;
   onUpdateEdition: (id: string, edition: string) => void;
+  onUpdateGameMode: (id: string, gameMode: GameMode) => void;
   onDeleteProfile: (id: string) => void;
   onResetProfile: (options?: ResetOptions) => void;
   onImportComplete: () => void;
@@ -130,6 +133,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     data: import("@/utils/indexedDB").AllProfilesExportData,
   ) => Promise<void>;
   isLoading?: boolean;
+  isGameModeLoading?: boolean;
+  isSwitchingMode?: boolean;
 }
 
 export function AppSidebar({
@@ -153,17 +158,21 @@ export function AppSidebar({
   activeProfileId,
   editions,
   activeEditionId,
+  activeGameMode,
   onSwitchProfile,
   onCreateProfile,
   onRenameProfile,
   onUpdateFaction,
   onUpdateEdition,
+  onUpdateGameMode,
   onDeleteProfile,
   onResetProfile,
   onImportComplete,
   onImportAsNewProfile,
   onImportAllProfiles,
   isLoading = false,
+  isGameModeLoading = false,
+  isSwitchingMode = false,
   ...props
 }: AppSidebarProps) {
   const [perTraderOpen, setPerTraderOpen] = React.useState(false);
@@ -342,6 +351,49 @@ export function AppSidebar({
                           </button>
                         ))}
                       </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {GAME_MODES.map((gameMode) => (
+                        <button
+                          key={gameMode}
+                          type="button"
+                          onClick={() =>
+                            onUpdateGameMode(activeProfile.id, gameMode)
+                          }
+                          disabled={isGameModeLoading}
+                          className={`relative flex items-center justify-center px-2 py-2 text-xs font-medium rounded-md border transition-all disabled:cursor-wait disabled:opacity-70 ${
+                            activeGameMode === gameMode
+                              ? "border-emerald-500/60 text-emerald-400"
+                              : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+                          }`}
+                        >
+                          {GAME_MODE_LABELS[gameMode]}
+                          {isSwitchingMode && activeGameMode === gameMode && (
+                            <div className="absolute -top-1 -right-1 h-3 w-3">
+                              <svg
+                                className="animate-spin h-3 w-3 text-amber-500"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
+                            </div>
+                          )}
+                        </button>
+                      ))}
                     </div>
                     {editions.length > 0 && (
                       <div className="space-y-1">
@@ -858,7 +910,9 @@ export function AppSidebar({
           >
             <StickyNote className="h-3.5 w-3.5" />
             <span>My Notes</span>
-            <span className="ml-auto text-[10px] text-muted-foreground">Ctrl+Shift+U</span>
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              Ctrl+Shift+U
+            </span>
           </button>
         </div>
         {/* Debug Export - Support Section */}
@@ -866,7 +920,9 @@ export function AppSidebar({
           <button
             onClick={() => {
               if (typeof window !== "undefined" && "debugTracker" in window) {
-                (window as Window & { debugTracker: () => Promise<void> }).debugTracker();
+                (
+                  window as Window & { debugTracker: () => Promise<void> }
+                ).debugTracker();
               }
             }}
             className="flex w-full items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] rounded-md bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors border border-amber-500/20"

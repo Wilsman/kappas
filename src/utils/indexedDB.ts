@@ -1,7 +1,8 @@
 import { isProfileDeleted } from "./profile";
+import type { GameMode } from "@/utils/gameMode";
 
 const DB_BASE_NAME = "TarkovQuests";
-const DB_VERSION = 12;
+const DB_VERSION = 13;
 const TASKS_STORE = "completedTasks";
 const COLLECTOR_STORE = "completedCollectorItems";
 const PRESTIGE_STORE = "prestigeProgress";
@@ -14,6 +15,7 @@ const USER_PREFS_STORE = "userPreferences";
 const WORKING_ON_STORE = "workingOnItems";
 const TASK_OBJECTIVES_STORE = "completedTaskObjectives";
 const TASK_OBJECTIVE_ITEM_PROGRESS_STORE = "taskObjectiveItemProgress";
+const API_CACHE_STORE = "apiCache";
 const TASKS_SNAPSHOT_KEY = "taskTracker_completedTasks_snapshot_v1";
 
 function getTaskSnapshotStorageKey(profileId: string): string {
@@ -24,7 +26,7 @@ function writeTaskSnapshot(profileId: string, tasks: Set<string>): void {
   try {
     localStorage.setItem(
       getTaskSnapshotStorageKey(profileId),
-      JSON.stringify(Array.from(tasks))
+      JSON.stringify(Array.from(tasks)),
     );
   } catch {
     /* ignore localStorage errors */
@@ -38,7 +40,9 @@ function readTaskSnapshot(profileId: string): Set<string> | null {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
     return new Set(
-      parsed.filter((id): id is string => typeof id === "string" && id.length > 0)
+      parsed.filter(
+        (id): id is string => typeof id === "string" && id.length > 0,
+      ),
     );
   } catch {
     return null;
@@ -96,7 +100,9 @@ export class TaskStorage {
     if (this.db) return;
 
     if (isProfileDeleted(this.profileId)) {
-      console.warn(`[Storage] Profile ${this.profileId} is archived, skipping DB init`);
+      console.warn(
+        `[Storage] Profile ${this.profileId} is archived, skipping DB init`,
+      );
       return;
     }
 
@@ -150,6 +156,9 @@ export class TaskStorage {
           db.createObjectStore(HIDEOUT_ITEM_QUANTITIES_STORE, {
             keyPath: "id",
           });
+        }
+        if (!db.objectStoreNames.contains(API_CACHE_STORE)) {
+          db.createObjectStore(API_CACHE_STORE, { keyPath: "key" });
         }
       };
     });
@@ -218,12 +227,12 @@ export class TaskStorage {
   }
 
   async saveCompletedCollectorItems(
-    completedItems: Set<string>
+    completedItems: Set<string>,
   ): Promise<void> {
     if (!this.db) await this.init();
 
     console.debug(
-      `[Storage] Saving ${completedItems.size} collector items to profile ${this.profileId}`
+      `[Storage] Saving ${completedItems.size} collector items to profile ${this.profileId}`,
     );
 
     const transaction = this.db!.transaction([COLLECTOR_STORE], "readwrite");
@@ -250,7 +259,7 @@ export class TaskStorage {
           completedItems.add(item.id);
         });
         console.debug(
-          `[Storage] Loaded ${completedItems.size} collector items from profile ${this.profileId}`
+          `[Storage] Loaded ${completedItems.size} collector items from profile ${this.profileId}`,
         );
         resolve(completedItems);
       };
@@ -315,7 +324,7 @@ export class TaskStorage {
     if (!this.db) await this.init();
 
     console.debug(
-      `[Storage] Saving ${completedItems.size} hideout items to profile ${this.profileId}`
+      `[Storage] Saving ${completedItems.size} hideout items to profile ${this.profileId}`,
     );
 
     const tx = this.db!.transaction([HIDEOUT_ITEMS_STORE], "readwrite");
@@ -338,7 +347,7 @@ export class TaskStorage {
           completed.add(item.id);
         });
         console.debug(
-          `[Storage] Loaded ${completed.size} hideout items from profile ${this.profileId}`
+          `[Storage] Loaded ${completed.size} hideout items from profile ${this.profileId}`,
         );
         resolve(completed);
       };
@@ -347,17 +356,17 @@ export class TaskStorage {
   }
 
   async saveCompletedStorylineObjectives(
-    completedObjectives: Set<string>
+    completedObjectives: Set<string>,
   ): Promise<void> {
     if (!this.db) await this.init();
 
     console.debug(
-      `[Storage] Saving ${completedObjectives.size} storyline objectives to profile ${this.profileId}`
+      `[Storage] Saving ${completedObjectives.size} storyline objectives to profile ${this.profileId}`,
     );
 
     const transaction = this.db!.transaction(
       [STORYLINE_OBJECTIVES_STORE],
-      "readwrite"
+      "readwrite",
     );
     const store = transaction.objectStore(STORYLINE_OBJECTIVES_STORE);
 
@@ -374,7 +383,7 @@ export class TaskStorage {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(
         [STORYLINE_OBJECTIVES_STORE],
-        "readonly"
+        "readonly",
       );
       const store = transaction.objectStore(STORYLINE_OBJECTIVES_STORE);
       const request = store.getAll();
@@ -385,7 +394,7 @@ export class TaskStorage {
           completed.add(item.id);
         });
         console.debug(
-          `[Storage] Loaded ${completed.size} storyline objectives from profile ${this.profileId}`
+          `[Storage] Loaded ${completed.size} storyline objectives from profile ${this.profileId}`,
         );
         resolve(completed);
       };
@@ -395,13 +404,13 @@ export class TaskStorage {
   }
 
   async saveCompletedStorylineMapNodes(
-    completedNodes: Set<string>
+    completedNodes: Set<string>,
   ): Promise<void> {
     if (!this.db) await this.init();
 
     const transaction = this.db!.transaction(
       [STORYLINE_MAP_NODES_STORE],
-      "readwrite"
+      "readwrite",
     );
     const store = transaction.objectStore(STORYLINE_MAP_NODES_STORE);
 
@@ -418,7 +427,7 @@ export class TaskStorage {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(
         [STORYLINE_MAP_NODES_STORE],
-        "readonly"
+        "readonly",
       );
       const store = transaction.objectStore(STORYLINE_MAP_NODES_STORE);
       const request = store.getAll();
@@ -436,12 +445,12 @@ export class TaskStorage {
   }
 
   async saveCompletedTaskObjectives(
-    completedObjectives: Set<string>
+    completedObjectives: Set<string>,
   ): Promise<void> {
     if (!this.db) await this.init();
 
     console.debug(
-      `[Storage] Saving ${completedObjectives.size} task objectives to profile ${this.profileId}`
+      `[Storage] Saving ${completedObjectives.size} task objectives to profile ${this.profileId}`,
     );
 
     const tx = this.db!.transaction([TASK_OBJECTIVES_STORE], "readwrite");
@@ -464,7 +473,7 @@ export class TaskStorage {
           completed.add(item.id);
         });
         console.debug(
-          `[Storage] Loaded ${completed.size} task objectives from profile ${this.profileId}`
+          `[Storage] Loaded ${completed.size} task objectives from profile ${this.profileId}`,
         );
         resolve(completed);
       };
@@ -473,13 +482,13 @@ export class TaskStorage {
   }
 
   async saveTaskObjectiveItemProgress(
-    progress: Record<string, number>
+    progress: Record<string, number>,
   ): Promise<void> {
     if (!this.db) await this.init();
 
     const tx = this.db!.transaction(
       [TASK_OBJECTIVE_ITEM_PROGRESS_STORE],
-      "readwrite"
+      "readwrite",
     );
     const store = tx.objectStore(TASK_OBJECTIVE_ITEM_PROGRESS_STORE);
     await store.clear();
@@ -494,7 +503,7 @@ export class TaskStorage {
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction(
         [TASK_OBJECTIVE_ITEM_PROGRESS_STORE],
-        "readonly"
+        "readonly",
       );
       const store = tx.objectStore(TASK_OBJECTIVE_ITEM_PROGRESS_STORE);
       const req = store.getAll();
@@ -512,21 +521,21 @@ export class TaskStorage {
   }
 
   async saveHideoutItemQuantities(
-    quantities: Record<string, number>
+    quantities: Record<string, number>,
   ): Promise<void> {
     if (!this.db) await this.init();
 
     // Skip if the store doesn't exist yet (backwards compatibility)
     if (!this.db!.objectStoreNames.contains(HIDEOUT_ITEM_QUANTITIES_STORE)) {
       console.warn(
-        "[Storage] HIDEOUT_ITEM_QUANTITIES_STORE not found, skipping save. Database may need upgrade."
+        "[Storage] HIDEOUT_ITEM_QUANTITIES_STORE not found, skipping save. Database may need upgrade.",
       );
       return;
     }
 
     const tx = this.db!.transaction(
       [HIDEOUT_ITEM_QUANTITIES_STORE],
-      "readwrite"
+      "readwrite",
     );
     const store = tx.objectStore(HIDEOUT_ITEM_QUANTITIES_STORE);
     await store.clear();
@@ -547,7 +556,7 @@ export class TaskStorage {
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction(
         [HIDEOUT_ITEM_QUANTITIES_STORE],
-        "readonly"
+        "readonly",
       );
       const store = tx.objectStore(HIDEOUT_ITEM_QUANTITIES_STORE);
       const req = store.getAll();
@@ -629,7 +638,7 @@ export class TaskStorage {
     // Skip if the store doesn't exist yet (backwards compatibility)
     if (!this.db!.objectStoreNames.contains(WORKING_ON_STORE)) {
       console.warn(
-        "[Storage] WORKING_ON_STORE not found, skipping save. Database may need upgrade."
+        "[Storage] WORKING_ON_STORE not found, skipping save. Database may need upgrade.",
       );
       return;
     }
@@ -706,6 +715,63 @@ export class TaskStorage {
     const store = tx.objectStore(WORKING_ON_STORE);
     await store.clear();
   }
+
+  async saveTaskCache(gameMode: GameMode, tasks: unknown[]): Promise<void> {
+    if (!this.db) await this.init();
+
+    const tx = this.db!.transaction([API_CACHE_STORE], "readwrite");
+    const store = tx.objectStore(API_CACHE_STORE);
+    const key = `tasks::${gameMode}`;
+
+    await store.put({
+      key,
+      data: tasks,
+      updatedAt: Date.now(),
+    });
+  }
+
+  async loadTaskCache(gameMode: GameMode): Promise<unknown[] | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction([API_CACHE_STORE], "readonly");
+      const store = tx.objectStore(API_CACHE_STORE);
+      const req = store.get(`tasks::${gameMode}`);
+
+      req.onsuccess = () => {
+        if (!req.result) {
+          resolve(null);
+          return;
+        }
+        resolve(req.result.data as unknown[]);
+      };
+
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async isTaskCacheFresh(
+    gameMode: GameMode,
+    ttlMs: number = 1000 * 60 * 30,
+  ): Promise<boolean> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction([API_CACHE_STORE], "readonly");
+      const store = tx.objectStore(API_CACHE_STORE);
+      const req = store.get(`tasks::${gameMode}`);
+
+      req.onsuccess = () => {
+        if (!req.result?.updatedAt) {
+          resolve(false);
+          return;
+        }
+        resolve(Date.now() - req.result.updatedAt < ttlMs);
+      };
+
+      req.onerror = () => reject(req.error);
+    });
+  }
 }
 
 // Export data interface for backup/restore (single profile)
@@ -741,6 +807,7 @@ export interface AllProfilesExportData {
     id: string;
     name: string;
     createdAt: number;
+    gameMode?: GameMode;
     data: ExportData;
   }>;
   activeProfileId: string;
@@ -828,7 +895,7 @@ export class ExportImportService {
 
     if (data.version !== EXPORT_VERSION) {
       console.warn(
-        `Export version mismatch: expected ${EXPORT_VERSION}, got ${data.version}`
+        `Export version mismatch: expected ${EXPORT_VERSION}, got ${data.version}`,
       );
       // Continue anyway for forward compatibility
     }
@@ -839,25 +906,25 @@ export class ExportImportService {
     await Promise.all([
       taskStorage.saveCompletedTasks(new Set(data.completedTasks || [])),
       taskStorage.saveCompletedTaskObjectives(
-        new Set(data.completedTaskObjectives || [])
+        new Set(data.completedTaskObjectives || []),
       ),
       taskStorage.saveCompletedCollectorItems(
-        new Set(data.completedCollectorItems || [])
+        new Set(data.completedCollectorItems || []),
       ),
       taskStorage.saveCompletedHideoutItems(
-        new Set(data.completedHideoutItems || [])
+        new Set(data.completedHideoutItems || []),
       ),
       taskStorage.saveCompletedAchievements(
-        new Set(data.completedAchievements || [])
+        new Set(data.completedAchievements || []),
       ),
       taskStorage.saveCompletedStorylineObjectives(
-        new Set(data.completedStorylineObjectives || [])
+        new Set(data.completedStorylineObjectives || []),
       ),
       taskStorage.saveCompletedStorylineMapNodes(
-        new Set(data.completedStorylineMapNodes || [])
+        new Set(data.completedStorylineMapNodes || []),
       ),
       taskStorage.saveTaskObjectiveItemProgress(
-        data.taskObjectiveItemProgress || {}
+        data.taskObjectiveItemProgress || {},
       ),
       taskStorage.saveHideoutItemQuantities(data.hideoutItemQuantities || {}),
     ]);
@@ -867,7 +934,7 @@ export class ExportImportService {
       await taskStorage.saveWorkingOnItems({
         tasks: new Set(data.workingOnItems.tasks || []),
         storylineObjectives: new Set(
-          data.workingOnItems.storylineObjectives || []
+          data.workingOnItems.storylineObjectives || [],
         ),
         collectorItems: new Set(data.workingOnItems.collectorItems || []),
         hideoutStations: new Set(data.workingOnItems.hideoutStations || []),
@@ -877,7 +944,7 @@ export class ExportImportService {
     // Import prestige progress
     if (data.prestigeProgress) {
       for (const [prestigeId, progressData] of Object.entries(
-        data.prestigeProgress
+        data.prestigeProgress,
       )) {
         await taskStorage.savePrestigeProgress(prestigeId, progressData);
       }
@@ -916,7 +983,7 @@ export class ExportImportService {
    * Read and parse an import file (single profile or all profiles)
    */
   static async readImportFile(
-    file: File
+    file: File,
   ): Promise<ExportData | AllProfilesExportData> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -939,9 +1006,10 @@ export class ExportImportService {
         } catch (err) {
           reject(
             new Error(
-              `Failed to parse file: ${err instanceof Error ? err.message : "Unknown error"
-              }`
-            )
+              `Failed to parse file: ${
+                err instanceof Error ? err.message : "Unknown error"
+              }`,
+            ),
           );
         }
       };
@@ -954,7 +1022,7 @@ export class ExportImportService {
    * Check if data is an all-profiles export
    */
   static isAllProfilesExport(
-    data: ExportData | AllProfilesExportData
+    data: ExportData | AllProfilesExportData,
   ): data is AllProfilesExportData {
     return "profiles" in data && Array.isArray(data.profiles);
   }
@@ -963,8 +1031,13 @@ export class ExportImportService {
    * Export all profiles data into a single bundle
    */
   static async exportAllProfiles(
-    profiles: Array<{ id: string; name: string; createdAt: number }>,
-    activeProfileId: string
+    profiles: Array<{
+      id: string;
+      name: string;
+      createdAt: number;
+      gameMode?: GameMode;
+    }>,
+    activeProfileId: string,
   ): Promise<AllProfilesExportData> {
     const exportedProfiles: AllProfilesExportData["profiles"] = [];
 
@@ -984,6 +1057,7 @@ export class ExportImportService {
         id: profile.id,
         name: profile.name,
         createdAt: profile.createdAt,
+        gameMode: profile.gameMode,
         data,
       });
     }
@@ -1005,7 +1079,7 @@ export class ExportImportService {
    */
   static downloadAllProfilesExport(
     data: AllProfilesExportData,
-    filename?: string
+    filename?: string,
   ): void {
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -1033,7 +1107,7 @@ const MIGRATION_FLAG = "taskTracker_profile_migrated_v1";
 const MIGRATION_DEFAULT_FLAG = "taskTracker_default_migrated_v1";
 
 export async function migrateLegacyDataIfNeeded(
-  targetProfileId: string
+  targetProfileId: string,
 ): Promise<void> {
   try {
     if (localStorage.getItem(MIGRATION_FLAG) === "1") return;
@@ -1081,19 +1155,19 @@ export async function migrateLegacyDataIfNeeded(
       try {
         const tasks = await readStoreAll<{ id: string }>(
           legacyDb,
-          TASKS_STORE
+          TASKS_STORE,
         ).catch(() => []);
         const col = await readStoreAll<{ id: string }>(
           legacyDb,
-          COLLECTOR_STORE
+          COLLECTOR_STORE,
         ).catch(() => []);
         const ach = await readStoreAll<{ id: string }>(
           legacyDb,
-          ACHIEVEMENTS_STORE
+          ACHIEVEMENTS_STORE,
         ).catch(() => []);
         const pres = await readStoreAll<{ id: string; data: unknown }>(
           legacyDb,
-          PRESTIGE_STORE
+          PRESTIGE_STORE,
         ).catch(() => []);
 
         const t = new TaskStorage();
@@ -1127,7 +1201,7 @@ export async function migrateLegacyDataIfNeeded(
  * This handles edge cases where data may have been saved before profile was properly set.
  */
 export async function migrateDefaultDbIfNeeded(
-  targetProfileId: string
+  targetProfileId: string,
 ): Promise<void> {
   // Skip if target is "default" (would be same DB)
   if (targetProfileId === "default") return;
@@ -1177,7 +1251,7 @@ export async function migrateDefaultDbIfNeeded(
       try {
         const tasks = await readStoreAll<{ id: string }>(
           defaultDb,
-          TASKS_STORE
+          TASKS_STORE,
         ).catch(() => []);
 
         // Only migrate if there's actually data in the default DB
@@ -1194,27 +1268,27 @@ export async function migrateDefaultDbIfNeeded(
 
         const col = await readStoreAll<{ id: string }>(
           defaultDb,
-          COLLECTOR_STORE
+          COLLECTOR_STORE,
         ).catch(() => []);
         const ach = await readStoreAll<{ id: string }>(
           defaultDb,
-          ACHIEVEMENTS_STORE
+          ACHIEVEMENTS_STORE,
         ).catch(() => []);
         const pres = await readStoreAll<{ id: string; data: unknown }>(
           defaultDb,
-          PRESTIGE_STORE
+          PRESTIGE_STORE,
         ).catch(() => []);
         const hideout = await readStoreAll<{ id: string }>(
           defaultDb,
-          HIDEOUT_ITEMS_STORE
+          HIDEOUT_ITEMS_STORE,
         ).catch(() => []);
         const storylineObj = await readStoreAll<{ id: string }>(
           defaultDb,
-          STORYLINE_OBJECTIVES_STORE
+          STORYLINE_OBJECTIVES_STORE,
         ).catch(() => []);
         const storylineMap = await readStoreAll<{ id: string }>(
           defaultDb,
-          STORYLINE_MAP_NODES_STORE
+          STORYLINE_MAP_NODES_STORE,
         ).catch(() => []);
 
         // Load existing data from target profile to merge (not overwrite)
@@ -1254,7 +1328,7 @@ export async function migrateDefaultDbIfNeeded(
         }
 
         console.log(
-          `[Migration] Migrated ${tasks.length} tasks from default DB to profile ${targetProfileId}`
+          `[Migration] Migrated ${tasks.length} tasks from default DB to profile ${targetProfileId}`,
         );
 
         try {

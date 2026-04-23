@@ -1,13 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { Mock } from 'vitest';
-import { 
-  fetchCombinedData, 
-  loadCombinedCache, 
-  saveCombinedCache, 
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type { Mock } from "vitest";
+import {
+  fetchCombinedData,
+  loadCombinedCache,
+  saveCombinedCache,
   isCombinedCacheFresh,
+  buildCombinedCacheKey,
   API_CACHE_KEY,
-  API_CACHE_TTL_MS 
-} from '../tarkovApi';
+  API_CACHE_TTL_MS,
+} from "../tarkovApi";
 
 interface MockResponse<T> {
   ok: boolean;
@@ -27,7 +28,7 @@ function mockFetchOnce<T>(data: T, ok = true, status = 200) {
     .mockResolvedValue(mockResponse);
 }
 
-describe('fetchCombinedData', () => {
+describe("fetchCombinedData", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
@@ -38,20 +39,20 @@ describe('fetchCombinedData', () => {
     localStorage.clear();
   });
 
-  it('returns tasks, collectorItems, achievements, and hideoutStations on success', async () => {
+  it("returns tasks, collectorItems, achievements, and hideoutStations on success", async () => {
     const apiResponse = {
       data: {
         tasks: [
           {
-            id: 't1',
+            id: "t1",
             minPlayerLevel: 1,
             kappaRequired: false,
             lightkeeperRequired: false,
-            map: { name: 'Customs' },
+            map: { name: "Customs" },
             taskRequirements: [],
-            trader: { name: 'Prapor', imageLink: 'img' },
-            wikiLink: 'link',
-            name: 'Task 1',
+            trader: { name: "Prapor", imageLink: "img" },
+            wikiLink: "link",
+            name: "Task 1",
             startRewards: { items: [] },
             finishRewards: { items: [] },
             objectives: [],
@@ -60,36 +61,34 @@ describe('fetchCombinedData', () => {
         task: {
           objectives: [
             {
-              items: [
-                { id: 'i1', name: 'Old firesteel', iconLink: 'icon' },
-              ],
+              items: [{ id: "i1", name: "Old firesteel", iconLink: "icon" }],
             },
           ],
         },
         achievements: [
           {
-            id: 'a1',
-            imageLink: 'img',
-            name: 'Ach 1',
-            description: 'desc',
+            id: "a1",
+            imageLink: "img",
+            name: "Ach 1",
+            description: "desc",
             hidden: false,
             playersCompletedPercent: 1,
             adjustedPlayersCompletedPercent: 1,
-            side: 'All',
-            rarity: 'Common',
+            side: "All",
+            rarity: "Common",
           },
         ],
         hideoutStations: [
           {
-            name: 'Workbench',
-            imageLink: 'img',
+            name: "Workbench",
+            imageLink: "img",
             levels: [
               {
                 level: 1,
                 skillRequirements: [],
                 stationLevelRequirements: [],
                 itemRequirements: [
-                  { count: 1, item: { name: 'Screwdriver', iconLink: 'icon' } },
+                  { count: 1, item: { name: "Screwdriver", iconLink: "icon" } },
                 ],
               },
             ],
@@ -102,67 +101,97 @@ describe('fetchCombinedData', () => {
     const result = await fetchCombinedData();
 
     expect(result.tasks.data.tasks.length).toBe(1);
-    expect(result.collectorItems.data.task.objectives[0].items[0].id).toBe('i1');
-    expect(result.achievements.data.achievements[0].id).toBe('a1');
-    expect(result.hideoutStations.data.hideoutStations[0].name).toBe('Workbench');
+    expect(result.collectorItems.data.task.objectives[0].items[0].id).toBe(
+      "i1",
+    );
+    expect(result.achievements.data.achievements[0].id).toBe("a1");
+    expect(result.hideoutStations.data.hideoutStations[0].name).toBe(
+      "Workbench",
+    );
 
     // Ensure correct fetch calls
     const fetchSpy = globalThis.fetch as unknown as Mock;
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
     const graphCall = calls.find((call) =>
-      String(call[0]).includes('https://api.tarkov.dev/graphql')
+      String(call[0]).includes("https://api.tarkov.dev/graphql"),
     );
     const overlayCall = calls.find((call) =>
-      String(call[0]).includes('tarkov-data-overlay')
+      String(call[0]).includes("tarkov-data-overlay"),
     );
     expect(graphCall).toBeDefined();
     expect(overlayCall).toBeDefined();
     const init = (graphCall?.[1] ?? {}) as { body?: string };
-    const body = JSON.parse(init.body ?? '{}') as { query?: string };
-    expect(body.query).toContain('tasks');
-    expect(body.query).toContain('achievements');
-    expect(body.query).toContain('hideoutStations');
-    expect(body.query).toContain('experience');
-    expect(body.query).toContain('traderStanding');
-    expect(body.query).toContain('skillLevelReward');
-    expect(body.query).toContain('traderUnlock');
-    expect(body.query).toContain('craftUnlock');
-    expect(body.query).toContain('customization');
-    expect(body.query).toContain('achievement');
+    const body = JSON.parse(init.body ?? "{}") as { query?: string };
+    expect(body.query).toContain("tasks");
+    expect(body.query).toContain("gameMode: regular");
+    expect(body.query).toContain("achievements");
+    expect(body.query).toContain("hideoutStations");
+    expect(body.query).toContain("experience");
+    expect(body.query).toContain("traderStanding");
+    expect(body.query).toContain("skillLevelReward");
+    expect(body.query).toContain("traderUnlock");
+    expect(body.query).toContain("craftUnlock");
+    expect(body.query).toContain("customization");
+    expect(body.query).toContain("achievement");
   });
 
-  it('throws on HTTP error', async () => {
+  it("throws on HTTP error", async () => {
     (globalThis as unknown as { fetch: Mock }).fetch = vi
       .fn()
       .mockResolvedValue({ ok: false, status: 500 });
-    await expect(fetchCombinedData()).rejects.toThrow('HTTP error');
+    await expect(fetchCombinedData()).rejects.toThrow("HTTP error");
   });
 
-  it('throws on GraphQL errors array', async () => {
-    const apiResponse: { data: object; errors: { message: string }[] } = { data: {}, errors: [{ message: 'boom' }] };
+  it("throws on GraphQL errors array", async () => {
+    const apiResponse: { data: object; errors: { message: string }[] } = {
+      data: {},
+      errors: [{ message: "boom" }],
+    };
     mockFetchOnce(apiResponse);
     await expect(fetchCombinedData()).rejects.toThrow(/GraphQL error: boom/);
   });
 
-  it('uses partial task data when GraphQL returns recoverable field errors', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it("requests PvE tasks when pve mode is selected", async () => {
+    mockFetchOnce({
+      data: {
+        tasks: [],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    });
+
+    await fetchCombinedData("pve");
+
+    const fetchSpy = globalThis.fetch as unknown as Mock;
+    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
+    const graphCall = calls.find((call) =>
+      String(call[0]).includes("https://api.tarkov.dev/graphql"),
+    );
+    const init = (graphCall?.[1] ?? {}) as { body?: string };
+    const body = JSON.parse(init.body ?? "{}") as { query?: string };
+    expect(body.query).toContain("gameMode: pve");
+  });
+
+  it("uses partial task data when GraphQL returns recoverable field errors", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const apiResponse = {
       data: {
         tasks: [
           {
-            id: 't-partial',
+            id: "t-partial",
             minPlayerLevel: 1,
             kappaRequired: false,
             lightkeeperRequired: false,
             map: null,
             taskRequirements: [],
-            trader: { name: 'Prapor', imageLink: 'img' },
-            wikiLink: 'link',
-            name: 'Partial Task',
+            trader: { name: "Prapor", imageLink: "img" },
+            wikiLink: "link",
+            name: "Partial Task",
             startRewards: { items: [] },
             finishRewards: {
-              customization: [{ id: 'c1', name: null, imageLink: 'img' }],
+              customization: [{ id: "c1", name: null, imageLink: "img" }],
               items: [],
             },
             objectives: [],
@@ -172,35 +201,37 @@ describe('fetchCombinedData', () => {
         hideoutStations: [],
       },
       errors: [
-        { message: 'Missing translation for key 707265736574000000000254 Name' },
+        {
+          message: "Missing translation for key 707265736574000000000254 Name",
+        },
       ],
     };
 
     mockFetchOnce(apiResponse);
     const result = await fetchCombinedData();
 
-    expect(result.tasks.data.tasks[0].id).toBe('t-partial');
+    expect(result.tasks.data.tasks[0].id).toBe("t-partial");
     expect(result.collectorItems.data.task.objectives).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
-      '[Tarkov API] GraphQL returned partial data; continuing with available task payload.',
+      "[Tarkov API] GraphQL returned partial data; continuing with available task payload.",
       apiResponse.errors,
     );
   });
 
-  it('handles missing optional fields with defaults', async () => {
+  it("handles missing optional fields with defaults", async () => {
     const partialResponse = {
       data: {
         tasks: [
           {
-            id: 't2',
+            id: "t2",
             minPlayerLevel: 1,
             kappaRequired: false,
             lightkeeperRequired: false,
-            map: { name: 'Woods' },
+            map: { name: "Woods" },
             taskRequirements: [],
-            trader: { name: 'Prapor', imageLink: 'img' },
-            wikiLink: 'link2',
-            name: 'Task 2',
+            trader: { name: "Prapor", imageLink: "img" },
+            wikiLink: "link2",
+            name: "Task 2",
             startRewards: { items: [] },
             finishRewards: { items: [] },
             objectives: [],
@@ -224,23 +255,29 @@ describe('fetchCombinedData', () => {
     expect(result.hideoutStations.data.hideoutStations).toEqual([]);
   });
 
-  it('aggregates maps from task objectives', async () => {
+  it("aggregates maps from task objectives", async () => {
     const apiResponse = {
       data: {
         tasks: [
           {
-            id: 't1',
+            id: "t1",
             minPlayerLevel: 1,
             kappaRequired: false,
             lightkeeperRequired: false,
-            map: { name: 'Customs' },
+            map: { name: "Customs" },
             taskRequirements: [],
-            trader: { name: 'Prapor', imageLink: 'img' },
-            wikiLink: 'link',
-            name: 'Task 1',
+            trader: { name: "Prapor", imageLink: "img" },
+            wikiLink: "link",
+            name: "Task 1",
             objectives: [
-              { maps: [{ name: 'Customs' }, { name: 'Woods' }], description: 'Test' },
-              { maps: [{ name: 'Woods' }, { name: 'Factory' }], description: 'Test2' },
+              {
+                maps: [{ name: "Customs" }, { name: "Woods" }],
+                description: "Test",
+              },
+              {
+                maps: [{ name: "Woods" }, { name: "Factory" }],
+                description: "Test2",
+              },
             ],
           },
         ],
@@ -255,28 +292,28 @@ describe('fetchCombinedData', () => {
 
     const task = result.tasks.data.tasks[0];
     expect(task.maps.length).toBe(3);
-    expect(task.maps.map((m: { name: string }) => m.name)).toContain('Customs');
-    expect(task.maps.map((m: { name: string }) => m.name)).toContain('Woods');
-    expect(task.maps.map((m: { name: string }) => m.name)).toContain('Factory');
+    expect(task.maps.map((m: { name: string }) => m.name)).toContain("Customs");
+    expect(task.maps.map((m: { name: string }) => m.name)).toContain("Woods");
+    expect(task.maps.map((m: { name: string }) => m.name)).toContain("Factory");
   });
 
-  it('preserves count for shoot objectives from the GraphQL response', async () => {
+  it("preserves count for shoot objectives from the GraphQL response", async () => {
     const apiResponse = {
       data: {
         tasks: [
           {
-            id: 'intimidator',
+            id: "intimidator",
             minPlayerLevel: 45,
             kappaRequired: true,
             lightkeeperRequired: false,
             map: null,
             taskRequirements: [],
-            trader: { name: 'Prapor', imageLink: 'img' },
-            wikiLink: 'link',
-            name: 'Intimidator',
+            trader: { name: "Prapor", imageLink: "img" },
+            wikiLink: "link",
+            name: "Intimidator",
             objectives: [
               {
-                description: 'Eliminate Scavs with headshots',
+                description: "Eliminate Scavs with headshots",
                 count: 40,
               },
             ],
@@ -298,27 +335,27 @@ describe('fetchCombinedData', () => {
     const fetchSpy = globalThis.fetch as unknown as Mock;
     const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
     const graphCall = calls.find((call) =>
-      String(call[0]).includes('https://api.tarkov.dev/graphql')
+      String(call[0]).includes("https://api.tarkov.dev/graphql"),
     );
     const init = (graphCall?.[1] ?? {}) as { body?: string };
-    const body = JSON.parse(init.body ?? '{}') as { query?: string };
-    expect(body.query).toContain('... on TaskObjectiveShoot { count }');
+    const body = JSON.parse(init.body ?? "{}") as { query?: string };
+    expect(body.query).toContain("... on TaskObjectiveShoot { count }");
   });
 
-  it('applies task wiki link overrides from the fetched overlay', async () => {
+  it("applies task wiki link overrides from the fetched overlay", async () => {
     const apiResponse = {
       data: {
         tasks: [
           {
-            id: '6663148ca9290f9e0806cca1',
+            id: "6663148ca9290f9e0806cca1",
             minPlayerLevel: 1,
             kappaRequired: false,
             lightkeeperRequired: false,
             map: null,
             taskRequirements: [],
-            trader: { name: 'Fence', imageLink: 'img' },
-            wikiLink: 'https://escapefromtarkov.fandom.com/wiki/Immunity',
-            name: 'Immunity',
+            trader: { name: "Fence", imageLink: "img" },
+            wikiLink: "https://escapefromtarkov.fandom.com/wiki/Immunity",
+            name: "Immunity",
             objectives: [],
           },
         ],
@@ -330,13 +367,13 @@ describe('fetchCombinedData', () => {
 
     const overlayResponse = {
       tasks: {
-        '6663148ca9290f9e0806cca1': {
-          wikiLink: 'https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)',
+        "6663148ca9290f9e0806cca1": {
+          wikiLink: "https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)",
         },
       },
       $meta: {
-        version: '1.19',
-        generated: '2026-03-21T21:38:28.266Z',
+        version: "1.19",
+        generated: "2026-03-21T21:38:28.266Z",
       },
     };
 
@@ -356,12 +393,12 @@ describe('fetchCombinedData', () => {
     const result = await fetchCombinedData();
 
     expect(result.tasks.data.tasks[0].wikiLink).toBe(
-      'https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)'
+      "https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)",
     );
   });
 });
 
-describe('Cache functionality', () => {
+describe("Cache functionality", () => {
   beforeEach(() => {
     localStorage.clear();
   });
@@ -370,34 +407,90 @@ describe('Cache functionality', () => {
     localStorage.clear();
   });
 
-  it('should save and load cache', () => {
+  it("should save and load cache by game mode", async () => {
     const payload = {
       tasks: { data: { tasks: [] } },
-      collectorItems: { data: { task: { objectives: [] } } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
       achievements: { data: { achievements: [] } },
       hideoutStations: { data: { hideoutStations: [] } },
     };
 
-    saveCombinedCache(payload);
-    const loaded = loadCombinedCache();
+    await saveCombinedCache(
+      payload as Parameters<typeof saveCombinedCache>[0],
+      "regular",
+    );
+    const loaded = loadCombinedCache("regular");
 
     expect(loaded).toBeTruthy();
     expect(loaded?.tasks.data.tasks).toEqual([]);
+    expect(localStorage.getItem(buildCombinedCacheKey("regular"))).toBeTruthy();
   });
 
-  it('should detect fresh cache', () => {
-    const payload = {
-      tasks: { data: { tasks: [] } },
+  it("should isolate cache by game mode", async () => {
+    const regularPayload = {
+      tasks: { data: { tasks: [{ id: "regular-task" }] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+    const pvePayload = {
+      tasks: { data: { tasks: [{ id: "pve-task" }] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+
+    await saveCombinedCache(
+      regularPayload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "regular",
+    );
+    await saveCombinedCache(
+      pvePayload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "pve",
+    );
+
+    expect(loadCombinedCache("regular")?.tasks.data.tasks[0].id).toBe(
+      "regular-task",
+    );
+    expect(loadCombinedCache("pve")?.tasks.data.tasks[0].id).toBe("pve-task");
+  });
+
+  it("should use old cache as regular-mode fallback only", () => {
+    const legacyPayload = {
+      tasks: { data: { tasks: [{ id: "legacy-regular-task" }] } },
       collectorItems: { data: { task: { objectives: [] } } },
       achievements: { data: { achievements: [] } },
       hideoutStations: { data: { hideoutStations: [] } },
     };
 
-    saveCombinedCache(payload);
+    localStorage.setItem(
+      API_CACHE_KEY,
+      JSON.stringify({ updatedAt: Date.now(), payload: legacyPayload }),
+    );
+
+    expect(loadCombinedCache("regular")?.tasks.data.tasks[0].id).toBe(
+      "legacy-regular-task",
+    );
+    expect(isCombinedCacheFresh("regular")).toBe(true);
+    expect(loadCombinedCache("pve")).toBeNull();
+    expect(isCombinedCacheFresh("pve")).toBe(false);
+  });
+
+  it("should detect fresh cache", async () => {
+    const payload = {
+      tasks: { data: { tasks: [] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+
+    await saveCombinedCache(
+      payload as unknown as Parameters<typeof saveCombinedCache>[0],
+    );
     expect(isCombinedCacheFresh()).toBe(true);
   });
 
-  it('should detect stale cache', () => {
+  it("should detect stale cache", () => {
     const payload = {
       tasks: { data: { tasks: [] } },
       collectorItems: { data: { task: { objectives: [] } } },
@@ -415,13 +508,13 @@ describe('Cache functionality', () => {
     expect(isCombinedCacheFresh()).toBe(false);
   });
 
-  it('should return null for missing cache', () => {
+  it("should return null for missing cache", () => {
     const loaded = loadCombinedCache();
     expect(loaded).toBeNull();
   });
 
-  it('should handle corrupted cache gracefully', () => {
-    localStorage.setItem(API_CACHE_KEY, 'invalid json{');
+  it("should handle corrupted cache gracefully", () => {
+    localStorage.setItem(API_CACHE_KEY, "invalid json{");
     expect(loadCombinedCache()).toBeNull();
     expect(isCombinedCacheFresh()).toBe(false);
   });
