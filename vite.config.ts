@@ -3,10 +3,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
+const plugins = [react()];
+
+if (process.env.SENTRY_AUTH_TOKEN) {
+  plugins.push(
     sentryVitePlugin({
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
@@ -14,8 +14,16 @@ export default defineConfig({
       reactComponentAnnotation: {
         enabled: true,
       },
+      sourcemaps: {
+        filesToDeleteAfterUpload: ["dist/**/*.map"],
+      },
     }),
-  ],
+  );
+}
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins,
   server: {
     headers: {
       "Document-Policy": "js-profiling",

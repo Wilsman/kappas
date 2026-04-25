@@ -8,6 +8,7 @@ import {
   buildCombinedCacheKey,
   API_CACHE_KEY,
   API_CACHE_TTL_MS,
+  SHARED_CACHE_KEY,
 } from "../tarkovApi";
 
 interface MockResponse<T> {
@@ -508,6 +509,31 @@ describe("Cache functionality", () => {
     expect(isCombinedCacheFresh()).toBe(false);
   });
 
+  it("should detect stale per-mode cache entries", () => {
+    const sharedCache = {
+      updatedAt: Date.now() - API_CACHE_TTL_MS - 1000,
+      collectorItems: { data: { task: { objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+    const taskCache = {
+      updatedAt: Date.now() - API_CACHE_TTL_MS - 1000,
+      payload: { tasks: { data: { tasks: [] } } },
+    };
+
+    localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify(sharedCache));
+    localStorage.setItem(
+      buildCombinedCacheKey("regular"),
+      JSON.stringify(taskCache),
+    );
+    localStorage.setItem(buildCombinedCacheKey("pve"), JSON.stringify(taskCache));
+
+    expect(isCombinedCacheFresh("regular")).toBe(false);
+    expect(isCombinedCacheFresh("pve")).toBe(false);
+    expect(loadCombinedCache("regular")).toBeTruthy();
+    expect(loadCombinedCache("pve")).toBeTruthy();
+  });
+
   it("should return null for missing cache", () => {
     const loaded = loadCombinedCache();
     expect(loaded).toBeNull();
@@ -515,7 +541,23 @@ describe("Cache functionality", () => {
 
   it("should handle corrupted cache gracefully", () => {
     localStorage.setItem(API_CACHE_KEY, "invalid json{");
+    localStorage.setItem(buildCombinedCacheKey("regular"), "invalid json{");
+    localStorage.setItem(buildCombinedCacheKey("pve"), "invalid json{");
     expect(loadCombinedCache()).toBeNull();
     expect(isCombinedCacheFresh()).toBe(false);
+    expect(loadCombinedCache("pve")).toBeNull();
+    expect(isCombinedCacheFresh("pve")).toBe(false);
+  });
+
+  it("should not return task-only per-mode cache as a combined payload", () => {
+    localStorage.setItem(
+      buildCombinedCacheKey("regular"),
+      JSON.stringify({
+        updatedAt: Date.now(),
+        payload: { tasks: { data: { tasks: [{ id: "task-only" }] } } },
+      }),
+    );
+
+    expect(loadCombinedCache("regular")).toBeNull();
   });
 });

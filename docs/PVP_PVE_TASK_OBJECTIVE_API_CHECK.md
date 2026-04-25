@@ -2,11 +2,55 @@
 
 Checked against `https://api.tarkov.dev/graphql` on 2026-04-23.
 
+Freshness note: this was a one-off live snapshot against the same endpoint used
+by `src/services/tarkovApi.ts` and the service tests. Recheck this document
+after Tarkov wipes, major API/schema changes, or mode-specific objective
+regressions. The LanguageTool "loose punctuation" hint on the Markdown lists is
+a false positive.
+
 Query shape:
 
 ```graphql
-tasks(lang: en, gameMode: regular) { ... }
-tasks(lang: en, gameMode: pve) { ... }
+query CheckTaskObjectives {
+  regular: tasks(lang: en, gameMode: regular) {
+    id
+    name
+    objectives {
+      description
+      maps { name }
+      ... on TaskObjectiveItem {
+        items { id name }
+        count
+        foundInRaid
+      }
+      ... on TaskObjectiveShoot {
+        count
+      }
+      ... on TaskObjectivePlayerLevel {
+        playerLevel
+      }
+    }
+  }
+  pve: tasks(lang: en, gameMode: pve) {
+    id
+    name
+    objectives {
+      description
+      maps { name }
+      ... on TaskObjectiveItem {
+        items { id name }
+        count
+        foundInRaid
+      }
+      ... on TaskObjectiveShoot {
+        count
+      }
+      ... on TaskObjectivePlayerLevel {
+        playerLevel
+      }
+    }
+  }
+}
 ```
 
 Compared objective fields used by the app:
@@ -16,6 +60,12 @@ Compared objective fields used by the app:
 - `TaskObjectiveItem`: `items`, `count`, `foundInRaid`
 - `TaskObjectiveShoot`: `count`
 - `TaskObjectivePlayerLevel`: `playerLevel`
+
+Implementation references:
+
+- `src/services/tarkovApi.ts` owns the API query and cache normalization.
+- `src/utils/taskProgressView.ts` maps equivalent task/objective progress across
+  mode variants.
 
 Summary:
 

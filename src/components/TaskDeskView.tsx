@@ -74,10 +74,8 @@ import {
   buildLogicalTaskKey,
   getLogicalCompletedPrerequisiteCount,
   isLogicalTaskCompleted as getIsLogicalTaskCompleted,
+  normalizeModeVariantTaskName,
 } from "@/utils/taskVariants";
-
-const normalizeModeVariantTaskName = (name: string) =>
-  name.replace(/\s+\[(?:PVP|PVE) ZONE\]$/i, "").trim().toLowerCase();
 
 interface TaskDeskViewProps {
   tasks: Task[];
@@ -336,6 +334,8 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   // Map of taskId -> DOM element to scroll into view when selected
   const itemRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   const selectedTaskNameRef = useRef<string | null>(null);
+  const selectedTaskLogicalKeyRef = useRef<string | null>(null);
+  const prevSearchTermRef = useRef(searchTerm);
 
   // When selectedTaskId changes, scroll that task into view
   useEffect(() => {
@@ -585,7 +585,15 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   const areAllExpanded = finalExpandedGroups.length === allGroupNames.length;
 
   useEffect(() => {
-    if (!searchTerm.trim() || allGroupNames.length === 0) return;
+    const previousSearchTerm = prevSearchTermRef.current;
+    prevSearchTermRef.current = searchTerm;
+    if (
+      previousSearchTerm.trim() ||
+      !searchTerm.trim() ||
+      allGroupNames.length === 0
+    ) {
+      return;
+    }
     setExpandedGroups((prev) => {
       const next = new Set(prev);
       allGroupNames.forEach((groupName) => next.add(groupName));
@@ -599,19 +607,28 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
     const selectedTask = tasks.find((task) => task.id === selectedTaskId);
     if (selectedTask) {
       selectedTaskNameRef.current = selectedTask.name;
+      selectedTaskLogicalKeyRef.current = buildLogicalTaskKey(selectedTask);
       return;
     }
 
     const previousName = selectedTaskNameRef.current;
-    if (!previousName) {
+    const previousLogicalKey = selectedTaskLogicalKeyRef.current;
+    if (!previousName && !previousLogicalKey) {
       setSelectedTaskId(null);
       return;
     }
 
-    const normalizedPreviousName = normalizeModeVariantTaskName(previousName);
-    const nextTask = tasks.find(
-      (task) => normalizeModeVariantTaskName(task.name) === normalizedPreviousName,
-    );
+    const nextTask =
+      (previousLogicalKey
+        ? tasks.find((task) => buildLogicalTaskKey(task) === previousLogicalKey)
+        : undefined) ??
+      (previousName
+        ? tasks.find(
+            (task) =>
+              normalizeModeVariantTaskName(task.name) ===
+              normalizeModeVariantTaskName(previousName),
+          )
+        : undefined);
 
     if (!nextTask) {
       setSelectedTaskId(null);
@@ -619,6 +636,7 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
     }
 
     selectedTaskNameRef.current = nextTask.name;
+    selectedTaskLogicalKeyRef.current = buildLogicalTaskKey(nextTask);
     setSelectedTaskId(nextTask.id);
     setExpandedGroups((prev) => {
       const groupNames =

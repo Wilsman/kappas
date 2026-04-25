@@ -729,49 +729,6 @@ export class TaskStorage {
       updatedAt: Date.now(),
     });
   }
-
-  async loadTaskCache(gameMode: GameMode): Promise<unknown[] | null> {
-    if (!this.db) await this.init();
-
-    return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction([API_CACHE_STORE], "readonly");
-      const store = tx.objectStore(API_CACHE_STORE);
-      const req = store.get(`tasks::${gameMode}`);
-
-      req.onsuccess = () => {
-        if (!req.result) {
-          resolve(null);
-          return;
-        }
-        resolve(req.result.data as unknown[]);
-      };
-
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async isTaskCacheFresh(
-    gameMode: GameMode,
-    ttlMs: number = 1000 * 60 * 30,
-  ): Promise<boolean> {
-    if (!this.db) await this.init();
-
-    return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction([API_CACHE_STORE], "readonly");
-      const store = tx.objectStore(API_CACHE_STORE);
-      const req = store.get(`tasks::${gameMode}`);
-
-      req.onsuccess = () => {
-        if (!req.result?.updatedAt) {
-          resolve(false);
-          return;
-        }
-        resolve(Date.now() - req.result.updatedAt < ttlMs);
-      };
-
-      req.onerror = () => reject(req.error);
-    });
-  }
 }
 
 // Export data interface for backup/restore (single profile)

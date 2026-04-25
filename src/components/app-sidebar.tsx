@@ -360,7 +360,8 @@ export function AppSidebar({
                           onClick={() =>
                             onUpdateGameMode(activeProfile.id, gameMode)
                           }
-                          disabled={isGameModeLoading}
+                          disabled={isGameModeLoading || isSwitchingMode}
+                          aria-pressed={activeGameMode === gameMode}
                           className={`relative flex items-center justify-center px-2 py-2 text-xs font-medium rounded-md border transition-all disabled:cursor-wait disabled:opacity-70 ${
                             activeGameMode === gameMode
                               ? "border-emerald-500/60 text-emerald-400"
@@ -375,6 +376,8 @@ export function AppSidebar({
                                 xmlns="http://www.w3.org/2000/svg"
                                 fill="none"
                                 viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                focusable="false"
                               >
                                 <circle
                                   className="opacity-25"

@@ -62,6 +62,7 @@ import {
 } from "@/utils/taskObjectives";
 import {
   buildLogicalTaskIdGroups,
+  createObjectiveEquivalentsMap,
   expandCompletedTaskObjectives,
   expandCompletedTasks,
   getEquivalentLegacyTaskObjectiveKeys,
@@ -457,6 +458,15 @@ function App() {
     () => expandCompletedTasks(completedTasks, logicalTaskIdsByTaskId),
     [completedTasks, logicalTaskIdsByTaskId],
   );
+  const objectiveEquivalentsByKey = useMemo(
+    () =>
+      createObjectiveEquivalentsMap(
+        modeTasksByMode,
+        knownTasksById,
+        logicalTaskIdsByTaskId,
+      ),
+    [knownTasksById, logicalTaskIdsByTaskId, modeTasksByMode],
+  );
   const visibleCompletedTaskObjectives = useMemo(
     () =>
       expandCompletedTaskObjectives(
@@ -464,12 +474,14 @@ function App() {
         modeTasksByMode,
         knownTasksById,
         logicalTaskIdsByTaskId,
+        objectiveEquivalentsByKey,
       ),
     [
       completedTaskObjectives,
       knownTasksById,
       logicalTaskIdsByTaskId,
       modeTasksByMode,
+      objectiveEquivalentsByKey,
     ],
   );
   const [hideoutItemQuantities, setHideoutItemQuantities] = useState<
@@ -482,6 +494,7 @@ function App() {
   const [isGameModeLoading, setIsGameModeLoading] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const hasInitializedRef = useRef(false);
+  const lastLoadedGameModeRef = useRef<GameMode | null>(null);
   const gameModeRequestRef = useRef(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
@@ -635,6 +648,7 @@ function App() {
       setAchievements(payload.achievements.data.achievements);
       setHideoutStations(payload.hideoutStations.data.hideoutStations);
       if (payload.overlay) setOverlay(payload.overlay);
+      lastLoadedGameModeRef.current = gameMode;
       setModeTasksByMode((prev) => ({
         ...prev,
         [gameMode]: payload.tasks.data.tasks,
@@ -723,10 +737,6 @@ function App() {
             description:
               "Falling back to PvP data for now. Please try PvE again later.",
           });
-          if (activeProfileId) {
-            updateProfileGameMode(activeProfileId, DEFAULT_GAME_MODE);
-            setProfiles(getProfiles());
-          }
           setActiveProfileGameMode(DEFAULT_GAME_MODE);
         } else if (!cached) {
           reportRefreshError("background-refresh", err, false);
@@ -738,7 +748,7 @@ function App() {
         }
       }
     },
-    [activeProfileId, applyCombinedData, reportRefreshError],
+    [applyCombinedData, reportRefreshError],
   );
 
   // Working on items (currently working towards)
@@ -1668,6 +1678,7 @@ function App() {
 
   useEffect(() => {
     if (!hasInitializedRef.current || !activeProfileId || isLoading) return;
+    if (lastLoadedGameModeRef.current === activeProfileGameMode) return;
     void loadGameModeData(activeProfileGameMode);
   }, [activeProfileGameMode, activeProfileId, isLoading, loadGameModeData]);
 
@@ -2102,6 +2113,7 @@ function App() {
         modeTasksByMode,
         knownTasksById,
         logicalTaskIdsByTaskId,
+        objectiveEquivalentsByKey,
       );
       const isAllObjectivesCompleted = areAllTaskObjectivesCompleted(
         taskId,
@@ -2134,6 +2146,7 @@ function App() {
       knownTasksById,
       logicalTaskIdsByTaskId,
       modeTasksByMode,
+      objectiveEquivalentsByKey,
       syncTaskCompletionFromObjectives,
       visibleCompletedTaskObjectives,
     ],

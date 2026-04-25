@@ -4,17 +4,16 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { HelmetProvider } from 'react-helmet-async';
 import * as Sentry from '@sentry/react';
+import { RootErrorFallback } from './components/RootErrorFallback.tsx';
 import App from './App.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!, {
-  onUncaughtError: Sentry.reactErrorHandler(),
-  onCaughtError: Sentry.reactErrorHandler(),
   onRecoverableError: Sentry.reactErrorHandler(),
 }).render(
   <StrictMode>
     <HelmetProvider>
-      <Sentry.ErrorBoundary fallback={<p>Something went wrong</p>}>
+      <Sentry.ErrorBoundary fallback={<RootErrorFallback />}>
         <App />
       </Sentry.ErrorBoundary>
     </HelmetProvider>

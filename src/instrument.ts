@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react";
 
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 const sentryEnvironment =
   import.meta.env.VITE_SENTRY_ENVIRONMENT ?? import.meta.env.MODE;
 
@@ -10,18 +11,20 @@ const tracesSampleRate =
       ? 0.2
       : 0.1;
 
-Sentry.init({
-  dsn: "https://5bf241dff082ead8c4ca29b79789154c@o4509849192824832.ingest.de.sentry.io/4511282185044048",
-  environment: sentryEnvironment,
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: sentryEnvironment,
 
-  sendDefaultPii: false,
+    sendDefaultPii: false,
 
-  integrations: [Sentry.browserTracingIntegration()],
+    integrations: [Sentry.browserTracingIntegration()],
 
-  // Tracing
-  tracesSampleRate,
-  tracePropagationTargets: ["localhost"],
+    // Tracing
+    tracesSampleRate,
+    tracePropagationTargets: ["localhost", "api.tarkov.dev"],
 
-  // Logs
-  enableLogs: true,
-});
+    // Logs
+    enableLogs: true,
+  });
+}

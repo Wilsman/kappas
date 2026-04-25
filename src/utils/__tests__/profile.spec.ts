@@ -3,10 +3,9 @@ import {
   createProfile,
   ensureProfiles,
   getProfiles,
+  PROFILES_KEY,
   updateProfileGameMode,
 } from "../profile";
-
-const PROFILES_KEY = "taskTracker_profiles_v1";
 
 describe("profile game mode metadata", () => {
   beforeEach(() => {
@@ -22,6 +21,27 @@ describe("profile game mode metadata", () => {
           name: "Default",
           faction: "USEC",
           edition: "standard",
+          createdAt: 1,
+        },
+      ]),
+    );
+
+    const ensured = ensureProfiles();
+
+    expect(ensured.profiles[0].gameMode).toBe("regular");
+    expect(getProfiles()[0].gameMode).toBe("regular");
+  });
+
+  it("normalizes unexpected profile game modes to regular", () => {
+    localStorage.setItem(
+      PROFILES_KEY,
+      JSON.stringify([
+        {
+          id: "profile-1",
+          name: "Default",
+          faction: "USEC",
+          edition: "standard",
+          gameMode: "PVP",
           createdAt: 1,
         },
       ]),

@@ -24,8 +24,9 @@ export const OVERLAY_URL =
   "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
 const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
 
-// Track localStorage quota state to avoid repeated failed attempts
-let localStorageQuotaExceeded = false;
+// Cool down localStorage writes after quota failures without disabling them forever.
+const LOCAL_STORAGE_QUOTA_COOLDOWN_MS = 60_000;
+let localStorageQuotaExceededUntil = 0;
 
 type TaskOverlayTarget = Task | CollectorItemsData["data"]["task"];
 type TaskRequirement = Task["taskRequirements"][number];
@@ -539,6 +540,21 @@ interface SharedCacheData {
   hideoutStations: { data: HideoutStationsData };
 }
 
+function canAttemptLocalStorageWrite() {
+  return Date.now() >= localStorageQuotaExceededUntil;
+}
+
+function noteLocalStorageQuotaError(err: unknown) {
+  if (err instanceof Error && err.name === "QuotaExceededError") {
+    localStorageQuotaExceededUntil =
+      Date.now() + LOCAL_STORAGE_QUOTA_COOLDOWN_MS;
+  }
+}
+
+function noteLocalStorageWriteSuccess() {
+  localStorageQuotaExceededUntil = 0;
+}
+
 export function buildCombinedCacheKey(gameMode: GameMode): string {
   return `${API_CACHE_KEY_PREFIX}::${gameMode}`;
 }
@@ -553,6 +569,17 @@ function readStoredCache(key: string): StoredCache | null {
   } catch {
     return null;
   }
+}
+
+function isCombinedCachePayload(payload: unknown): payload is CombinedCachePayload {
+  if (!payload || typeof payload !== "object") return false;
+  const candidate = payload as Partial<CombinedCachePayload>;
+  return (
+    Array.isArray(candidate.tasks?.data?.tasks) &&
+    Array.isArray(candidate.collectorItems?.data?.task?.objectives) &&
+    Array.isArray(candidate.achievements?.data?.achievements) &&
+    Array.isArray(candidate.hideoutStations?.data?.hideoutStations)
+  );
 }
 
 export function loadCombinedCache(
@@ -590,23 +617,24 @@ export function loadCombinedCache(
 
   // Fallback to legacy cache for compatibility
   const modeCache = readStoredCache(buildCombinedCacheKey(normalizedGameMode));
-  if (modeCache) return modeCache.payload;
+  if (modeCache && isCombinedCachePayload(modeCache.payload)) {
+    return modeCache.payload;
+  }
 
   if (normalizedGameMode === DEFAULT_GAME_MODE) {
-    return readStoredCache(API_CACHE_KEY)?.payload ?? null;
+    const legacyCache = readStoredCache(API_CACHE_KEY);
+    return legacyCache && isCombinedCachePayload(legacyCache.payload)
+      ? legacyCache.payload
+      : null;
   }
 
   return null;
 }
 
 export function isCombinedCacheFresh(
-  gameMode: GameMode | number = DEFAULT_GAME_MODE,
+  gameMode: GameMode = DEFAULT_GAME_MODE,
   ttlMs: number = API_CACHE_TTL_MS,
 ): boolean {
-  if (typeof gameMode === "number") {
-    ttlMs = gameMode;
-    gameMode = DEFAULT_GAME_MODE;
-  }
   const normalizedGameMode = normalizeGameMode(gameMode);
 
   // Check new split cache format
@@ -653,21 +681,21 @@ export async function saveCombinedCache(
   gameMode: GameMode = DEFAULT_GAME_MODE,
 ): Promise<void> {
   const normalizedGameMode = normalizeGameMode(gameMode);
+  const now = Date.now();
 
   // Save shared data to localStorage (smaller, shared across modes)
-  if (!localStorageQuotaExceeded) {
+  if (canAttemptLocalStorageWrite()) {
     try {
       const sharedData: SharedCacheData = {
-        updatedAt: Date.now(),
+        updatedAt: now,
         collectorItems: payload.collectorItems,
         achievements: payload.achievements,
         hideoutStations: payload.hideoutStations,
       };
       localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify(sharedData));
+      noteLocalStorageWriteSuccess();
     } catch (err) {
-      if (err instanceof Error && err.name === "QuotaExceededError") {
-        localStorageQuotaExceeded = true;
-      }
+      noteLocalStorageQuotaError(err);
       console.error(
         "[Cache] Failed to save shared cache to localStorage:",
         err,
@@ -676,20 +704,19 @@ export async function saveCombinedCache(
   }
 
   // Save task data to localStorage (mode-specific, smaller now)
-  if (!localStorageQuotaExceeded) {
+  if (canAttemptLocalStorageWrite()) {
     try {
       const taskData: TaskOnlyCache = {
-        updatedAt: Date.now(),
+        updatedAt: now,
         payload: { tasks: payload.tasks },
       };
       localStorage.setItem(
         buildCombinedCacheKey(normalizedGameMode),
         JSON.stringify(taskData),
       );
+      noteLocalStorageWriteSuccess();
     } catch (err) {
-      if (err instanceof Error && err.name === "QuotaExceededError") {
-        localStorageQuotaExceeded = true;
-      }
+      noteLocalStorageQuotaError(err);
       console.error("[Cache] Failed to save task cache to localStorage:", err);
     }
   }

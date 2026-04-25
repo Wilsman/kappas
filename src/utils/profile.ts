@@ -15,7 +15,7 @@ export type Profile = {
 };
 
 const DEFAULT_EDITION_ID = "standard";
-const PROFILES_KEY = "taskTracker_profiles_v1";
+export const PROFILES_KEY = "taskTracker_profiles_v1";
 const ACTIVE_PROFILE_KEY = "taskTracker_activeProfile_v1";
 const DELETED_PROFILES_KEY = "taskTracker_deletedProfiles_v1";
 

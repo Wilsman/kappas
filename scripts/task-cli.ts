@@ -17,6 +17,9 @@
 
 const TARKOV_API_URL = 'https://api.tarkov.dev/graphql';
 const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json';
+type GameMode = 'regular' | 'pve';
+const GAME_MODES = new Set<GameMode>(['regular', 'pve']);
+let selectedGameMode: GameMode = 'regular';
 
 // Colors for terminal output
 const colors = {
@@ -66,10 +69,10 @@ interface OverlayData {
 // ============================================================================
 
 async function fetchTarkovDevTasks(): Promise<TarkovTask[]> {
-    console.log(`${colors.cyan}⏳ Fetching tasks from Tarkov Dev API...${colors.reset}`);
+    console.log(`${colors.cyan}⏳ Fetching ${selectedGameMode} tasks from Tarkov Dev API...${colors.reset}`);
 
     const query = `{
-    tasks(lang: en, gameMode: regular) {
+    tasks(lang: en, gameMode: ${selectedGameMode}) {
       id
       name
       minPlayerLevel
@@ -376,6 +379,9 @@ ${colors.dim}Developer tool for inspecting task data from Tarkov Dev API and ove
 ${colors.bright}Usage:${colors.reset}
   npx tsx scripts/task-cli.ts [command] [options]
 
+${colors.bright}Options:${colors.reset}
+  ${colors.green}--mode <regular|pve>${colors.reset}     Select Tarkov game mode (defaults to MODE env var or regular)
+
 ${colors.bright}Commands:${colors.reset}
   ${colors.green}count${colors.reset}                  Show total number of tasks from all sources
   ${colors.green}search-id <id>${colors.reset}         Search for a task by ID (exact or partial)
@@ -387,6 +393,7 @@ ${colors.bright}Commands:${colors.reset}
 
 ${colors.bright}Examples:${colors.reset}
   npx tsx scripts/task-cli.ts count
+  npx tsx scripts/task-cli.ts count --mode pve
   npx tsx scripts/task-cli.ts search-id 5c51aac186f77432ea65c552
   npx tsx scripts/task-cli.ts search-name "friend from"
   npx tsx scripts/task-cli.ts list-all
@@ -398,7 +405,22 @@ ${colors.bright}Examples:${colors.reset}
 // ============================================================================
 
 async function main() {
-    const args = process.argv.slice(2);
+    const rawArgs = process.argv.slice(2);
+    const modeIndex = rawArgs.indexOf('--mode');
+    const modeValue = modeIndex >= 0 ? rawArgs[modeIndex + 1] : process.env.MODE;
+    const args =
+        modeIndex >= 0
+            ? rawArgs.filter((_, index) => index !== modeIndex && index !== modeIndex + 1)
+            : rawArgs;
+    if (modeIndex >= 0 && !modeValue) {
+        throw new Error('Missing value for --mode. Use "regular" or "pve".');
+    }
+    if (modeValue) {
+        if (!GAME_MODES.has(modeValue as GameMode)) {
+            throw new Error(`Invalid mode "${modeValue}". Use "regular" or "pve".`);
+        }
+        selectedGameMode = modeValue as GameMode;
+    }
     const command = args[0];
 
     try {

@@ -62,6 +62,8 @@ function getLegacyObjectiveIndex(
   taskId: string,
   legacyObjectiveKey?: string,
 ): number | null {
+  // Legacy objective keys are assumed to be `${taskId}-${index}` where index
+  // is a decimal integer. Update this parser if the key format gains segments.
   const prefix = `${taskId}-`;
   if (!legacyObjectiveKey?.startsWith(prefix)) return null;
   const parsed = Number(legacyObjectiveKey.slice(prefix.length));
@@ -104,39 +106,57 @@ export function getEquivalentLegacyTaskObjectiveKeys(
   );
 }
 
-export function expandCompletedTaskObjectives(
-  completedTaskObjectives: Set<string>,
+export function createObjectiveEquivalentsMap(
   tasksByMode: TasksByMode,
   tasksById: Map<string, Task>,
   logicalTaskIdsByTaskId: Map<string, Set<string>>,
-): Set<string> {
-  const expanded = new Set(completedTaskObjectives);
+): Map<string, string[]> {
+  const equivalentsByKey = new Map<string, string[]>();
 
   Object.values(tasksByMode).forEach((tasks) => {
     tasks?.forEach((task) => {
       buildTaskObjectiveKeys(task).forEach((objectiveKey, index) => {
         const legacyKey = buildLegacyTaskObjectiveKey(task.id, index);
-        const equivalentObjectiveKeys = getEquivalentTaskObjectiveKeys(
-          task.id,
-          objectiveKey,
-          tasksById,
-          logicalTaskIdsByTaskId,
-        );
-        const equivalentLegacyKeys = getEquivalentLegacyTaskObjectiveKeys(
-          task.id,
-          legacyKey,
-          logicalTaskIdsByTaskId,
-        );
         const equivalentKeys = [
-          ...equivalentObjectiveKeys,
-          ...equivalentLegacyKeys,
+          ...getEquivalentTaskObjectiveKeys(
+            task.id,
+            objectiveKey,
+            tasksById,
+            logicalTaskIdsByTaskId,
+          ),
+          ...getEquivalentLegacyTaskObjectiveKeys(
+            task.id,
+            legacyKey,
+            logicalTaskIdsByTaskId,
+          ),
         ];
 
-        if (equivalentKeys.some((key) => completedTaskObjectives.has(key))) {
-          equivalentKeys.forEach((key) => expanded.add(key));
-        }
+        equivalentKeys.forEach((key) => {
+          equivalentsByKey.set(key, equivalentKeys);
+        });
       });
     });
+  });
+
+  return equivalentsByKey;
+}
+
+export function expandCompletedTaskObjectives(
+  completedTaskObjectives: Set<string>,
+  tasksByMode: TasksByMode,
+  tasksById: Map<string, Task>,
+  logicalTaskIdsByTaskId: Map<string, Set<string>>,
+  objectiveEquivalentsByKey: Map<string, string[]> = createObjectiveEquivalentsMap(
+    tasksByMode,
+    tasksById,
+    logicalTaskIdsByTaskId,
+  ),
+): Set<string> {
+  const expanded = new Set(completedTaskObjectives);
+
+  completedTaskObjectives.forEach((key) => {
+    const equivalentKeys = objectiveEquivalentsByKey.get(key);
+    equivalentKeys?.forEach((equivalentKey) => expanded.add(equivalentKey));
   });
 
   return expanded;
