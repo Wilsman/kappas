@@ -2917,7 +2917,7 @@ function App() {
                         <CheckListView
                           key={`${activeProfileId}:${
                             activeProfileFaction ?? "none"
-                          }:${activeProfileGameMode}`}
+                          }`}
                           tasks={tasksWithEvents}
                           achievements={achievements}
                           completedTasks={visibleCompletedTasks}
@@ -2946,7 +2946,7 @@ function App() {
                         <TaskDeskView
                           key={`${activeProfileId}:${
                             activeProfileFaction ?? "none"
-                          }:${activeProfileGameMode}:desk`}
+                          }:desk`}
                           tasks={tasksWithEvents}
                           achievements={achievements}
                           completedTasks={visibleCompletedTasks}

@@ -1,10 +1,26 @@
 import path from "path";
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    sentryVitePlugin({
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      reactComponentAnnotation: {
+        enabled: true,
+      },
+    }),
+  ],
+  server: {
+    headers: {
+      "Document-Policy": "js-profiling",
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -14,6 +30,7 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   build: {
+    sourcemap: "hidden",
     // Raise the warning threshold to avoid noisy large-chunk warnings.
     // This does not change runtime behavior; it only silences the warning.
     chunkSizeWarningLimit: 1000,
