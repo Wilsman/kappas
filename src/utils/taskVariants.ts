@@ -23,6 +23,9 @@ const buildTaskObjectiveSignature = (task: Task) =>
     })),
   );
 
+export const normalizeModeVariantTaskName = (name: string) =>
+  name.replace(/\s+\[(?:PVP|PVE) ZONE\]$/i, "").trim().toLowerCase();
+
 export const buildLogicalTaskKey = (task: Task) =>
   [
     task.name,

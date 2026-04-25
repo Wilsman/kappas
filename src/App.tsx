@@ -11,13 +11,7 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "./hooks/use-mobile";
-import {
-  RotateCcw,
-  BarChart3,
-  Search,
-  Copy,
-  ExternalLink,
-} from "lucide-react";
+import { RotateCcw, BarChart3, Search, Copy, ExternalLink } from "lucide-react";
 import {
   Task,
   CollectorItemsData,
@@ -45,9 +39,16 @@ import {
   deleteProfile,
   updateProfileFaction,
   updateProfileEdition,
+  updateProfileGameMode,
   getUniqueProfileName,
   type Profile,
 } from "@/utils/profile";
+import {
+  DEFAULT_GAME_MODE,
+  getInactiveGameMode,
+  normalizeGameMode,
+  type GameMode,
+} from "@/utils/gameMode";
 import {
   loadCurrentPrestigeSummary,
   PRESTIGE_UPDATED_EVENT,
@@ -59,6 +60,15 @@ import {
   buildTaskObjectiveKeys,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
+import {
+  buildLogicalTaskIdGroups,
+  createObjectiveEquivalentsMap,
+  expandCompletedTaskObjectives,
+  expandCompletedTasks,
+  getEquivalentLegacyTaskObjectiveKeys,
+  getEquivalentTaskIds,
+  getEquivalentTaskObjectiveKeys,
+} from "@/utils/taskProgressView";
 import {
   fetchCombinedData,
   fetchOverlay,
@@ -80,7 +90,7 @@ import {
 async function loadWithRetry<T>(
   loadFn: () => Promise<T>,
   retries = 3,
-  delay = 100
+  delay = 100,
 ): Promise<T> {
   let lastError: Error | undefined;
   for (let i = 0; i < retries; i++) {
@@ -89,7 +99,7 @@ async function loadWithRetry<T>(
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (i < retries - 1) {
-        await new Promise(r => setTimeout(r, delay * (i + 1)));
+        await new Promise((r) => setTimeout(r, delay * (i + 1)));
       }
     }
   }
@@ -262,9 +272,7 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
 
 declare global {
   interface Window {
-    showRefreshErrorDialog?: (
-      options?: RefreshErrorDialogDebugOptions,
-    ) => void;
+    showRefreshErrorDialog?: (options?: RefreshErrorDialogDebugOptions) => void;
   }
 }
 
@@ -277,6 +285,8 @@ function App() {
   const [activeProfileEdition, setActiveProfileEdition] = useState<
     string | undefined
   >(undefined);
+  const [activeProfileGameMode, setActiveProfileGameMode] =
+    useState<GameMode>(DEFAULT_GAME_MODE);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [refreshErrorDialog, setRefreshErrorDialog] =
     useState<RefreshErrorDialogState | null>(null);
@@ -289,7 +299,16 @@ function App() {
     const nextEdition = profiles.find((p) => p.id === activeProfileId)?.edition;
     setActiveProfileEdition(nextEdition);
   }, [activeProfileId, profiles]);
+  useEffect(() => {
+    const nextGameMode = profiles.find(
+      (p) => p.id === activeProfileId,
+    )?.gameMode;
+    setActiveProfileGameMode(normalizeGameMode(nextGameMode));
+  }, [activeProfileId, profiles]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [modeTasksByMode, setModeTasksByMode] = useState<
+    Partial<Record<GameMode, Task[]>>
+  >({});
   const editionOptions = useMemo(() => {
     const editions = overlay?.editions;
     if (!editions) return [];
@@ -423,6 +442,48 @@ function App() {
   const [taskObjectiveItemProgress, setTaskObjectiveItemProgress] = useState<
     Record<string, number>
   >({});
+  const logicalTaskIdsByTaskId = useMemo(
+    () => buildLogicalTaskIdGroups(modeTasksByMode),
+    [modeTasksByMode],
+  );
+  const knownTasksById = useMemo(() => {
+    const map = new Map<string, Task>();
+    Object.values(modeTasksByMode).forEach((modeTasks) => {
+      modeTasks?.forEach((task) => map.set(task.id, task));
+    });
+    eventTasks.forEach((task) => map.set(task.id, task));
+    return map;
+  }, [eventTasks, modeTasksByMode]);
+  const visibleCompletedTasks = useMemo(
+    () => expandCompletedTasks(completedTasks, logicalTaskIdsByTaskId),
+    [completedTasks, logicalTaskIdsByTaskId],
+  );
+  const objectiveEquivalentsByKey = useMemo(
+    () =>
+      createObjectiveEquivalentsMap(
+        modeTasksByMode,
+        knownTasksById,
+        logicalTaskIdsByTaskId,
+      ),
+    [knownTasksById, logicalTaskIdsByTaskId, modeTasksByMode],
+  );
+  const visibleCompletedTaskObjectives = useMemo(
+    () =>
+      expandCompletedTaskObjectives(
+        completedTaskObjectives,
+        modeTasksByMode,
+        knownTasksById,
+        logicalTaskIdsByTaskId,
+        objectiveEquivalentsByKey,
+      ),
+    [
+      completedTaskObjectives,
+      knownTasksById,
+      logicalTaskIdsByTaskId,
+      modeTasksByMode,
+      objectiveEquivalentsByKey,
+    ],
+  );
   const [hideoutItemQuantities, setHideoutItemQuantities] = useState<
     Record<string, number>
   >({});
@@ -430,6 +491,11 @@ function App() {
   const [hiddenTraders, setHiddenTraders] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGameModeLoading, setIsGameModeLoading] = useState(false);
+  const [isSwitchingMode, setIsSwitchingMode] = useState(false);
+  const hasInitializedRef = useRef(false);
+  const lastLoadedGameModeRef = useRef<GameMode | null>(null);
+  const gameModeRequestRef = useRef(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
   const [showKappa, setShowKappa] = useState(false);
@@ -566,6 +632,30 @@ function App() {
     },
     [buildRefreshErrorDialogState],
   );
+  const applyCombinedData = useCallback(
+    (
+      payload: {
+        tasks: { data: { tasks: Task[] } };
+        collectorItems: CollectorItemsData;
+        achievements: { data: { achievements: Achievement[] } };
+        hideoutStations: { data: { hideoutStations: HideoutStation[] } };
+        overlay?: Overlay;
+      },
+      gameMode: GameMode,
+    ) => {
+      setAllTasks(payload.tasks.data.tasks);
+      setApiCollectorItems(payload.collectorItems);
+      setAchievements(payload.achievements.data.achievements);
+      setHideoutStations(payload.hideoutStations.data.hideoutStations);
+      if (payload.overlay) setOverlay(payload.overlay);
+      lastLoadedGameModeRef.current = gameMode;
+      setModeTasksByMode((prev) => ({
+        ...prev,
+        [gameMode]: payload.tasks.data.tasks,
+      }));
+    },
+    [],
+  );
   const handleCopyRefreshErrorReport = useCallback(async () => {
     if (!refreshErrorDialog) return;
     const copied = await copyTextToClipboard(refreshErrorDialog.reportText);
@@ -601,25 +691,65 @@ function App() {
   const handleRefresh = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const {
-        tasks: tasksData,
-        collectorItems: collectorData,
-        achievements: achievementsData,
-        hideoutStations,
-        overlay: overlayData,
-      } = await fetchCombinedData();
-      setAllTasks(tasksData.data.tasks);
-      setApiCollectorItems(collectorData);
-      setAchievements(achievementsData.data.achievements);
-      setHideoutStations(hideoutStations.data.hideoutStations);
-      setOverlay(overlayData);
+      const data = await fetchCombinedData(activeProfileGameMode);
+      applyCombinedData(data, activeProfileGameMode);
     } catch (err) {
       console.error("Manual refresh error", err);
       reportRefreshError("manual-refresh", err, allTasks.length > 0);
     } finally {
       setIsRefreshing(false);
     }
-  }, [allTasks.length, reportRefreshError]);
+  }, [
+    activeProfileGameMode,
+    allTasks.length,
+    applyCombinedData,
+    reportRefreshError,
+  ]);
+
+  const loadGameModeData = useCallback(
+    async (gameMode: GameMode) => {
+      const requestId = ++gameModeRequestRef.current;
+      const cached = loadCombinedCache(gameMode);
+
+      setIsGameModeLoading(true);
+      setIsSwitchingMode(true);
+      if (cached) {
+        applyCombinedData(cached, gameMode);
+      }
+      // Don't clear tasks when switching modes - keep old data visible until new data arrives
+      // This prevents skeleton flash during mode switch
+
+      if (cached && isCombinedCacheFresh(gameMode)) {
+        setIsGameModeLoading(false);
+        setIsSwitchingMode(false);
+        return;
+      }
+
+      try {
+        const data = await fetchCombinedData(gameMode);
+        if (gameModeRequestRef.current !== requestId) return;
+        applyCombinedData(data, gameMode);
+      } catch (err) {
+        if (gameModeRequestRef.current !== requestId) return;
+        console.error("Game mode data refresh error", err);
+        if (!cached && gameMode === "pve") {
+          toast.warning("PvE task data is unavailable", {
+            description:
+              "Falling back to PvP data for now. Please try PvE again later.",
+          });
+          setActiveProfileGameMode(DEFAULT_GAME_MODE);
+        } else if (!cached) {
+          reportRefreshError("background-refresh", err, false);
+        }
+      } finally {
+        if (gameModeRequestRef.current === requestId) {
+          setIsGameModeLoading(false);
+          setIsSwitchingMode(false);
+        }
+      }
+    },
+    [applyCombinedData, reportRefreshError],
+  );
 
   // Working on items (currently working towards)
   const [workingOnTasks, setWorkingOnTasks] = useState<Set<string>>(new Set());
@@ -906,7 +1036,7 @@ function App() {
 
   const totalQuests = baseTasks.length;
   const completedQuests = baseTasks.filter((task) =>
-    completedTasks.has(task.id),
+    visibleCompletedTasks.has(task.id),
   ).length;
 
   // Calculate storyline objectives (only main objectives count towards progress)
@@ -944,7 +1074,7 @@ function App() {
     baseTasks.forEach(({ trader: { name, imageLink }, id }) => {
       if (map[name]) {
         map[name].total++;
-        if (completedTasks.has(id)) {
+        if (visibleCompletedTasks.has(id)) {
           map[name].completed++;
         }
         // Store the imageLink from the first task we encounter for this trader
@@ -964,7 +1094,7 @@ function App() {
         imageLink,
       }),
     );
-  }, [baseTasks, completedTasks]);
+  }, [baseTasks, visibleCompletedTasks]);
 
   // Derived lists for sidebar
   const traderList = useMemo(() => Object.keys(TRADER_COLORS), []);
@@ -978,6 +1108,7 @@ function App() {
       const profile = getProfiles().find((p) => p.id === id);
       setActiveProfileFaction(profile?.faction);
       setActiveProfileEdition(profile?.edition);
+      setActiveProfileGameMode(normalizeGameMode(profile?.gameMode));
       try {
         try {
           (document.activeElement as HTMLElement | null)?.blur?.();
@@ -1014,16 +1145,51 @@ function App() {
           savedWorkingOnItemsResult,
         ] = loadResults;
 
-        const savedTasks = savedTasksResult.status === "fulfilled" ? savedTasksResult.value : new Set<string>();
-        const savedCollectorItems = savedCollectorItemsResult.status === "fulfilled" ? savedCollectorItemsResult.value : new Set<string>();
-        const savedHideoutItems = savedHideoutItemsResult.status === "fulfilled" ? savedHideoutItemsResult.value : new Set<string>();
-        const savedAchievements = savedAchievementsResult.status === "fulfilled" ? savedAchievementsResult.value : new Set<string>();
-        const savedStorylineObjectives = savedStorylineObjectivesResult.status === "fulfilled" ? savedStorylineObjectivesResult.value : new Set<string>();
-        const savedStorylineMapNodes = savedStorylineMapNodesResult.status === "fulfilled" ? savedStorylineMapNodesResult.value : new Set<string>();
-        const savedTaskObjectives = savedTaskObjectivesResult.status === "fulfilled" ? savedTaskObjectivesResult.value : new Set<string>();
-        const savedTaskObjectiveItemProgress = savedTaskObjectiveItemProgressResult.status === "fulfilled" ? savedTaskObjectiveItemProgressResult.value : {};
-        const savedHideoutItemQuantities = savedHideoutItemQuantitiesResult.status === "fulfilled" ? savedHideoutItemQuantitiesResult.value : {};
-        const savedWorkingOnItems = savedWorkingOnItemsResult.status === "fulfilled" ? savedWorkingOnItemsResult.value : { tasks: new Set<string>(), storylineObjectives: new Set<string>(), collectorItems: new Set<string>(), hideoutStations: new Set<string>() };
+        const savedTasks =
+          savedTasksResult.status === "fulfilled"
+            ? savedTasksResult.value
+            : new Set<string>();
+        const savedCollectorItems =
+          savedCollectorItemsResult.status === "fulfilled"
+            ? savedCollectorItemsResult.value
+            : new Set<string>();
+        const savedHideoutItems =
+          savedHideoutItemsResult.status === "fulfilled"
+            ? savedHideoutItemsResult.value
+            : new Set<string>();
+        const savedAchievements =
+          savedAchievementsResult.status === "fulfilled"
+            ? savedAchievementsResult.value
+            : new Set<string>();
+        const savedStorylineObjectives =
+          savedStorylineObjectivesResult.status === "fulfilled"
+            ? savedStorylineObjectivesResult.value
+            : new Set<string>();
+        const savedStorylineMapNodes =
+          savedStorylineMapNodesResult.status === "fulfilled"
+            ? savedStorylineMapNodesResult.value
+            : new Set<string>();
+        const savedTaskObjectives =
+          savedTaskObjectivesResult.status === "fulfilled"
+            ? savedTaskObjectivesResult.value
+            : new Set<string>();
+        const savedTaskObjectiveItemProgress =
+          savedTaskObjectiveItemProgressResult.status === "fulfilled"
+            ? savedTaskObjectiveItemProgressResult.value
+            : {};
+        const savedHideoutItemQuantities =
+          savedHideoutItemQuantitiesResult.status === "fulfilled"
+            ? savedHideoutItemQuantitiesResult.value
+            : {};
+        const savedWorkingOnItems =
+          savedWorkingOnItemsResult.status === "fulfilled"
+            ? savedWorkingOnItemsResult.value
+            : {
+                tasks: new Set<string>(),
+                storylineObjectives: new Set<string>(),
+                collectorItems: new Set<string>(),
+                hideoutStations: new Set<string>(),
+              };
 
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
@@ -1074,6 +1240,18 @@ function App() {
       setProfiles(getProfiles());
       if (id === activeProfileId) {
         setActiveProfileEdition(edition);
+      }
+    },
+    [activeProfileId],
+  );
+
+  const handleUpdateGameMode = useCallback(
+    (id: string, gameMode: GameMode) => {
+      const normalizedGameMode = normalizeGameMode(gameMode);
+      updateProfileGameMode(id, normalizedGameMode);
+      setProfiles(getProfiles());
+      if (id === activeProfileId) {
+        setActiveProfileGameMode(normalizedGameMode);
       }
     },
     [activeProfileId],
@@ -1130,14 +1308,14 @@ function App() {
     return {
       totalKappaTasks: kappaTasks.length,
       completedKappaTasks: kappaTasks.filter((task) =>
-        completedTasks.has(task.id),
+        visibleCompletedTasks.has(task.id),
       ).length,
       totalLightkeeperTasks: lightkeeperTasks.length,
       completedLightkeeperTasks: lightkeeperTasks.filter((task) =>
-        completedTasks.has(task.id),
+        visibleCompletedTasks.has(task.id),
       ).length,
     };
-  }, [baseTasks, completedTasks]);
+  }, [baseTasks, visibleCompletedTasks]);
 
   useEffect(() => {
     const init = async () => {
@@ -1155,6 +1333,11 @@ function App() {
         const ensured = ensureProfiles();
         setProfiles(ensured.profiles);
         setActiveProfileId(ensured.activeId);
+        const initialGameMode = normalizeGameMode(
+          ensured.profiles.find((profile) => profile.id === ensured.activeId)
+            ?.gameMode,
+        );
+        setActiveProfileGameMode(initialGameMode);
 
         // One-time migrate legacy single-DB data into the first profile
         await migrateLegacyDataIfNeeded(ensured.activeId);
@@ -1210,13 +1393,33 @@ function App() {
         // This ensures that if IndexedDB isn't immediately ready, we retry
         const loadResults = await Promise.allSettled([
           loadWithRetry(() => taskStorage.loadCompletedTasks(), 3, 100),
-          loadWithRetry(() => taskStorage.loadCompletedCollectorItems(), 3, 100),
+          loadWithRetry(
+            () => taskStorage.loadCompletedCollectorItems(),
+            3,
+            100,
+          ),
           loadWithRetry(() => taskStorage.loadCompletedHideoutItems(), 3, 100),
           loadWithRetry(() => taskStorage.loadCompletedAchievements(), 3, 100),
-          loadWithRetry(() => taskStorage.loadCompletedStorylineObjectives(), 3, 100),
-          loadWithRetry(() => taskStorage.loadCompletedStorylineMapNodes(), 3, 100),
-          loadWithRetry(() => taskStorage.loadCompletedTaskObjectives(), 3, 100),
-          loadWithRetry(() => taskStorage.loadTaskObjectiveItemProgress(), 3, 100),
+          loadWithRetry(
+            () => taskStorage.loadCompletedStorylineObjectives(),
+            3,
+            100,
+          ),
+          loadWithRetry(
+            () => taskStorage.loadCompletedStorylineMapNodes(),
+            3,
+            100,
+          ),
+          loadWithRetry(
+            () => taskStorage.loadCompletedTaskObjectives(),
+            3,
+            100,
+          ),
+          loadWithRetry(
+            () => taskStorage.loadTaskObjectiveItemProgress(),
+            3,
+            100,
+          ),
           loadWithRetry(() => taskStorage.loadHideoutItemQuantities(), 3, 100),
           loadWithRetry(() => taskStorage.loadWorkingOnItems(), 3, 100),
         ]);
@@ -1240,7 +1443,10 @@ function App() {
             ? savedTasksResult.value
             : new Set<string>();
         if (savedTasksResult.status === "rejected") {
-          console.error("[Init] Failed to load completed tasks:", savedTasksResult.reason);
+          console.error(
+            "[Init] Failed to load completed tasks:",
+            savedTasksResult.reason,
+          );
         }
 
         const savedCollectorItems =
@@ -1248,7 +1454,10 @@ function App() {
             ? savedCollectorItemsResult.value
             : new Set<string>();
         if (savedCollectorItemsResult.status === "rejected") {
-          console.error("[Init] Failed to load collector items:", savedCollectorItemsResult.reason);
+          console.error(
+            "[Init] Failed to load collector items:",
+            savedCollectorItemsResult.reason,
+          );
         }
 
         const savedHideoutItems =
@@ -1256,7 +1465,10 @@ function App() {
             ? savedHideoutItemsResult.value
             : new Set<string>();
         if (savedHideoutItemsResult.status === "rejected") {
-          console.error("[Init] Failed to load hideout items:", savedHideoutItemsResult.reason);
+          console.error(
+            "[Init] Failed to load hideout items:",
+            savedHideoutItemsResult.reason,
+          );
         }
 
         const savedAchievements =
@@ -1264,7 +1476,10 @@ function App() {
             ? savedAchievementsResult.value
             : new Set<string>();
         if (savedAchievementsResult.status === "rejected") {
-          console.error("[Init] Failed to load achievements:", savedAchievementsResult.reason);
+          console.error(
+            "[Init] Failed to load achievements:",
+            savedAchievementsResult.reason,
+          );
         }
 
         const savedStorylineObjectives =
@@ -1272,7 +1487,10 @@ function App() {
             ? savedStorylineObjectivesResult.value
             : new Set<string>();
         if (savedStorylineObjectivesResult.status === "rejected") {
-          console.error("[Init] Failed to load storyline objectives:", savedStorylineObjectivesResult.reason);
+          console.error(
+            "[Init] Failed to load storyline objectives:",
+            savedStorylineObjectivesResult.reason,
+          );
         }
 
         const savedStorylineMapNodes =
@@ -1280,7 +1498,10 @@ function App() {
             ? savedStorylineMapNodesResult.value
             : new Set<string>();
         if (savedStorylineMapNodesResult.status === "rejected") {
-          console.error("[Init] Failed to load storyline map nodes:", savedStorylineMapNodesResult.reason);
+          console.error(
+            "[Init] Failed to load storyline map nodes:",
+            savedStorylineMapNodesResult.reason,
+          );
         }
 
         const savedTaskObjectives =
@@ -1288,7 +1509,10 @@ function App() {
             ? savedTaskObjectivesResult.value
             : new Set<string>();
         if (savedTaskObjectivesResult.status === "rejected") {
-          console.error("[Init] Failed to load task objectives:", savedTaskObjectivesResult.reason);
+          console.error(
+            "[Init] Failed to load task objectives:",
+            savedTaskObjectivesResult.reason,
+          );
         }
 
         const savedTaskObjectiveItemProgress =
@@ -1296,7 +1520,10 @@ function App() {
             ? savedTaskObjectiveItemProgressResult.value
             : {};
         if (savedTaskObjectiveItemProgressResult.status === "rejected") {
-          console.error("[Init] Failed to load task objective item progress:", savedTaskObjectiveItemProgressResult.reason);
+          console.error(
+            "[Init] Failed to load task objective item progress:",
+            savedTaskObjectiveItemProgressResult.reason,
+          );
         }
 
         const savedHideoutItemQuantities =
@@ -1304,15 +1531,26 @@ function App() {
             ? savedHideoutItemQuantitiesResult.value
             : {};
         if (savedHideoutItemQuantitiesResult.status === "rejected") {
-          console.error("[Init] Failed to load hideout item quantities:", savedHideoutItemQuantitiesResult.reason);
+          console.error(
+            "[Init] Failed to load hideout item quantities:",
+            savedHideoutItemQuantitiesResult.reason,
+          );
         }
 
         const savedWorkingOnItems =
           savedWorkingOnItemsResult.status === "fulfilled"
             ? savedWorkingOnItemsResult.value
-            : { tasks: new Set<string>(), storylineObjectives: new Set<string>(), collectorItems: new Set<string>(), hideoutStations: new Set<string>() };
+            : {
+                tasks: new Set<string>(),
+                storylineObjectives: new Set<string>(),
+                collectorItems: new Set<string>(),
+                hideoutStations: new Set<string>(),
+              };
         if (savedWorkingOnItemsResult.status === "rejected") {
-          console.error("[Init] Failed to load working on items:", savedWorkingOnItemsResult.reason);
+          console.error(
+            "[Init] Failed to load working on items:",
+            savedWorkingOnItemsResult.reason,
+          );
         }
 
         setCompletedTasks(savedTasks);
@@ -1370,31 +1608,18 @@ function App() {
         }
 
         // Load cached API data instantly if present
-        const cached = loadCombinedCache();
+        const cached = loadCombinedCache(initialGameMode);
         if (cached) {
-          setAllTasks(cached.tasks.data.tasks);
-          setApiCollectorItems(cached.collectorItems);
-          setAchievements(cached.achievements.data.achievements);
-          setHideoutStations(cached.hideoutStations.data.hideoutStations);
+          applyCombinedData(cached, initialGameMode);
           setIsLoading(false);
         }
 
-        const needsRefresh = !isCombinedCacheFresh();
+        const needsRefresh = !isCombinedCacheFresh(initialGameMode);
         if (needsRefresh) {
           // Refresh in background; if no cache, this awaits to ensure UI has data
           try {
-            const {
-              tasks: tasksData,
-              collectorItems: collectorData,
-              achievements: achievementsData,
-              hideoutStations,
-              overlay: overlayData,
-            } = await fetchCombinedData();
-            setAllTasks(tasksData.data.tasks);
-            setApiCollectorItems(collectorData);
-            setAchievements(achievementsData.data.achievements);
-            setHideoutStations(hideoutStations.data.hideoutStations);
-            setOverlay(overlayData);
+            const data = await fetchCombinedData(initialGameMode);
+            applyCombinedData(data, initialGameMode);
             overlayLoaded = true;
           } catch (err) {
             console.error("API refresh error", err);
@@ -1411,18 +1636,8 @@ function App() {
         } else if (!cached) {
           // Fresh cache was missing but TTL says fresh (edge) → fetch to populate and render
           try {
-            const {
-              tasks: tasksData,
-              collectorItems: collectorData,
-              achievements: achievementsData,
-              hideoutStations,
-              overlay: overlayData,
-            } = await fetchCombinedData();
-            setAllTasks(tasksData.data.tasks);
-            setApiCollectorItems(collectorData);
-            setAchievements(achievementsData.data.achievements);
-            setHideoutStations(hideoutStations.data.hideoutStations);
-            setOverlay(overlayData);
+            const data = await fetchCombinedData(initialGameMode);
+            applyCombinedData(data, initialGameMode);
             overlayLoaded = true;
           } catch (err) {
             console.error("API fetch error", err);
@@ -1448,16 +1663,64 @@ function App() {
           }
         }
         // Ensure loading state is always cleared after initialization
+        hasInitializedRef.current = true;
         setIsLoading(false);
       } catch (err) {
         console.error("Init error", err);
         reportRefreshError("initialization", err, Boolean(loadCombinedCache()));
         // Ensure UI doesn't get stuck loading on init errors
+        hasInitializedRef.current = true;
         setIsLoading(false);
       }
     };
     void init();
-  }, [reportRefreshError]);
+  }, [applyCombinedData, reportRefreshError]);
+
+  useEffect(() => {
+    if (!hasInitializedRef.current || !activeProfileId || isLoading) return;
+    if (lastLoadedGameModeRef.current === activeProfileGameMode) return;
+    void loadGameModeData(activeProfileGameMode);
+  }, [activeProfileGameMode, activeProfileId, isLoading, loadGameModeData]);
+
+  useEffect(() => {
+    if (
+      !hasInitializedRef.current ||
+      !activeProfileId ||
+      isLoading ||
+      isGameModeLoading
+    ) {
+      return;
+    }
+
+    const inactiveGameMode = getInactiveGameMode(activeProfileGameMode);
+    const cached = loadCombinedCache(inactiveGameMode);
+    if (cached) {
+      setModeTasksByMode((prev) => ({
+        ...prev,
+        [inactiveGameMode]: cached.tasks.data.tasks,
+      }));
+    }
+    if (isCombinedCacheFresh(inactiveGameMode)) return;
+
+    let cancelled = false;
+    void fetchCombinedData(inactiveGameMode)
+      .then((data) => {
+        if (cancelled) return;
+        setModeTasksByMode((prev) => ({
+          ...prev,
+          [inactiveGameMode]: data.tasks.data.tasks,
+        }));
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn("Inactive game mode prefetch error", err);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProfileGameMode, activeProfileId, isGameModeLoading, isLoading]);
 
   // Validate and cleanup orphaned working-on task IDs
   // This runs after tasks are loaded to detect any saved task IDs that no longer exist
@@ -1591,28 +1854,45 @@ function App() {
         targetTaskId: string,
         markComplete: boolean,
       ) => {
-        const task = tasksWithEvents.find((entry) => entry.id === targetTaskId);
-        const objectiveKeys = task ? buildTaskObjectiveKeys(task) : [];
-        objectiveKeys.forEach((objectiveKey, index) => {
-          const legacyKey = buildLegacyTaskObjectiveKey(targetTaskId, index);
-          if (markComplete) {
-            nextTaskObjectives.add(objectiveKey);
-            nextTaskObjectives.add(legacyKey);
-          } else {
-            nextTaskObjectives.delete(objectiveKey);
-            nextTaskObjectives.delete(legacyKey);
-          }
-        });
+        getEquivalentTaskIds(targetTaskId, logicalTaskIdsByTaskId).forEach(
+          (equivalentTaskId) => {
+            const task =
+              knownTasksById.get(equivalentTaskId) ??
+              tasksWithEvents.find((entry) => entry.id === equivalentTaskId);
+            const objectiveKeys = task ? buildTaskObjectiveKeys(task) : [];
+            objectiveKeys.forEach((objectiveKey, index) => {
+              const legacyKey = buildLegacyTaskObjectiveKey(
+                equivalentTaskId,
+                index,
+              );
+              if (markComplete) {
+                nextTaskObjectives.add(objectiveKey);
+                nextTaskObjectives.add(legacyKey);
+              } else {
+                nextTaskObjectives.delete(objectiveKey);
+                nextTaskObjectives.delete(legacyKey);
+              }
+            });
+          },
+        );
       };
-      if (next.has(taskId)) {
-        next.delete(taskId);
-        applyTaskObjectiveCompletion(taskId, false);
+      const equivalentTaskIds = getEquivalentTaskIds(
+        taskId,
+        logicalTaskIdsByTaskId,
+      );
+      if (equivalentTaskIds.some((id) => next.has(id))) {
+        equivalentTaskIds.forEach((id) => {
+          next.delete(id);
+          applyTaskObjectiveCompletion(id, false);
+        });
       } else {
         const depMap = buildTaskDependencyMap(tasksWithEvents);
         const deps = getAllDependencies(taskId, depMap);
         const relatedTaskIds = [taskId, ...deps];
         relatedTaskIds.forEach((id) => {
-          next.add(id);
+          getEquivalentTaskIds(id, logicalTaskIdsByTaskId).forEach(
+            (equivalentTaskId) => next.add(equivalentTaskId),
+          );
           applyTaskObjectiveCompletion(id, true);
         });
       }
@@ -1630,7 +1910,14 @@ function App() {
         console.error("Save error", err);
       }
     },
-    [completedTaskObjectives, completedTasks, tasksWithEvents, activeProfileId],
+    [
+      activeProfileId,
+      completedTaskObjectives,
+      completedTasks,
+      knownTasksById,
+      logicalTaskIdsByTaskId,
+      tasksWithEvents,
+    ],
   );
 
   // Sidebar trader filter: multi-select toggle
@@ -1748,15 +2035,20 @@ function App() {
       if (isAllObjectivesCompleted) {
         const depMap = buildTaskDependencyMap(tasksWithEvents);
         const deps = getAllDependencies(taskId, depMap);
-        nextCompletedTasks.add(taskId);
-        deps.forEach((id) => nextCompletedTasks.add(id));
+        [taskId, ...deps].forEach((id) => {
+          getEquivalentTaskIds(id, logicalTaskIdsByTaskId).forEach(
+            (equivalentTaskId) => nextCompletedTasks.add(equivalentTaskId),
+          );
+        });
       } else if (wasAllObjectivesCompleted) {
-        nextCompletedTasks.delete(taskId);
+        getEquivalentTaskIds(taskId, logicalTaskIdsByTaskId).forEach((id) =>
+          nextCompletedTasks.delete(id),
+        );
       }
 
       return nextCompletedTasks;
     },
-    [tasksWithEvents],
+    [logicalTaskIdsByTaskId, tasksWithEvents],
   );
 
   const areAllTaskObjectivesCompleted = useCallback(
@@ -1789,26 +2081,44 @@ function App() {
       const next = new Set(completedTaskObjectives);
       const wasAllObjectivesCompleted = areAllTaskObjectivesCompleted(
         taskId,
-        completedTaskObjectives,
+        visibleCompletedTaskObjectives,
       );
-      const isAlreadyCompleted = isTaskObjectiveCompleted(
-        next,
+      const equivalentObjectiveKeys = getEquivalentTaskObjectiveKeys(
+        taskId,
         objectiveKey,
-        legacyObjectiveKey,
+        knownTasksById,
+        logicalTaskIdsByTaskId,
+      );
+      const equivalentLegacyObjectiveKeys =
+        getEquivalentLegacyTaskObjectiveKeys(
+          taskId,
+          legacyObjectiveKey,
+          logicalTaskIdsByTaskId,
+        );
+      const equivalentKeys = [
+        ...equivalentObjectiveKeys,
+        ...equivalentLegacyObjectiveKeys,
+      ];
+      const isAlreadyCompleted = equivalentKeys.some((key) =>
+        visibleCompletedTaskObjectives.has(key),
       );
       if (isAlreadyCompleted) {
-        next.delete(objectiveKey);
-        if (legacyObjectiveKey) {
-          next.delete(legacyObjectiveKey);
-        }
+        equivalentKeys.forEach((key) => next.delete(key));
       } else {
-        next.add(objectiveKey);
-        if (legacyObjectiveKey) {
-          next.add(legacyObjectiveKey);
-        }
+        equivalentKeys.forEach((key) => next.add(key));
       }
 
-      const isAllObjectivesCompleted = areAllTaskObjectivesCompleted(taskId, next);
+      const nextVisibleTaskObjectives = expandCompletedTaskObjectives(
+        next,
+        modeTasksByMode,
+        knownTasksById,
+        logicalTaskIdsByTaskId,
+        objectiveEquivalentsByKey,
+      );
+      const isAllObjectivesCompleted = areAllTaskObjectivesCompleted(
+        taskId,
+        nextVisibleTaskObjectives,
+      );
       const nextCompletedTasks = syncTaskCompletionFromObjectives(
         taskId,
         completedTasks,
@@ -1833,7 +2143,12 @@ function App() {
       completedTasks,
       activeProfileId,
       areAllTaskObjectivesCompleted,
+      knownTasksById,
+      logicalTaskIdsByTaskId,
+      modeTasksByMode,
+      objectiveEquivalentsByKey,
       syncTaskCompletionFromObjectives,
+      visibleCompletedTaskObjectives,
     ],
   );
 
@@ -2108,14 +2423,38 @@ function App() {
         savedTaskObjectiveItemProgressResult,
       ] = loadResults;
 
-      const savedTasks = savedTasksResult.status === "fulfilled" ? savedTasksResult.value : new Set<string>();
-      const savedCollectorItems = savedCollectorItemsResult.status === "fulfilled" ? savedCollectorItemsResult.value : new Set<string>();
-      const savedHideoutItems = savedHideoutItemsResult.status === "fulfilled" ? savedHideoutItemsResult.value : new Set<string>();
-      const savedAchievements = savedAchievementsResult.status === "fulfilled" ? savedAchievementsResult.value : new Set<string>();
-      const savedStorylineObjectives = savedStorylineObjectivesResult.status === "fulfilled" ? savedStorylineObjectivesResult.value : new Set<string>();
-      const savedStorylineMapNodes = savedStorylineMapNodesResult.status === "fulfilled" ? savedStorylineMapNodesResult.value : new Set<string>();
-      const savedTaskObjectives = savedTaskObjectivesResult.status === "fulfilled" ? savedTaskObjectivesResult.value : new Set<string>();
-      const savedTaskObjectiveItemProgress = savedTaskObjectiveItemProgressResult.status === "fulfilled" ? savedTaskObjectiveItemProgressResult.value : {};
+      const savedTasks =
+        savedTasksResult.status === "fulfilled"
+          ? savedTasksResult.value
+          : new Set<string>();
+      const savedCollectorItems =
+        savedCollectorItemsResult.status === "fulfilled"
+          ? savedCollectorItemsResult.value
+          : new Set<string>();
+      const savedHideoutItems =
+        savedHideoutItemsResult.status === "fulfilled"
+          ? savedHideoutItemsResult.value
+          : new Set<string>();
+      const savedAchievements =
+        savedAchievementsResult.status === "fulfilled"
+          ? savedAchievementsResult.value
+          : new Set<string>();
+      const savedStorylineObjectives =
+        savedStorylineObjectivesResult.status === "fulfilled"
+          ? savedStorylineObjectivesResult.value
+          : new Set<string>();
+      const savedStorylineMapNodes =
+        savedStorylineMapNodesResult.status === "fulfilled"
+          ? savedStorylineMapNodesResult.value
+          : new Set<string>();
+      const savedTaskObjectives =
+        savedTaskObjectivesResult.status === "fulfilled"
+          ? savedTaskObjectivesResult.value
+          : new Set<string>();
+      const savedTaskObjectiveItemProgress =
+        savedTaskObjectiveItemProgressResult.status === "fulfilled"
+          ? savedTaskObjectiveItemProgressResult.value
+          : {};
 
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
@@ -2172,14 +2511,38 @@ function App() {
         savedTaskObjectiveItemProgressResult,
       ] = loadResults;
 
-      const savedTasks = savedTasksResult.status === "fulfilled" ? savedTasksResult.value : new Set<string>();
-      const savedCollectorItems = savedCollectorItemsResult.status === "fulfilled" ? savedCollectorItemsResult.value : new Set<string>();
-      const savedHideoutItems = savedHideoutItemsResult.status === "fulfilled" ? savedHideoutItemsResult.value : new Set<string>();
-      const savedAchievements = savedAchievementsResult.status === "fulfilled" ? savedAchievementsResult.value : new Set<string>();
-      const savedStorylineObjectives = savedStorylineObjectivesResult.status === "fulfilled" ? savedStorylineObjectivesResult.value : new Set<string>();
-      const savedStorylineMapNodes = savedStorylineMapNodesResult.status === "fulfilled" ? savedStorylineMapNodesResult.value : new Set<string>();
-      const savedTaskObjectives = savedTaskObjectivesResult.status === "fulfilled" ? savedTaskObjectivesResult.value : new Set<string>();
-      const savedTaskObjectiveItemProgress = savedTaskObjectiveItemProgressResult.status === "fulfilled" ? savedTaskObjectiveItemProgressResult.value : {};
+      const savedTasks =
+        savedTasksResult.status === "fulfilled"
+          ? savedTasksResult.value
+          : new Set<string>();
+      const savedCollectorItems =
+        savedCollectorItemsResult.status === "fulfilled"
+          ? savedCollectorItemsResult.value
+          : new Set<string>();
+      const savedHideoutItems =
+        savedHideoutItemsResult.status === "fulfilled"
+          ? savedHideoutItemsResult.value
+          : new Set<string>();
+      const savedAchievements =
+        savedAchievementsResult.status === "fulfilled"
+          ? savedAchievementsResult.value
+          : new Set<string>();
+      const savedStorylineObjectives =
+        savedStorylineObjectivesResult.status === "fulfilled"
+          ? savedStorylineObjectivesResult.value
+          : new Set<string>();
+      const savedStorylineMapNodes =
+        savedStorylineMapNodesResult.status === "fulfilled"
+          ? savedStorylineMapNodesResult.value
+          : new Set<string>();
+      const savedTaskObjectives =
+        savedTaskObjectivesResult.status === "fulfilled"
+          ? savedTaskObjectivesResult.value
+          : new Set<string>();
+      const savedTaskObjectiveItemProgress =
+        savedTaskObjectiveItemProgressResult.status === "fulfilled"
+          ? savedTaskObjectiveItemProgressResult.value
+          : {};
 
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
@@ -2204,7 +2567,13 @@ function App() {
       for (const profileData of data.profiles) {
         // Create a new profile with a unique name to avoid duplicates
         const uniqueName = getUniqueProfileName(profileData.name);
-        const newProfile = createProfile(uniqueName);
+        const newProfile = createProfile(
+          uniqueName,
+          undefined,
+          undefined,
+          undefined,
+          profileData.gameMode,
+        );
 
         // Switch to the new profile's database
         taskStorage.setProfile(newProfile.id);
@@ -2225,6 +2594,7 @@ function App() {
         {
           setActiveProfileIdLS(targetProfile.id);
           setActiveProfileId(targetProfile.id);
+          setActiveProfileGameMode(normalizeGameMode(targetProfile.gameMode));
           taskStorage.setProfile(targetProfile.id);
           await taskStorage.init();
 
@@ -2308,6 +2678,8 @@ function App() {
     if (focusMode === "lightkeeper") return "Lightkeeper Progress";
     return "Progress Overview";
   }, [focusMode]);
+  const isTaskDataLoading =
+    isLoading || (isGameModeLoading && allTasks.length === 0);
 
   // Removed full-page loading screen - now showing skeleton layout instead
 
@@ -2325,11 +2697,13 @@ function App() {
           activeProfileId={activeProfileId}
           editions={editionOptions}
           activeEditionId={activeProfileEdition}
+          activeGameMode={activeProfileGameMode}
           onSwitchProfile={handleSwitchProfile}
           onCreateProfile={handleCreateProfile}
           onRenameProfile={handleRenameProfile}
           onUpdateFaction={handleUpdateFaction}
           onUpdateEdition={handleUpdateEdition}
+          onUpdateGameMode={handleUpdateGameMode}
           onDeleteProfile={handleDeleteProfile}
           onResetProfile={handleResetProgress}
           onImportComplete={handleImportComplete}
@@ -2348,6 +2722,8 @@ function App() {
           onSetPlayerLevel={handleSetPlayerLevel}
           side="left"
           isLoading={isLoading}
+          isGameModeLoading={isGameModeLoading}
+          isSwitchingMode={isSwitchingMode}
         />
         <SidebarInset className="min-h-0 overflow-hidden">
           <div
@@ -2545,7 +2921,7 @@ function App() {
                 )}
               >
                 {/* Quests sub-tabs removed; view selection handled via sidebar */}
-                {isLoading ? (
+                {isTaskDataLoading ? (
                   <ContentSkeleton />
                 ) : (
                   <LazyLoadErrorBoundary>
@@ -2557,7 +2933,7 @@ function App() {
                           }`}
                           tasks={tasksWithEvents}
                           achievements={achievements}
-                          completedTasks={completedTasks}
+                          completedTasks={visibleCompletedTasks}
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
                           showLightkeeper={showLightkeeper}
@@ -2570,7 +2946,9 @@ function App() {
                           playerLevel={playerLevel}
                           workingOnTasks={workingOnTasks}
                           onToggleWorkingOnTask={handleToggleWorkingOnTask}
-                          completedTaskObjectives={completedTaskObjectives}
+                          completedTaskObjectives={
+                            visibleCompletedTaskObjectives
+                          }
                           onToggleTaskObjective={handleToggleTaskObjective}
                           taskObjectiveItemProgress={taskObjectiveItemProgress}
                           onUpdateTaskObjectiveItemProgress={
@@ -2584,7 +2962,7 @@ function App() {
                           }:desk`}
                           tasks={tasksWithEvents}
                           achievements={achievements}
-                          completedTasks={completedTasks}
+                          completedTasks={visibleCompletedTasks}
                           hiddenTraders={hiddenTraders}
                           focusMode={focusMode}
                           onSetFocus={handleSetFocus}
@@ -2597,7 +2975,9 @@ function App() {
                           playerLevel={playerLevel}
                           workingOnTasks={workingOnTasks}
                           onToggleWorkingOnTask={handleToggleWorkingOnTask}
-                          completedTaskObjectives={completedTaskObjectives}
+                          completedTaskObjectives={
+                            visibleCompletedTaskObjectives
+                          }
                           onToggleTaskObjective={handleToggleTaskObjective}
                           taskObjectiveItemProgress={taskObjectiveItemProgress}
                           onUpdateTaskObjectiveItemProgress={
@@ -2607,8 +2987,10 @@ function App() {
                       ) : viewMode === "tracked-items" ? (
                         <TrackedItemsView
                           tasks={tasksWithEvents}
-                          completedTasks={completedTasks}
-                          completedTaskObjectives={completedTaskObjectives}
+                          completedTasks={visibleCompletedTasks}
+                          completedTaskObjectives={
+                            visibleCompletedTaskObjectives
+                          }
                           taskObjectiveItemProgress={taskObjectiveItemProgress}
                           onUpdateTaskObjectiveItemProgress={
                             handleUpdateTaskObjectiveItemProgress
@@ -2707,7 +3089,7 @@ function App() {
                           collectorItems={collectorItems}
                           hideoutStations={hideoutStations}
                           completedCollectorItems={completedCollectorItems}
-                          completedTasks={completedTasks}
+                          completedTasks={visibleCompletedTasks}
                           completedStorylineObjectives={
                             completedStorylineObjectives
                           }
@@ -2726,7 +3108,9 @@ function App() {
                             handleToggleStorylineObjective
                           }
                           onToggleHideoutItem={handleToggleHideoutItem}
-                          completedTaskObjectives={completedTaskObjectives}
+                          completedTaskObjectives={
+                            visibleCompletedTaskObjectives
+                          }
                           onToggleTaskObjective={handleToggleTaskObjective}
                           taskObjectiveItemProgress={taskObjectiveItemProgress}
                           onUpdateTaskObjectiveItemProgress={
@@ -2740,7 +3124,7 @@ function App() {
                       ) : viewMode === "flow" ? (
                         <FlowView
                           tasks={tasks}
-                          completedTasks={completedTasks}
+                          completedTasks={visibleCompletedTasks}
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
                           showLightkeeper={showLightkeeper}
@@ -2750,7 +3134,7 @@ function App() {
                       ) : (
                         <MindMap
                           tasks={tasks}
-                          completedTasks={completedTasks}
+                          completedTasks={visibleCompletedTasks}
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
                           showLightkeeper={showLightkeeper}
@@ -2817,7 +3201,7 @@ function App() {
         achievements={achievements}
         collectorItems={collectorItems}
         hideoutStations={hideoutStations}
-        completedTasks={completedTasks}
+        completedTasks={visibleCompletedTasks}
         onSetViewMode={setViewMode}
         onOpenStorylineMap={handleOpenStorylineMap}
         onSetGroupBy={setGroupBy}
@@ -2874,12 +3258,10 @@ function App() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{refreshErrorDialog?.title}</DialogTitle>
-            <DialogDescription>
-              {refreshErrorDialog?.summary}
-            </DialogDescription>
+            <DialogDescription>{refreshErrorDialog?.summary}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-gray-300 dark:text-gray-100">
               <span className="font-medium">
                 {refreshErrorDialog
                   ? getRefreshErrorSourceLabel(refreshErrorDialog.source)
@@ -2890,8 +3272,8 @@ function App() {
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                Copy this report and paste it into our Discord support channel so
-                we can compare the exact API failure.
+                Copy this report and paste it into our Discord support channel
+                so we can compare the exact API failure.
               </p>
               <Textarea
                 readOnly
@@ -2919,11 +3301,7 @@ function App() {
                 Close
               </Button>
               <Button asChild>
-                <a
-                  href={SUPPORT_DISCORD_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a href={SUPPORT_DISCORD_URL} target="_blank" rel="noreferrer">
                   Join Discord
                   <ExternalLink className="h-4 w-4" />
                 </a>

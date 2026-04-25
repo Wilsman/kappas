@@ -45,6 +45,7 @@ interface CommandMenuProps {
   viewMode:
     | "tree"
     | "grouped"
+    | "desk"
     | "collector"
     | "tracked-items"
     | "flow"

@@ -89,6 +89,13 @@ Data is fetched from [tarkov.dev](https://tarkov.dev/) GraphQL API in a single c
 
 API responses are cached in localStorage for 30 minutes.
 
+## Build Modes
+
+`build:dev` intentionally runs `vite build --mode preview`, and `deploy:dev`
+uses that script. `src/instrument.ts` reads the Vite mode for Sentry environment
+and trace sampling (`development=1.0`, `preview=0.2`, default `0.1`), so the
+preview mode name is not a typo.
+
 ## Data Overlay System
 
 The tracker uses a community-maintained data overlay to correct and extend tarkov.dev API data. This handles cases where game updates outpace API updates.

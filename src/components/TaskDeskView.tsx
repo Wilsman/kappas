@@ -74,6 +74,7 @@ import {
   buildLogicalTaskKey,
   getLogicalCompletedPrerequisiteCount,
   isLogicalTaskCompleted as getIsLogicalTaskCompleted,
+  normalizeModeVariantTaskName,
 } from "@/utils/taskVariants";
 
 interface TaskDeskViewProps {
@@ -332,6 +333,9 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
 
   // Map of taskId -> DOM element to scroll into view when selected
   const itemRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const selectedTaskNameRef = useRef<string | null>(null);
+  const selectedTaskLogicalKeyRef = useRef<string | null>(null);
+  const prevSearchTermRef = useRef(searchTerm);
 
   // When selectedTaskId changes, scroll that task into view
   useEffect(() => {
@@ -579,6 +583,73 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   // Only use the explicitly expanded groups
   const finalExpandedGroups = expandedGroups;
   const areAllExpanded = finalExpandedGroups.length === allGroupNames.length;
+
+  useEffect(() => {
+    const previousSearchTerm = prevSearchTermRef.current;
+    prevSearchTermRef.current = searchTerm;
+    if (
+      previousSearchTerm.trim() ||
+      !searchTerm.trim() ||
+      allGroupNames.length === 0
+    ) {
+      return;
+    }
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      allGroupNames.forEach((groupName) => next.add(groupName));
+      return next.size === prev.length ? prev : Array.from(next);
+    });
+  }, [allGroupNames, searchTerm]);
+
+  useEffect(() => {
+    if (!selectedTaskId) return;
+
+    const selectedTask = tasks.find((task) => task.id === selectedTaskId);
+    if (selectedTask) {
+      selectedTaskNameRef.current = selectedTask.name;
+      selectedTaskLogicalKeyRef.current = buildLogicalTaskKey(selectedTask);
+      return;
+    }
+
+    const previousName = selectedTaskNameRef.current;
+    const previousLogicalKey = selectedTaskLogicalKeyRef.current;
+    if (!previousName && !previousLogicalKey) {
+      setSelectedTaskId(null);
+      return;
+    }
+
+    const nextTask =
+      (previousLogicalKey
+        ? tasks.find((task) => buildLogicalTaskKey(task) === previousLogicalKey)
+        : undefined) ??
+      (previousName
+        ? tasks.find(
+            (task) =>
+              normalizeModeVariantTaskName(task.name) ===
+              normalizeModeVariantTaskName(previousName),
+          )
+        : undefined);
+
+    if (!nextTask) {
+      setSelectedTaskId(null);
+      return;
+    }
+
+    selectedTaskNameRef.current = nextTask.name;
+    selectedTaskLogicalKeyRef.current = buildLogicalTaskKey(nextTask);
+    setSelectedTaskId(nextTask.id);
+    setExpandedGroups((prev) => {
+      const groupNames =
+        groupBy === "trader"
+          ? [nextTask.trader.name]
+          : nextTask.maps && nextTask.maps.length > 0
+            ? nextTask.maps.map((map) => map.name)
+            : [nextTask.map?.name || "Anywhere"];
+      const next = new Set(prev);
+      groupNames.forEach((groupName) => next.add(groupName));
+      return next.size === prev.length ? prev : Array.from(next);
+    });
+  }, [groupBy, selectedTaskId, tasks]);
 
   const handleToggleAll = () => {
     if (areAllExpanded) {
