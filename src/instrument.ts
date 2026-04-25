@@ -22,7 +22,8 @@ if (sentryDsn) {
 
     // Tracing
     tracesSampleRate,
-    tracePropagationTargets: ["localhost", "api.tarkov.dev"],
+    // api.tarkov.dev does not allow Sentry tracing headers in CORS preflight.
+    tracePropagationTargets: ["localhost"],
 
     // Logs
     enableLogs: true,
