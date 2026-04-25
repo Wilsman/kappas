@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:prod": "vite build --mode production",
+    "build:dev": "vite build --mode preview",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "deploy:prod": "bun run build && wrangler pages deploy dist --project-name=kappas --branch=master --commit-dirty=true",
-    "deploy:dev": "bun run build && wrangler pages deploy dist --project-name=kappas --branch=dev --commit-dirty=true",
+    "deploy:prod": "bun run build:prod && wrangler pages deploy dist --project-name=kappas --branch=master --commit-dirty=true",
+    "deploy:dev": "bun run build:dev && wrangler pages deploy dist --project-name=kappas --branch=dev --commit-dirty=true",
     "task": "npx tsx scripts/task-cli.ts"
   },
   "dependencies": {
