@@ -2,6 +2,10 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import * as Sentry from "@sentry/react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  isStaleAssetError,
+  requestStaleAssetReload,
+} from "@/utils/sentryNoiseFilters";
 
 interface Props {
   children: ReactNode;
@@ -23,17 +27,17 @@ export class LazyLoadErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (isStaleAssetError(error)) {
+      if (requestStaleAssetReload()) {
+        return;
+      }
+    }
+
     Sentry.captureReactException(error, errorInfo);
   }
 
   private isChunkLoadError(error: Error): boolean {
-    const message = error.message.toLowerCase();
-    return (
-      message.includes("failed to fetch dynamically imported module") ||
-      message.includes("loading chunk") ||
-      message.includes("loading css chunk") ||
-      message.includes("mime type")
-    );
+    return isStaleAssetError(error);
   }
 
   private handleReload = () => {

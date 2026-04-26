@@ -1,4 +1,8 @@
 import * as Sentry from "@sentry/react";
+import {
+  isReactDomMutationError,
+  isStaleAssetError,
+} from "@/utils/sentryNoiseFilters";
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 const sentryEnvironment =
@@ -27,5 +31,18 @@ if (sentryDsn) {
 
     // Logs
     enableLogs: true,
+
+    beforeSend(event, hint) {
+      const originalException = hint.originalException;
+
+      if (
+        isReactDomMutationError(originalException) ||
+        isStaleAssetError(originalException)
+      ) {
+        return null;
+      }
+
+      return event;
+    },
   });
 }
