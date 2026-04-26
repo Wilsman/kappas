@@ -431,6 +431,31 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
   });
 }
 
+export function sanitizeTaskRewardData(task: Task): Task {
+  const startRewardItems = (task.startRewards?.items ?? []).filter(
+    (reward) => !!reward?.item?.name,
+  );
+  const finishRewardItems = (task.finishRewards?.items ?? []).filter(
+    (reward) => !!reward?.item?.name,
+  );
+  const offerUnlocks = (task.finishRewards?.offerUnlock ?? []).filter(
+    (unlock) => !!unlock?.item?.name && !!unlock?.trader?.name,
+  );
+
+  return {
+    ...task,
+    startRewards:
+      startRewardItems.length > 0 ? { items: startRewardItems } : undefined,
+    finishRewards: task.finishRewards
+      ? {
+          ...task.finishRewards,
+          items: finishRewardItems,
+          offerUnlock: offerUnlocks,
+        }
+      : undefined,
+  };
+}
+
 export async function fetchOverlay(): Promise<Overlay> {
   try {
     const response = await fetch(OVERLAY_URL);
@@ -553,6 +578,66 @@ function noteLocalStorageQuotaError(err: unknown) {
 
 function noteLocalStorageWriteSuccess() {
   localStorageQuotaExceededUntil = 0;
+}
+
+function isQuotaExceededError(err: unknown): boolean {
+  return (
+    err instanceof Error ||
+    (typeof err === "object" && err !== null && "name" in err)
+  ) && (err as { name?: unknown }).name === "QuotaExceededError";
+}
+
+function pruneLocalStorageApiCaches(keyToKeep: string): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key) continue;
+      if (key === keyToKeep) continue;
+      if (
+        key === API_CACHE_KEY ||
+        (key === SHARED_CACHE_KEY && keyToKeep === SHARED_CACHE_KEY) ||
+        key.startsWith(`${API_CACHE_KEY_PREFIX}::`)
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Cache cleanup is best-effort; IndexedDB remains the durable fallback.
+  }
+}
+
+function setCacheItemWithQuotaRecovery(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    noteLocalStorageWriteSuccess();
+    return true;
+  } catch (err) {
+    if (!isQuotaExceededError(err)) {
+      console.warn("[Cache] Failed to save cache to localStorage:", err);
+      return false;
+    }
+  }
+
+  pruneLocalStorageApiCaches(key);
+
+  try {
+    localStorage.setItem(key, value);
+    noteLocalStorageWriteSuccess();
+    return true;
+  } catch (retryErr) {
+    if (isQuotaExceededError(retryErr)) {
+      noteLocalStorageQuotaError(retryErr);
+      console.warn(
+        "[Cache] localStorage quota exceeded; using IndexedDB cache fallback.",
+      );
+    } else {
+      console.warn("[Cache] Failed to save cache to localStorage:", retryErr);
+    }
+    return false;
+  }
 }
 
 export function buildCombinedCacheKey(gameMode: GameMode): string {
@@ -685,40 +770,25 @@ export async function saveCombinedCache(
 
   // Save shared data to localStorage (smaller, shared across modes)
   if (canAttemptLocalStorageWrite()) {
-    try {
-      const sharedData: SharedCacheData = {
-        updatedAt: now,
-        collectorItems: payload.collectorItems,
-        achievements: payload.achievements,
-        hideoutStations: payload.hideoutStations,
-      };
-      localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify(sharedData));
-      noteLocalStorageWriteSuccess();
-    } catch (err) {
-      noteLocalStorageQuotaError(err);
-      console.error(
-        "[Cache] Failed to save shared cache to localStorage:",
-        err,
-      );
-    }
+    const sharedData: SharedCacheData = {
+      updatedAt: now,
+      collectorItems: payload.collectorItems,
+      achievements: payload.achievements,
+      hideoutStations: payload.hideoutStations,
+    };
+    setCacheItemWithQuotaRecovery(SHARED_CACHE_KEY, JSON.stringify(sharedData));
   }
 
   // Save task data to localStorage (mode-specific, smaller now)
   if (canAttemptLocalStorageWrite()) {
-    try {
-      const taskData: TaskOnlyCache = {
-        updatedAt: now,
-        payload: { tasks: payload.tasks },
-      };
-      localStorage.setItem(
-        buildCombinedCacheKey(normalizedGameMode),
-        JSON.stringify(taskData),
-      );
-      noteLocalStorageWriteSuccess();
-    } catch (err) {
-      noteLocalStorageQuotaError(err);
-      console.error("[Cache] Failed to save task cache to localStorage:", err);
-    }
+    const taskData: TaskOnlyCache = {
+      updatedAt: now,
+      payload: { tasks: payload.tasks },
+    };
+    setCacheItemWithQuotaRecovery(
+      buildCombinedCacheKey(normalizedGameMode),
+      JSON.stringify(taskData),
+    );
   }
 
   // Also save tasks to IndexedDB as backup (async, no quota issues)
@@ -966,11 +1036,11 @@ export async function fetchCombinedData(
     // Convert Set to array of map objects
     const maps = Array.from(mapsSet).map((name) => ({ name }));
 
-    return {
+    return sanitizeTaskRewardData({
       ...task,
       wikiLink: task.wikiLink ?? "",
       maps,
-    };
+    });
   });
 
   const tasks: TaskData = {

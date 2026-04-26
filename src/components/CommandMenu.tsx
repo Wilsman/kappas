@@ -41,6 +41,39 @@ type PreviewItem =
   | { kind: "achievement"; achievement: Achievement }
   | { kind: "item"; name: string; img?: string };
 
+type RewardWithItem = NonNullable<Task["finishRewards"]>["items"] extends
+  | (infer Reward)[]
+  | undefined
+  ? Reward & { item: NonNullable<Reward extends { item?: infer Item } ? Item : never> }
+  : never;
+
+type OfferUnlockWithItem = NonNullable<
+  Task["finishRewards"]
+>["offerUnlock"] extends (infer Unlock)[] | undefined
+  ? Unlock & {
+      item: NonNullable<Unlock extends { item?: infer Item } ? Item : never>;
+      trader: NonNullable<
+        Unlock extends { trader?: infer Trader } ? Trader : never
+      >;
+    }
+  : never;
+
+function hasRewardItem(reward: unknown): reward is RewardWithItem {
+  const item = (reward as { item?: { name?: unknown } } | null)?.item;
+  return typeof item?.name === "string" && item.name.length > 0;
+}
+
+function hasOfferUnlockItem(unlock: unknown): unlock is OfferUnlockWithItem {
+  const entry =
+    unlock as { item?: { name?: unknown }; trader?: { name?: unknown } } | null;
+  return (
+    typeof entry?.item?.name === "string" &&
+    entry.item.name.length > 0 &&
+    typeof entry.trader?.name === "string" &&
+    entry.trader.name.length > 0
+  );
+}
+
 interface CommandMenuProps {
   viewMode:
     | "tree"
@@ -371,7 +404,7 @@ export function CommandMenu(props: CommandMenuProps) {
       }
 
       // Rewards: start and finish items (include quantities)
-      for (const r of t.startRewards?.items ?? []) {
+      for (const r of (t.startRewards?.items ?? []).filter(hasRewardItem)) {
         const base = scoreValue(r.item.name, 0.9);
         if (base < 0.5) continue;
         const qty =
@@ -383,7 +416,7 @@ export function CommandMenu(props: CommandMenuProps) {
           "reward",
         );
       }
-      for (const r of t.finishRewards?.items ?? []) {
+      for (const r of (t.finishRewards?.items ?? []).filter(hasRewardItem)) {
         const base = scoreValue(r.item.name, 0.9);
         if (base < 0.5) continue;
         const qty =
@@ -397,7 +430,9 @@ export function CommandMenu(props: CommandMenuProps) {
       }
 
       // Offer unlocks: item names and trader names (higher priority than rewards)
-      for (const u of t.finishRewards?.offerUnlock ?? []) {
+      for (const u of (t.finishRewards?.offerUnlock ?? []).filter(
+        hasOfferUnlockItem,
+      )) {
         const itemBase = scoreValue(u.item.name, 1.0);
         if (itemBase >= 0.5) {
           consider(
@@ -492,9 +527,13 @@ export function CommandMenu(props: CommandMenuProps) {
       for (const obj of task.objectives ?? []) {
         for (const item of obj.items ?? []) mark(item.name);
       }
-      for (const reward of task.startRewards?.items ?? [])
+      for (const reward of (task.startRewards?.items ?? []).filter(
+        hasRewardItem,
+      ))
         mark(reward.item.name);
-      for (const reward of task.finishRewards?.items ?? [])
+      for (const reward of (task.finishRewards?.items ?? []).filter(
+        hasRewardItem,
+      ))
         mark(reward.item.name);
     }
     return flags;
@@ -753,7 +792,7 @@ export function CommandMenu(props: CommandMenuProps) {
       const rewardItems = [
         ...(task.startRewards?.items ?? []),
         ...(task.finishRewards?.items ?? []),
-      ];
+      ].filter(hasRewardItem);
       const traderStandingRewards = (
         task.finishRewards?.traderStanding ?? []
       ).filter((rep) => typeof rep.standing === "number" && !!rep.trader?.name);
@@ -1091,7 +1130,8 @@ export function CommandMenu(props: CommandMenuProps) {
             )}
 
             {task.finishRewards?.offerUnlock &&
-              task.finishRewards.offerUnlock.length > 0 && (
+              task.finishRewards.offerUnlock.filter(hasOfferUnlockItem).length >
+                0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <div className="h-[1px] flex-1 bg-border/50" />
@@ -1101,45 +1141,47 @@ export function CommandMenu(props: CommandMenuProps) {
                     <div className="h-[1px] flex-1 bg-border/50" />
                   </div>
                   <div className="grid gap-2">
-                    {task.finishRewards.offerUnlock.map((unlock, uIdx) => (
-                      <div
-                        key={`unlock-${uIdx}`}
-                        className="flex items-center gap-3 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10"
-                      >
-                        {/* Item Icon */}
-                        <div className="h-10 w-10 shrink-0 rounded-md bg-black/20 flex items-center justify-center p-1 border border-amber-500/20">
-                          {unlock.item.iconLink ? (
-                            <img
-                              src={unlock.item.iconLink}
-                              alt=""
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            <div className="h-2 w-2 rounded-full bg-amber-500/40" />
-                          )}
-                        </div>
-                        {/* Trader Icon (smaller, overlaid) */}
-                        <div className="h-6 w-6 shrink-0 rounded-full bg-black/40 flex items-center justify-center overflow-hidden -ml-5 ring-2 ring-amber-500/10 z-10">
-                          {unlock.trader.imageLink ? (
-                            <img
-                              src={unlock.trader.imageLink}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="h-1.5 w-1.5 rounded-full bg-amber-500/60" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-foreground/90 truncate">
-                            {unlock.item.name}
+                    {task.finishRewards.offerUnlock
+                      .filter(hasOfferUnlockItem)
+                      .map((unlock, uIdx) => (
+                        <div
+                          key={`unlock-${uIdx}`}
+                          className="flex items-center gap-3 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10"
+                        >
+                          {/* Item Icon */}
+                          <div className="h-10 w-10 shrink-0 rounded-md bg-black/20 flex items-center justify-center p-1 border border-amber-500/20">
+                            {unlock.item.iconLink ? (
+                              <img
+                                src={unlock.item.iconLink}
+                                alt=""
+                                className="h-full w-full object-contain"
+                              />
+                            ) : (
+                              <div className="h-2 w-2 rounded-full bg-amber-500/40" />
+                            )}
                           </div>
-                          <div className="text-[10px] text-amber-500/80 font-medium">
-                            {unlock.trader.name} LL{unlock.level}
+                          {/* Trader Icon (smaller, overlaid) */}
+                          <div className="h-6 w-6 shrink-0 rounded-full bg-black/40 flex items-center justify-center overflow-hidden -ml-5 ring-2 ring-amber-500/10 z-10">
+                            {unlock.trader.imageLink ? (
+                              <img
+                                src={unlock.trader.imageLink}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-1.5 w-1.5 rounded-full bg-amber-500/60" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-foreground/90 truncate">
+                              {unlock.item.name}
+                            </div>
+                            <div className="text-[10px] text-amber-500/80 font-medium">
+                              {unlock.trader.name} LL{unlock.level}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
               )}

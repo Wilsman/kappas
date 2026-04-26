@@ -9,6 +9,7 @@ import {
   API_CACHE_KEY,
   API_CACHE_TTL_MS,
   SHARED_CACHE_KEY,
+  sanitizeTaskRewardData,
 } from "../tarkovApi";
 
 interface MockResponse<T> {
@@ -399,6 +400,57 @@ describe("fetchCombinedData", () => {
   });
 });
 
+describe("sanitizeTaskRewardData", () => {
+  it("removes reward rows that are missing item data", () => {
+    const task = {
+      id: "task",
+      minPlayerLevel: 1,
+      taskRequirements: [],
+      wikiLink: "",
+      name: "Task",
+      map: null,
+      maps: [],
+      trader: { name: "Prapor" },
+      startRewards: {
+        items: [
+          { item: null, count: 1 },
+          { item: { name: "Valid start reward" }, count: 2 },
+        ],
+      },
+      finishRewards: {
+        items: [
+          { item: null, count: 1 },
+          { item: { name: "Valid finish reward" }, count: 3 },
+        ],
+        offerUnlock: [
+          { item: null, trader: { name: "Prapor" }, level: 1 },
+          { item: { name: "Valid unlock" }, trader: null, level: 1 },
+          {
+            item: { name: "Valid offer" },
+            trader: { name: "Prapor" },
+            level: 2,
+          },
+        ],
+      },
+    };
+
+    const sanitized = sanitizeTaskRewardData(task as never);
+
+    expect(sanitized.startRewards?.items).toHaveLength(1);
+    expect(sanitized.startRewards?.items[0].item.name).toBe(
+      "Valid start reward",
+    );
+    expect(sanitized.finishRewards?.items).toHaveLength(1);
+    expect(sanitized.finishRewards?.items?.[0].item.name).toBe(
+      "Valid finish reward",
+    );
+    expect(sanitized.finishRewards?.offerUnlock).toHaveLength(1);
+    expect(sanitized.finishRewards?.offerUnlock?.[0].item.name).toBe(
+      "Valid offer",
+    );
+  });
+});
+
 describe("Cache functionality", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -559,5 +611,43 @@ describe("Cache functionality", () => {
     );
 
     expect(loadCombinedCache("regular")).toBeNull();
+  });
+
+  it("should prune old API cache entries and retry after localStorage quota errors", async () => {
+    const payload = {
+      tasks: { data: { tasks: [{ id: "fresh-pve-task" }] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+    const originalSetItem = Storage.prototype.setItem;
+    let pveWriteAttempts = 0;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+        this: Storage,
+        key: string,
+        value: string,
+      ) {
+        if (key === buildCombinedCacheKey("pve")) {
+          pveWriteAttempts++;
+        }
+        if (key === buildCombinedCacheKey("pve") && pveWriteAttempts === 1) {
+          throw new DOMException("Quota exceeded", "QuotaExceededError");
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    localStorage.setItem(API_CACHE_KEY, "legacy");
+    localStorage.setItem(buildCombinedCacheKey("regular"), "old-regular");
+
+    await saveCombinedCache(
+      payload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "pve",
+    );
+
+    expect(localStorage.getItem(API_CACHE_KEY)).toBeNull();
+    expect(localStorage.getItem(buildCombinedCacheKey("regular"))).toBeNull();
+    expect(loadCombinedCache("pve")?.tasks.data.tasks[0].id).toBe(
+      "fresh-pve-task",
+    );
   });
 });
