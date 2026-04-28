@@ -663,6 +663,66 @@ function buildLegacyCombinedCacheKey(gameMode: GameMode): string {
   return `${LEGACY_API_CACHE_KEY_PREFIX}::${normalizeGameMode(gameMode)}`;
 }
 
+function readSplitCache(
+  sharedCacheKey: string,
+  taskCacheKey: string,
+): CombinedCachePayload | null {
+  const sharedCacheRaw = localStorage.getItem(sharedCacheKey);
+  const taskCacheRaw = localStorage.getItem(taskCacheKey);
+
+  if (!sharedCacheRaw || !taskCacheRaw) return null;
+
+  try {
+    const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
+    const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
+
+    if (
+      sharedCache?.collectorItems &&
+      sharedCache?.achievements &&
+      sharedCache?.hideoutStations &&
+      taskCache?.payload?.tasks
+    ) {
+      return {
+        tasks: taskCache.payload.tasks,
+        collectorItems: sharedCache.collectorItems,
+        achievements: sharedCache.achievements,
+        hideoutStations: sharedCache.hideoutStations,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function isSplitCacheFresh(
+  sharedCacheKey: string,
+  taskCacheKey: string,
+  ttlMs: number,
+): boolean {
+  const sharedCacheRaw = localStorage.getItem(sharedCacheKey);
+  const taskCacheRaw = localStorage.getItem(taskCacheKey);
+
+  if (!sharedCacheRaw || !taskCacheRaw) return false;
+
+  try {
+    const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
+    const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
+
+    if (sharedCache?.updatedAt && taskCache?.updatedAt) {
+      const now = Date.now();
+      return (
+        now - sharedCache.updatedAt < ttlMs && now - taskCache.updatedAt < ttlMs
+      );
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 function readStoredCache(key: string): StoredCache | null {
   try {
     const raw = localStorage.getItem(key);
@@ -694,40 +754,22 @@ export function loadCombinedCache(
   const normalizedLanguage = normalizeLanguage(language);
 
   // Try to load from new split cache format (shared + tasks in localStorage)
-  const sharedCacheRaw = localStorage.getItem(
-    buildSharedCacheKey(normalizedLanguage),
-  );
+  const sharedCacheKey = buildSharedCacheKey(normalizedLanguage);
   const taskCacheKey = buildCombinedCacheKey(
     normalizedGameMode,
     normalizedLanguage,
   );
-  const taskCacheRaw = localStorage.getItem(taskCacheKey);
-
-  if (sharedCacheRaw && taskCacheRaw) {
-    try {
-      const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
-      const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
-
-      if (
-        sharedCache?.collectorItems &&
-        sharedCache?.achievements &&
-        sharedCache?.hideoutStations &&
-        taskCache?.payload?.tasks
-      ) {
-        return {
-          tasks: taskCache.payload.tasks,
-          collectorItems: sharedCache.collectorItems,
-          achievements: sharedCache.achievements,
-          hideoutStations: sharedCache.hideoutStations,
-        };
-      }
-    } catch {
-      // Fall through to legacy cache
-    }
-  }
+  const splitCache = readSplitCache(sharedCacheKey, taskCacheKey);
+  if (splitCache) return splitCache;
 
   // Fallback to legacy cache for compatibility
   if (normalizedLanguage === DEFAULT_LANGUAGE) {
+    const legacySplitCache = readSplitCache(
+      SHARED_CACHE_KEY,
+      buildLegacyCombinedCacheKey(normalizedGameMode),
+    );
+    if (legacySplitCache) return legacySplitCache;
+
     const modeCache = readStoredCache(
       buildLegacyCombinedCacheKey(normalizedGameMode),
     );
@@ -755,32 +797,22 @@ export function isCombinedCacheFresh(
   const normalizedLanguage = normalizeLanguage(language);
 
   // Check new split cache format
-  const sharedCacheRaw = localStorage.getItem(
+  const splitCacheFresh = isSplitCacheFresh(
     buildSharedCacheKey(normalizedLanguage),
-  );
-  const taskCacheRaw = localStorage.getItem(
     buildCombinedCacheKey(normalizedGameMode, normalizedLanguage),
+    ttlMs,
   );
-
-  if (sharedCacheRaw && taskCacheRaw) {
-    try {
-      const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
-      const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
-
-      // Both must be fresh
-      if (sharedCache?.updatedAt && taskCache?.updatedAt) {
-        const now = Date.now();
-        const sharedFresh = now - sharedCache.updatedAt < ttlMs;
-        const taskFresh = now - taskCache.updatedAt < ttlMs;
-        return sharedFresh && taskFresh;
-      }
-    } catch {
-      // Fall through to legacy check
-    }
-  }
+  if (splitCacheFresh) return true;
 
   // Fallback to legacy cache
   if (normalizedLanguage === DEFAULT_LANGUAGE) {
+    const legacySplitCacheFresh = isSplitCacheFresh(
+      SHARED_CACHE_KEY,
+      buildLegacyCombinedCacheKey(normalizedGameMode),
+      ttlMs,
+    );
+    if (legacySplitCacheFresh) return true;
+
     const modeCache = readStoredCache(
       buildLegacyCombinedCacheKey(normalizedGameMode),
     );
@@ -839,6 +871,7 @@ export async function saveCombinedCache(
     await taskStorage.saveTaskCache(
       normalizedGameMode,
       payload.tasks.data.tasks,
+      normalizedLanguage,
     );
   } catch (err) {
     console.warn(

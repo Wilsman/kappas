@@ -601,6 +601,35 @@ describe("Cache functionality", () => {
     expect(isCombinedCacheFresh("pve")).toBe(false);
   });
 
+  it("should use legacy split cache as English fallback only", () => {
+    const sharedCache = {
+      updatedAt: Date.now(),
+      collectorItems: { data: { task: { id: "collector-en", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+    const taskCache = {
+      updatedAt: Date.now(),
+      payload: { tasks: { data: { tasks: [{ id: "legacy-split-task" }] } } },
+    };
+
+    localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify(sharedCache));
+    localStorage.setItem(
+      "taskTracker_api_cache_v3::regular",
+      JSON.stringify(taskCache),
+    );
+
+    expect(loadCombinedCache("regular", "en")?.tasks.data.tasks[0].id).toBe(
+      "legacy-split-task",
+    );
+    expect(loadCombinedCache("regular", "en")?.collectorItems.data.task.id).toBe(
+      "collector-en",
+    );
+    expect(isCombinedCacheFresh("regular", "en")).toBe(true);
+    expect(loadCombinedCache("regular", "de")).toBeNull();
+    expect(isCombinedCacheFresh("regular", "de")).toBe(false);
+  });
+
   it("should detect fresh cache", async () => {
     const payload = {
       tasks: { data: { tasks: [] } },
