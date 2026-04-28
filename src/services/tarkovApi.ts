@@ -18,6 +18,11 @@ import {
   normalizeGameMode,
   type GameMode,
 } from "@/utils/gameMode";
+import {
+  DEFAULT_LANGUAGE,
+  normalizeLanguage,
+  type LanguageCode,
+} from "@/utils/language";
 import { taskStorage } from "@/utils/indexedDB";
 const TARKOV_API_URL = "https://api.tarkov.dev/graphql";
 export const OVERLAY_URL =
@@ -537,7 +542,8 @@ function hasUsableCombinedTaskData(
 
 // Simple localStorage cache for combined API payload
 export const API_CACHE_KEY = "taskTracker_api_cache_v2";
-export const API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v3";
+export const API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v4";
+const LEGACY_API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v3";
 export const SHARED_CACHE_KEY = "taskTracker_shared_cache_v3";
 export const API_CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
 
@@ -597,7 +603,8 @@ function pruneLocalStorageApiCaches(keyToKeep: string): void {
       if (
         key === API_CACHE_KEY ||
         (key === SHARED_CACHE_KEY && keyToKeep === SHARED_CACHE_KEY) ||
-        key.startsWith(`${API_CACHE_KEY_PREFIX}::`)
+        key.startsWith(`${API_CACHE_KEY_PREFIX}::`) ||
+        key.startsWith(`${LEGACY_API_CACHE_KEY_PREFIX}::`)
       ) {
         keysToRemove.push(key);
       }
@@ -640,8 +647,15 @@ function setCacheItemWithQuotaRecovery(key: string, value: string): boolean {
   }
 }
 
-export function buildCombinedCacheKey(gameMode: GameMode): string {
-  return `${API_CACHE_KEY_PREFIX}::${gameMode}`;
+export function buildCombinedCacheKey(
+  gameMode: GameMode,
+  language: LanguageCode = DEFAULT_LANGUAGE,
+): string {
+  return `${API_CACHE_KEY_PREFIX}::${normalizeGameMode(gameMode)}::${normalizeLanguage(language)}`;
+}
+
+function buildLegacyCombinedCacheKey(gameMode: GameMode): string {
+  return `${LEGACY_API_CACHE_KEY_PREFIX}::${normalizeGameMode(gameMode)}`;
 }
 
 function readStoredCache(key: string): StoredCache | null {
@@ -669,12 +683,17 @@ function isCombinedCachePayload(payload: unknown): payload is CombinedCachePaylo
 
 export function loadCombinedCache(
   gameMode: GameMode = DEFAULT_GAME_MODE,
+  language: LanguageCode = DEFAULT_LANGUAGE,
 ): CombinedCachePayload | null {
   const normalizedGameMode = normalizeGameMode(gameMode);
+  const normalizedLanguage = normalizeLanguage(language);
 
   // Try to load from new split cache format (shared + tasks in localStorage)
   const sharedCacheRaw = localStorage.getItem(SHARED_CACHE_KEY);
-  const taskCacheKey = buildCombinedCacheKey(normalizedGameMode);
+  const taskCacheKey = buildCombinedCacheKey(
+    normalizedGameMode,
+    normalizedLanguage,
+  );
   const taskCacheRaw = localStorage.getItem(taskCacheKey);
 
   if (sharedCacheRaw && taskCacheRaw) {
@@ -701,16 +720,20 @@ export function loadCombinedCache(
   }
 
   // Fallback to legacy cache for compatibility
-  const modeCache = readStoredCache(buildCombinedCacheKey(normalizedGameMode));
-  if (modeCache && isCombinedCachePayload(modeCache.payload)) {
-    return modeCache.payload;
-  }
+  if (normalizedLanguage === DEFAULT_LANGUAGE) {
+    const modeCache = readStoredCache(
+      buildLegacyCombinedCacheKey(normalizedGameMode),
+    );
+    if (modeCache && isCombinedCachePayload(modeCache.payload)) {
+      return modeCache.payload;
+    }
 
-  if (normalizedGameMode === DEFAULT_GAME_MODE) {
-    const legacyCache = readStoredCache(API_CACHE_KEY);
-    return legacyCache && isCombinedCachePayload(legacyCache.payload)
-      ? legacyCache.payload
-      : null;
+    if (normalizedGameMode === DEFAULT_GAME_MODE) {
+      const legacyCache = readStoredCache(API_CACHE_KEY);
+      return legacyCache && isCombinedCachePayload(legacyCache.payload)
+        ? legacyCache.payload
+        : null;
+    }
   }
 
   return null;
@@ -718,14 +741,16 @@ export function loadCombinedCache(
 
 export function isCombinedCacheFresh(
   gameMode: GameMode = DEFAULT_GAME_MODE,
+  language: LanguageCode = DEFAULT_LANGUAGE,
   ttlMs: number = API_CACHE_TTL_MS,
 ): boolean {
   const normalizedGameMode = normalizeGameMode(gameMode);
+  const normalizedLanguage = normalizeLanguage(language);
 
   // Check new split cache format
   const sharedCacheRaw = localStorage.getItem(SHARED_CACHE_KEY);
   const taskCacheRaw = localStorage.getItem(
-    buildCombinedCacheKey(normalizedGameMode),
+    buildCombinedCacheKey(normalizedGameMode, normalizedLanguage),
   );
 
   if (sharedCacheRaw && taskCacheRaw) {
@@ -746,15 +771,19 @@ export function isCombinedCacheFresh(
   }
 
   // Fallback to legacy cache
-  const modeCache = readStoredCache(buildCombinedCacheKey(normalizedGameMode));
-  if (modeCache?.updatedAt) {
-    return Date.now() - modeCache.updatedAt < ttlMs;
-  }
+  if (normalizedLanguage === DEFAULT_LANGUAGE) {
+    const modeCache = readStoredCache(
+      buildLegacyCombinedCacheKey(normalizedGameMode),
+    );
+    if (modeCache?.updatedAt) {
+      return Date.now() - modeCache.updatedAt < ttlMs;
+    }
 
-  if (normalizedGameMode === DEFAULT_GAME_MODE) {
-    const legacyCache = readStoredCache(API_CACHE_KEY);
-    if (legacyCache?.updatedAt) {
-      return Date.now() - legacyCache.updatedAt < ttlMs;
+    if (normalizedGameMode === DEFAULT_GAME_MODE) {
+      const legacyCache = readStoredCache(API_CACHE_KEY);
+      if (legacyCache?.updatedAt) {
+        return Date.now() - legacyCache.updatedAt < ttlMs;
+      }
     }
   }
 
@@ -764,8 +793,10 @@ export function isCombinedCacheFresh(
 export async function saveCombinedCache(
   payload: CombinedCachePayload,
   gameMode: GameMode = DEFAULT_GAME_MODE,
+  language: LanguageCode = DEFAULT_LANGUAGE,
 ): Promise<void> {
   const normalizedGameMode = normalizeGameMode(gameMode);
+  const normalizedLanguage = normalizeLanguage(language);
   const now = Date.now();
 
   // Save shared data to localStorage (smaller, shared across modes)
@@ -786,7 +817,7 @@ export async function saveCombinedCache(
       payload: { tasks: payload.tasks },
     };
     setCacheItemWithQuotaRecovery(
-      buildCombinedCacheKey(normalizedGameMode),
+      buildCombinedCacheKey(normalizedGameMode, normalizedLanguage),
       JSON.stringify(taskData),
     );
   }
@@ -871,9 +902,9 @@ const ACHIEVEMENTS_QUERY = `
   }
 `;
 
-const buildCombinedQuery = (gameMode: GameMode) => `
+const buildCombinedQuery = (gameMode: GameMode, language: LanguageCode) => `
 {
-  tasks(lang: en, gameMode: ${gameMode}) {
+  tasks(lang: ${language}, gameMode: ${gameMode}) {
     id
     minPlayerLevel
     factionName
@@ -934,7 +965,7 @@ const buildCombinedQuery = (gameMode: GameMode) => `
       ... on TaskObjectivePlayerLevel { playerLevel }
     }
   }
-  task(id: "5c51aac186f77432ea65c552", lang: en) {
+  task(id: "5c51aac186f77432ea65c552", lang: ${language}) {
     id
     objectives { ... on TaskObjectiveItem { items { id name iconLink } } }
   }
@@ -972,6 +1003,7 @@ export type FetchStage =
 
 export async function fetchCombinedData(
   gameMode: GameMode = DEFAULT_GAME_MODE,
+  language: LanguageCode = DEFAULT_LANGUAGE,
   onStage?: (stage: FetchStage) => void,
 ): Promise<{
   tasks: TaskData;
@@ -981,6 +1013,7 @@ export async function fetchCombinedData(
   overlay: Overlay;
 }> {
   const normalizedGameMode = normalizeGameMode(gameMode);
+  const normalizedLanguage = normalizeLanguage(language);
   onStage?.("request");
   const response = await fetch(TARKOV_API_URL, {
     method: "POST",
@@ -988,7 +1021,7 @@ export async function fetchCombinedData(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      query: buildCombinedQuery(normalizedGameMode),
+      query: buildCombinedQuery(normalizedGameMode, normalizedLanguage),
     }),
   });
 
@@ -1077,7 +1110,7 @@ export async function fetchCombinedData(
 
   const combined = { tasks, collectorItems, achievements, hideoutStations };
   // Save fresh data to cache for next startup
-  await saveCombinedCache(combined, normalizedGameMode);
+  await saveCombinedCache(combined, normalizedGameMode, normalizedLanguage);
   onStage?.("done");
   return { ...combined, overlay };
 }

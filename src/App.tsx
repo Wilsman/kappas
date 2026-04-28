@@ -50,6 +50,13 @@ import {
   type GameMode,
 } from "@/utils/gameMode";
 import {
+  API_LANGUAGE_STORAGE_KEY,
+  DEFAULT_LANGUAGE,
+  SUPPORTED_LANGUAGES,
+  normalizeLanguage,
+  type LanguageCode,
+} from "@/utils/language";
+import {
   loadCurrentPrestigeSummary,
   PRESTIGE_UPDATED_EVENT,
   PRESTIGE_CONFIGS,
@@ -106,6 +113,13 @@ async function loadWithRetry<T>(
   throw lastError;
 }
 import { Button } from "./components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -287,6 +301,11 @@ function App() {
   >(undefined);
   const [activeProfileGameMode, setActiveProfileGameMode] =
     useState<GameMode>(DEFAULT_GAME_MODE);
+  const [apiLanguage, setApiLanguage] = useState<LanguageCode>(() => {
+    if (typeof window === "undefined") return DEFAULT_LANGUAGE;
+    return normalizeLanguage(localStorage.getItem(API_LANGUAGE_STORAGE_KEY));
+  });
+  const apiLanguageRef = useRef(apiLanguage);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [refreshErrorDialog, setRefreshErrorDialog] =
     useState<RefreshErrorDialogState | null>(null);
@@ -495,6 +514,7 @@ function App() {
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const hasInitializedRef = useRef(false);
   const lastLoadedGameModeRef = useRef<GameMode | null>(null);
+  const lastLoadedLanguageRef = useRef<LanguageCode | null>(null);
   const gameModeRequestRef = useRef(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
@@ -642,6 +662,7 @@ function App() {
         overlay?: Overlay;
       },
       gameMode: GameMode,
+      language: LanguageCode,
     ) => {
       setAllTasks(payload.tasks.data.tasks);
       setApiCollectorItems(payload.collectorItems);
@@ -649,6 +670,7 @@ function App() {
       setHideoutStations(payload.hideoutStations.data.hideoutStations);
       if (payload.overlay) setOverlay(payload.overlay);
       lastLoadedGameModeRef.current = gameMode;
+      lastLoadedLanguageRef.current = language;
       setModeTasksByMode((prev) => ({
         ...prev,
         [gameMode]: payload.tasks.data.tasks,
@@ -656,6 +678,10 @@ function App() {
     },
     [],
   );
+  useEffect(() => {
+    apiLanguageRef.current = apiLanguage;
+    localStorage.setItem(API_LANGUAGE_STORAGE_KEY, apiLanguage);
+  }, [apiLanguage]);
   const handleCopyRefreshErrorReport = useCallback(async () => {
     if (!refreshErrorDialog) return;
     const copied = await copyTextToClipboard(refreshErrorDialog.reportText);
@@ -691,8 +717,8 @@ function App() {
   const handleRefresh = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const data = await fetchCombinedData(activeProfileGameMode);
-      applyCombinedData(data, activeProfileGameMode);
+      const data = await fetchCombinedData(activeProfileGameMode, apiLanguage);
+      applyCombinedData(data, activeProfileGameMode, apiLanguage);
     } catch (err) {
       console.error("Manual refresh error", err);
       reportRefreshError("manual-refresh", err, allTasks.length > 0);
@@ -701,34 +727,38 @@ function App() {
     }
   }, [
     activeProfileGameMode,
+    apiLanguage,
     allTasks.length,
     applyCombinedData,
     reportRefreshError,
   ]);
 
   const loadGameModeData = useCallback(
-    async (gameMode: GameMode) => {
+    async (
+      gameMode: GameMode,
+      language: LanguageCode = apiLanguageRef.current,
+    ) => {
       const requestId = ++gameModeRequestRef.current;
-      const cached = loadCombinedCache(gameMode);
+      const cached = loadCombinedCache(gameMode, language);
 
       setIsGameModeLoading(true);
       setIsSwitchingMode(true);
       if (cached) {
-        applyCombinedData(cached, gameMode);
+        applyCombinedData(cached, gameMode, language);
       }
       // Don't clear tasks when switching modes - keep old data visible until new data arrives
       // This prevents skeleton flash during mode switch
 
-      if (cached && isCombinedCacheFresh(gameMode)) {
+      if (cached && isCombinedCacheFresh(gameMode, language)) {
         setIsGameModeLoading(false);
         setIsSwitchingMode(false);
         return;
       }
 
       try {
-        const data = await fetchCombinedData(gameMode);
+        const data = await fetchCombinedData(gameMode, language);
         if (gameModeRequestRef.current !== requestId) return;
-        applyCombinedData(data, gameMode);
+        applyCombinedData(data, gameMode, language);
       } catch (err) {
         if (gameModeRequestRef.current !== requestId) return;
         console.error("Game mode data refresh error", err);
@@ -1337,6 +1367,7 @@ function App() {
           ensured.profiles.find((profile) => profile.id === ensured.activeId)
             ?.gameMode,
         );
+        const initialLanguage = apiLanguageRef.current;
         setActiveProfileGameMode(initialGameMode);
 
         // One-time migrate legacy single-DB data into the first profile
@@ -1608,18 +1639,24 @@ function App() {
         }
 
         // Load cached API data instantly if present
-        const cached = loadCombinedCache(initialGameMode);
+        const cached = loadCombinedCache(initialGameMode, initialLanguage);
         if (cached) {
-          applyCombinedData(cached, initialGameMode);
+          applyCombinedData(cached, initialGameMode, initialLanguage);
           setIsLoading(false);
         }
 
-        const needsRefresh = !isCombinedCacheFresh(initialGameMode);
+        const needsRefresh = !isCombinedCacheFresh(
+          initialGameMode,
+          initialLanguage,
+        );
         if (needsRefresh) {
           // Refresh in background; if no cache, this awaits to ensure UI has data
           try {
-            const data = await fetchCombinedData(initialGameMode);
-            applyCombinedData(data, initialGameMode);
+            const data = await fetchCombinedData(
+              initialGameMode,
+              initialLanguage,
+            );
+            applyCombinedData(data, initialGameMode, initialLanguage);
             overlayLoaded = true;
           } catch (err) {
             console.error("API refresh error", err);
@@ -1636,8 +1673,11 @@ function App() {
         } else if (!cached) {
           // Fresh cache was missing but TTL says fresh (edge) → fetch to populate and render
           try {
-            const data = await fetchCombinedData(initialGameMode);
-            applyCombinedData(data, initialGameMode);
+            const data = await fetchCombinedData(
+              initialGameMode,
+              initialLanguage,
+            );
+            applyCombinedData(data, initialGameMode, initialLanguage);
             overlayLoaded = true;
           } catch (err) {
             console.error("API fetch error", err);
@@ -1667,7 +1707,11 @@ function App() {
         setIsLoading(false);
       } catch (err) {
         console.error("Init error", err);
-        reportRefreshError("initialization", err, Boolean(loadCombinedCache()));
+        reportRefreshError(
+          "initialization",
+          err,
+          Boolean(loadCombinedCache(DEFAULT_GAME_MODE, apiLanguageRef.current)),
+        );
         // Ensure UI doesn't get stuck loading on init errors
         hasInitializedRef.current = true;
         setIsLoading(false);
@@ -1678,9 +1722,20 @@ function App() {
 
   useEffect(() => {
     if (!hasInitializedRef.current || !activeProfileId || isLoading) return;
-    if (lastLoadedGameModeRef.current === activeProfileGameMode) return;
-    void loadGameModeData(activeProfileGameMode);
-  }, [activeProfileGameMode, activeProfileId, isLoading, loadGameModeData]);
+    if (
+      lastLoadedGameModeRef.current === activeProfileGameMode &&
+      lastLoadedLanguageRef.current === apiLanguage
+    ) {
+      return;
+    }
+    void loadGameModeData(activeProfileGameMode, apiLanguage);
+  }, [
+    activeProfileGameMode,
+    activeProfileId,
+    apiLanguage,
+    isLoading,
+    loadGameModeData,
+  ]);
 
   useEffect(() => {
     if (
@@ -1693,17 +1748,17 @@ function App() {
     }
 
     const inactiveGameMode = getInactiveGameMode(activeProfileGameMode);
-    const cached = loadCombinedCache(inactiveGameMode);
+    const cached = loadCombinedCache(inactiveGameMode, apiLanguage);
     if (cached) {
       setModeTasksByMode((prev) => ({
         ...prev,
         [inactiveGameMode]: cached.tasks.data.tasks,
       }));
     }
-    if (isCombinedCacheFresh(inactiveGameMode)) return;
+    if (isCombinedCacheFresh(inactiveGameMode, apiLanguage)) return;
 
     let cancelled = false;
-    void fetchCombinedData(inactiveGameMode)
+    void fetchCombinedData(inactiveGameMode, apiLanguage)
       .then((data) => {
         if (cancelled) return;
         setModeTasksByMode((prev) => ({
@@ -1720,7 +1775,13 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeProfileGameMode, activeProfileId, isGameModeLoading, isLoading]);
+  }, [
+    activeProfileGameMode,
+    activeProfileId,
+    apiLanguage,
+    isGameModeLoading,
+    isLoading,
+  ]);
 
   // Validate and cleanup orphaned working-on task IDs
   // This runs after tasks are loaded to detect any saved task IDs that no longer exist
@@ -2777,6 +2838,29 @@ function App() {
                       >
                         <BarChart3 className="h-4 w-4" />
                       </Button>
+                      <Select
+                        value={apiLanguage}
+                        onValueChange={(value) =>
+                          setApiLanguage(normalizeLanguage(value))
+                        }
+                      >
+                        <SelectTrigger
+                          className="h-9 w-[76px] px-2 text-xs"
+                          aria-label="API language"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          {SUPPORTED_LANGUAGES.map((language) => (
+                            <SelectItem
+                              key={language.code}
+                              value={language.code}
+                            >
+                              {language.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Button
                         variant="outline"
                         size="icon"
@@ -2879,6 +2963,26 @@ function App() {
                       </span>
                     </Button>
                     <span className="h-4 w-px bg-border/60" />
+                    <Select
+                      value={apiLanguage}
+                      onValueChange={(value) =>
+                        setApiLanguage(normalizeLanguage(value))
+                      }
+                    >
+                      <SelectTrigger
+                        className="h-9 w-[130px] text-xs"
+                        aria-label="API language"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="end">
+                        {SUPPORTED_LANGUAGES.map((language) => (
+                          <SelectItem key={language.code} value={language.code}>
+                            {language.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       variant="outline"
                       size="sm"

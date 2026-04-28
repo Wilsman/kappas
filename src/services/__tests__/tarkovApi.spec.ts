@@ -176,6 +176,31 @@ describe("fetchCombinedData", () => {
     expect(body.query).toContain("gameMode: pve");
   });
 
+  it("requests localized tasks and collector data when language is selected", async () => {
+    mockFetchOnce({
+      data: {
+        tasks: [],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    });
+
+    await fetchCombinedData("regular", "de");
+
+    const fetchSpy = globalThis.fetch as unknown as Mock;
+    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
+    const graphCall = calls.find((call) =>
+      String(call[0]).includes("https://api.tarkov.dev/graphql"),
+    );
+    const init = (graphCall?.[1] ?? {}) as { body?: string };
+    const body = JSON.parse(init.body ?? "{}") as { query?: string };
+    expect(body.query).toContain("tasks(lang: de, gameMode: regular)");
+    expect(body.query).toContain(
+      'task(id: "5c51aac186f77432ea65c552", lang: de)',
+    );
+  });
+
   it("uses partial task data when GraphQL returns recoverable field errors", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const apiResponse = {
@@ -508,6 +533,45 @@ describe("Cache functionality", () => {
     expect(loadCombinedCache("pve")?.tasks.data.tasks[0].id).toBe("pve-task");
   });
 
+  it("should isolate task cache by language", async () => {
+    const englishPayload = {
+      tasks: { data: { tasks: [{ id: "english-task" }] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+    const germanPayload = {
+      tasks: { data: { tasks: [{ id: "german-task" }] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+
+    await saveCombinedCache(
+      englishPayload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "regular",
+      "en",
+    );
+    await saveCombinedCache(
+      germanPayload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "regular",
+      "de",
+    );
+
+    expect(buildCombinedCacheKey("regular", "en")).toBe(
+      "taskTracker_api_cache_v4::regular::en",
+    );
+    expect(buildCombinedCacheKey("regular", "de")).toBe(
+      "taskTracker_api_cache_v4::regular::de",
+    );
+    expect(loadCombinedCache("regular", "en")?.tasks.data.tasks[0].id).toBe(
+      "english-task",
+    );
+    expect(loadCombinedCache("regular", "de")?.tasks.data.tasks[0].id).toBe(
+      "german-task",
+    );
+  });
+
   it("should use old cache as regular-mode fallback only", () => {
     const legacyPayload = {
       tasks: { data: { tasks: [{ id: "legacy-regular-task" }] } },
@@ -525,6 +589,8 @@ describe("Cache functionality", () => {
       "legacy-regular-task",
     );
     expect(isCombinedCacheFresh("regular")).toBe(true);
+    expect(loadCombinedCache("regular", "de")).toBeNull();
+    expect(isCombinedCacheFresh("regular", "de")).toBe(false);
     expect(loadCombinedCache("pve")).toBeNull();
     expect(isCombinedCacheFresh("pve")).toBe(false);
   });
