@@ -602,7 +602,8 @@ function pruneLocalStorageApiCaches(keyToKeep: string): void {
       if (key === keyToKeep) continue;
       if (
         key === API_CACHE_KEY ||
-        (key === SHARED_CACHE_KEY && keyToKeep === SHARED_CACHE_KEY) ||
+        ((key === SHARED_CACHE_KEY || key.startsWith(`${SHARED_CACHE_KEY}::`)) &&
+          keyToKeep.startsWith(SHARED_CACHE_KEY)) ||
         key.startsWith(`${API_CACHE_KEY_PREFIX}::`) ||
         key.startsWith(`${LEGACY_API_CACHE_KEY_PREFIX}::`)
       ) {
@@ -654,6 +655,10 @@ export function buildCombinedCacheKey(
   return `${API_CACHE_KEY_PREFIX}::${normalizeGameMode(gameMode)}::${normalizeLanguage(language)}`;
 }
 
+function buildSharedCacheKey(language: LanguageCode = DEFAULT_LANGUAGE): string {
+  return `${SHARED_CACHE_KEY}::${normalizeLanguage(language)}`;
+}
+
 function buildLegacyCombinedCacheKey(gameMode: GameMode): string {
   return `${LEGACY_API_CACHE_KEY_PREFIX}::${normalizeGameMode(gameMode)}`;
 }
@@ -689,7 +694,9 @@ export function loadCombinedCache(
   const normalizedLanguage = normalizeLanguage(language);
 
   // Try to load from new split cache format (shared + tasks in localStorage)
-  const sharedCacheRaw = localStorage.getItem(SHARED_CACHE_KEY);
+  const sharedCacheRaw = localStorage.getItem(
+    buildSharedCacheKey(normalizedLanguage),
+  );
   const taskCacheKey = buildCombinedCacheKey(
     normalizedGameMode,
     normalizedLanguage,
@@ -748,7 +755,9 @@ export function isCombinedCacheFresh(
   const normalizedLanguage = normalizeLanguage(language);
 
   // Check new split cache format
-  const sharedCacheRaw = localStorage.getItem(SHARED_CACHE_KEY);
+  const sharedCacheRaw = localStorage.getItem(
+    buildSharedCacheKey(normalizedLanguage),
+  );
   const taskCacheRaw = localStorage.getItem(
     buildCombinedCacheKey(normalizedGameMode, normalizedLanguage),
   );
@@ -807,7 +816,10 @@ export async function saveCombinedCache(
       achievements: payload.achievements,
       hideoutStations: payload.hideoutStations,
     };
-    setCacheItemWithQuotaRecovery(SHARED_CACHE_KEY, JSON.stringify(sharedData));
+    setCacheItemWithQuotaRecovery(
+      buildSharedCacheKey(normalizedLanguage),
+      JSON.stringify(sharedData),
+    );
   }
 
   // Save task data to localStorage (mode-specific, smaller now)

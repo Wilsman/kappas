@@ -290,6 +290,26 @@ declare global {
   }
 }
 
+function safeGetLanguage(key: string): LanguageCode {
+  if (typeof window === "undefined") return DEFAULT_LANGUAGE;
+
+  try {
+    return normalizeLanguage(localStorage.getItem(key));
+  } catch {
+    return DEFAULT_LANGUAGE;
+  }
+}
+
+function safeSetLanguage(key: string, value: LanguageCode): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore unavailable storage */
+  }
+}
+
 function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string>("");
@@ -301,10 +321,9 @@ function App() {
   >(undefined);
   const [activeProfileGameMode, setActiveProfileGameMode] =
     useState<GameMode>(DEFAULT_GAME_MODE);
-  const [apiLanguage, setApiLanguage] = useState<LanguageCode>(() => {
-    if (typeof window === "undefined") return DEFAULT_LANGUAGE;
-    return normalizeLanguage(localStorage.getItem(API_LANGUAGE_STORAGE_KEY));
-  });
+  const [apiLanguage, setApiLanguage] = useState<LanguageCode>(() =>
+    safeGetLanguage(API_LANGUAGE_STORAGE_KEY),
+  );
   const apiLanguageRef = useRef(apiLanguage);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [refreshErrorDialog, setRefreshErrorDialog] =
@@ -680,7 +699,7 @@ function App() {
   );
   useEffect(() => {
     apiLanguageRef.current = apiLanguage;
-    localStorage.setItem(API_LANGUAGE_STORAGE_KEY, apiLanguage);
+    safeSetLanguage(API_LANGUAGE_STORAGE_KEY, apiLanguage);
   }, [apiLanguage]);
   const handleCopyRefreshErrorReport = useCallback(async () => {
     if (!refreshErrorDialog) return;
@@ -1349,6 +1368,9 @@ function App() {
 
   useEffect(() => {
     const init = async () => {
+      let resolvedInitialGameMode = DEFAULT_GAME_MODE;
+      let resolvedInitialLanguage = apiLanguageRef.current;
+
       try {
         let overlayLoaded = false;
 
@@ -1368,6 +1390,8 @@ function App() {
             ?.gameMode,
         );
         const initialLanguage = apiLanguageRef.current;
+        resolvedInitialGameMode = initialGameMode;
+        resolvedInitialLanguage = initialLanguage;
         setActiveProfileGameMode(initialGameMode);
 
         // One-time migrate legacy single-DB data into the first profile
@@ -1710,7 +1734,9 @@ function App() {
         reportRefreshError(
           "initialization",
           err,
-          Boolean(loadCombinedCache(DEFAULT_GAME_MODE, apiLanguageRef.current)),
+          Boolean(
+            loadCombinedCache(resolvedInitialGameMode, resolvedInitialLanguage),
+          ),
         );
         // Ensure UI doesn't get stuck loading on init errors
         hasInitializedRef.current = true;
