@@ -1,5 +1,10 @@
 import { isProfileDeleted } from "./profile";
 import type { GameMode } from "@/utils/gameMode";
+import {
+  DEFAULT_LANGUAGE,
+  normalizeLanguage,
+  type LanguageCode,
+} from "@/utils/language";
 
 const DB_BASE_NAME = "TarkovQuests";
 const DB_VERSION = 13;
@@ -716,12 +721,16 @@ export class TaskStorage {
     await store.clear();
   }
 
-  async saveTaskCache(gameMode: GameMode, tasks: unknown[]): Promise<void> {
+  async saveTaskCache(
+    gameMode: GameMode,
+    tasks: unknown[],
+    language: LanguageCode = DEFAULT_LANGUAGE,
+  ): Promise<void> {
     if (!this.db) await this.init();
 
     const tx = this.db!.transaction([API_CACHE_STORE], "readwrite");
     const store = tx.objectStore(API_CACHE_STORE);
-    const key = `tasks::${gameMode}`;
+    const key = `tasks::${gameMode}::${normalizeLanguage(language)}`;
 
     await store.put({
       key,

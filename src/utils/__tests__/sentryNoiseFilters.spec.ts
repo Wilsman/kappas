@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isExternalAssetLoadError,
   isReactDomMutationError,
   isStaleAssetError,
 } from "@/utils/sentryNoiseFilters";
@@ -45,5 +46,28 @@ describe("sentry noise filters", () => {
     expect(isReactDomMutationError(new Error("Network request failed"))).toBe(
       false,
     );
+  });
+
+  it("detects external Tarkov asset load failures with event evidence", () => {
+    expect(
+      isExternalAssetLoadError(new TypeError("Load failed"), {
+        metadata: {
+          type: "TypeError",
+          value: "Load failed (assets.tarkov.dev)",
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      isExternalAssetLoadError(new TypeError("Load failed"), {
+        request: { url: "https://api.tarkov.dev/graphql" },
+      }),
+    ).toBe(false);
+
+    expect(
+      isExternalAssetLoadError(new TypeError("Failed to fetch"), {
+        request: { url: "https://assets.tarkov.dev/item-icon.webp" },
+      }),
+    ).toBe(false);
   });
 });

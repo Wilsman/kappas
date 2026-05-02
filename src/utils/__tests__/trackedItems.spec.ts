@@ -516,4 +516,57 @@ describe("buildTrackedItems", () => {
 
     expect(trackedItems).toHaveLength(0);
   });
+
+  it("skips null item entries from API payloads without crashing", () => {
+    const tasks: Task[] = [
+      makeTask({
+        id: "null-objective-item",
+        name: "Null Objective Item",
+        objectives: [
+          {
+            description: "Hand over usable item",
+            count: 1,
+            items: [
+              null,
+              { id: "usable", name: "Usable item", iconLink: "usable.png" },
+            ],
+          },
+        ],
+      }),
+    ];
+
+    const hideoutStations = [
+      {
+        name: "Workbench",
+        imageLink: "",
+        levels: [
+          {
+            level: 1,
+            skillRequirements: [],
+            stationLevelRequirements: [],
+            itemRequirements: [
+              { count: 1, item: null },
+              { count: 2, item: { name: "Wires" } },
+            ],
+          },
+        ],
+      },
+    ] as unknown as HideoutStation[];
+
+    const trackedItems = buildTrackedItems({
+      tasks: tasks as unknown as Task[],
+      completedTasks: new Set<string>(),
+      completedTaskObjectives: new Set<string>(),
+      taskObjectiveItemProgress: {},
+      hideoutStations,
+      completedHideoutItems: new Set<string>(),
+      hideoutItemQuantities: {},
+      playerLevel: 1,
+    });
+
+    expect(trackedItems.map((item) => item.itemName).sort()).toEqual([
+      "Usable item",
+      "Wires",
+    ]);
+  });
 });

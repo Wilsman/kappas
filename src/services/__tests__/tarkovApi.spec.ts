@@ -176,6 +176,31 @@ describe("fetchCombinedData", () => {
     expect(body.query).toContain("gameMode: pve");
   });
 
+  it("requests localized tasks and collector data when language is selected", async () => {
+    mockFetchOnce({
+      data: {
+        tasks: [],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    });
+
+    await fetchCombinedData("regular", "de");
+
+    const fetchSpy = globalThis.fetch as unknown as Mock;
+    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
+    const graphCall = calls.find((call) =>
+      String(call[0]).includes("https://api.tarkov.dev/graphql"),
+    );
+    const init = (graphCall?.[1] ?? {}) as { body?: string };
+    const body = JSON.parse(init.body ?? "{}") as { query?: string };
+    expect(body.query).toContain("tasks(lang: de, gameMode: regular)");
+    expect(body.query).toContain(
+      'task(id: "5c51aac186f77432ea65c552", lang: de)',
+    );
+  });
+
   it("uses partial task data when GraphQL returns recoverable field errors", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const apiResponse = {
@@ -508,6 +533,51 @@ describe("Cache functionality", () => {
     expect(loadCombinedCache("pve")?.tasks.data.tasks[0].id).toBe("pve-task");
   });
 
+  it("should isolate task cache by language", async () => {
+    const englishPayload = {
+      tasks: { data: { tasks: [{ id: "english-task" }] } },
+      collectorItems: { data: { task: { id: "collector-en", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+    const germanPayload = {
+      tasks: { data: { tasks: [{ id: "german-task" }] } },
+      collectorItems: { data: { task: { id: "collector-de", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+
+    await saveCombinedCache(
+      englishPayload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "regular",
+      "en",
+    );
+    await saveCombinedCache(
+      germanPayload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "regular",
+      "de",
+    );
+
+    expect(buildCombinedCacheKey("regular", "en")).toBe(
+      "taskTracker_api_cache_v4::regular::en",
+    );
+    expect(buildCombinedCacheKey("regular", "de")).toBe(
+      "taskTracker_api_cache_v4::regular::de",
+    );
+    expect(loadCombinedCache("regular", "en")?.tasks.data.tasks[0].id).toBe(
+      "english-task",
+    );
+    expect(loadCombinedCache("regular", "de")?.tasks.data.tasks[0].id).toBe(
+      "german-task",
+    );
+    expect(loadCombinedCache("regular", "en")?.collectorItems.data.task.id).toBe(
+      "collector-en",
+    );
+    expect(loadCombinedCache("regular", "de")?.collectorItems.data.task.id).toBe(
+      "collector-de",
+    );
+  });
+
   it("should use old cache as regular-mode fallback only", () => {
     const legacyPayload = {
       tasks: { data: { tasks: [{ id: "legacy-regular-task" }] } },
@@ -525,8 +595,39 @@ describe("Cache functionality", () => {
       "legacy-regular-task",
     );
     expect(isCombinedCacheFresh("regular")).toBe(true);
+    expect(loadCombinedCache("regular", "de")).toBeNull();
+    expect(isCombinedCacheFresh("regular", "de")).toBe(false);
     expect(loadCombinedCache("pve")).toBeNull();
     expect(isCombinedCacheFresh("pve")).toBe(false);
+  });
+
+  it("should use legacy split cache as English fallback only", () => {
+    const sharedCache = {
+      updatedAt: Date.now(),
+      collectorItems: { data: { task: { id: "collector-en", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+    const taskCache = {
+      updatedAt: Date.now(),
+      payload: { tasks: { data: { tasks: [{ id: "legacy-split-task" }] } } },
+    };
+
+    localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify(sharedCache));
+    localStorage.setItem(
+      "taskTracker_api_cache_v3::regular",
+      JSON.stringify(taskCache),
+    );
+
+    expect(loadCombinedCache("regular", "en")?.tasks.data.tasks[0].id).toBe(
+      "legacy-split-task",
+    );
+    expect(loadCombinedCache("regular", "en")?.collectorItems.data.task.id).toBe(
+      "collector-en",
+    );
+    expect(isCombinedCacheFresh("regular", "en")).toBe(true);
+    expect(loadCombinedCache("regular", "de")).toBeNull();
+    expect(isCombinedCacheFresh("regular", "de")).toBe(false);
   });
 
   it("should detect fresh cache", async () => {
@@ -573,7 +674,7 @@ describe("Cache functionality", () => {
       payload: { tasks: { data: { tasks: [] } } },
     };
 
-    localStorage.setItem(SHARED_CACHE_KEY, JSON.stringify(sharedCache));
+    localStorage.setItem(`${SHARED_CACHE_KEY}::en`, JSON.stringify(sharedCache));
     localStorage.setItem(
       buildCombinedCacheKey("regular"),
       JSON.stringify(taskCache),
@@ -620,34 +721,50 @@ describe("Cache functionality", () => {
       achievements: { data: { achievements: [] } },
       hideoutStations: { data: { hideoutStations: [] } },
     };
-    const originalSetItem = Storage.prototype.setItem;
+    const realLocalStorage = localStorage;
+    const store = new Map<string, string>();
     let pveWriteAttempts = 0;
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
-        this: Storage,
-        key: string,
-        value: string,
-      ) {
+    const mockLocalStorage = {
+      get length() {
+        return store.size;
+      },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      getItem: (key: string) => store.get(key) ?? null,
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      },
+      setItem: (key: string, value: string) => {
         if (key === buildCombinedCacheKey("pve")) {
           pveWriteAttempts++;
         }
         if (key === buildCombinedCacheKey("pve") && pveWriteAttempts === 1) {
           throw new DOMException("Quota exceeded", "QuotaExceededError");
         }
-        return originalSetItem.call(this, key, value);
-      });
+        store.set(key, value);
+      },
+    } as Storage;
+
+    vi.stubGlobal("localStorage", mockLocalStorage);
 
     localStorage.setItem(API_CACHE_KEY, "legacy");
     localStorage.setItem(buildCombinedCacheKey("regular"), "old-regular");
 
-    await saveCombinedCache(
-      payload as unknown as Parameters<typeof saveCombinedCache>[0],
-      "pve",
-    );
+    try {
+      await saveCombinedCache(
+        payload as unknown as Parameters<typeof saveCombinedCache>[0],
+        "pve",
+      );
 
-    expect(localStorage.getItem(API_CACHE_KEY)).toBeNull();
-    expect(localStorage.getItem(buildCombinedCacheKey("regular"))).toBeNull();
-    expect(loadCombinedCache("pve")?.tasks.data.tasks[0].id).toBe(
-      "fresh-pve-task",
-    );
+      expect(localStorage.getItem(API_CACHE_KEY)).toBeNull();
+      expect(localStorage.getItem(buildCombinedCacheKey("regular"))).toBeNull();
+      expect(loadCombinedCache("pve")?.tasks.data.tasks[0].id).toBe(
+        "fresh-pve-task",
+      );
+    } finally {
+      vi.stubGlobal("localStorage", realLocalStorage);
+    }
   });
 });
