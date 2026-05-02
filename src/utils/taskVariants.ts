@@ -1,5 +1,10 @@
 import type { Task } from "@/types";
 
+const hasNamedItem = (
+  item: { name?: unknown } | null | undefined,
+): item is { id?: string; name: string } =>
+  typeof item?.name === "string" && item.name.trim().length > 0;
+
 const buildTaskMapSignature = (task: Task) => {
   const mapNames =
     task.maps.length > 0
@@ -18,6 +23,7 @@ const buildTaskObjectiveSignature = (task: Task) =>
       foundInRaid: objective.foundInRaid ?? null,
       maps: (objective.maps ?? []).map((map) => map.name).sort(),
       items: (objective.items ?? [])
+        .filter(hasNamedItem)
         .map((item) => item.id ?? item.name)
         .sort(),
     })),

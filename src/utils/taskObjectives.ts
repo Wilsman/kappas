@@ -6,12 +6,18 @@ function normalizePart(value?: string | null): string {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+const hasNamedItem = (
+  item: { name?: unknown } | null | undefined,
+): item is { id?: string; name: string } =>
+  typeof item?.name === "string" && item.name.trim().length > 0;
+
 function serializeObjective(objective: TaskObjective): string {
   const maps = (objective.maps ?? [])
     .map((map) => normalizePart(map?.name))
     .filter(Boolean)
     .sort();
   const items = (objective.items ?? [])
+    .filter(hasNamedItem)
     .map((item) => `${normalizePart(item.id)}|${normalizePart(item.name)}`)
     .sort();
   const playerLevel =

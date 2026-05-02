@@ -70,6 +70,11 @@ export interface BuildTrackedItemsOptions {
 const normalizeText = (value: string) =>
   value.trim().toLowerCase().replace(/\s+/g, " ");
 
+const isNamedItem = (
+  item: { name?: unknown } | null | undefined,
+): item is { id?: string; name: string; iconLink?: string } =>
+  typeof item?.name === "string" && item.name.trim().length > 0;
+
 const buildItemGroupKey = (itemName: string) => normalizeText(itemName);
 
 const classifyTaskItemObjective = (description?: string) => {
@@ -217,7 +222,10 @@ const getHighestCompletedHideoutLevels = (
     let highestCompletedLevel = 0;
 
     for (const level of sortedLevels) {
-      const isLevelComplete = level.itemRequirements.every((requirement) =>
+      const itemRequirements = level.itemRequirements.filter((requirement) =>
+        isNamedItem(requirement.item),
+      );
+      const isLevelComplete = itemRequirements.every((requirement) =>
         isHideoutItemComplete(
           `${station.name}-${level.level}-${requirement.item.name}`,
           requirement.count,
@@ -249,8 +257,12 @@ const getFirstIncompleteHideoutLevels = (
   hideoutStations.forEach((station) => {
     const sortedLevels = [...station.levels].sort((a, b) => a.level - b.level);
     const firstIncompleteLevel =
-      sortedLevels.find((level) =>
-        level.itemRequirements.some(
+      sortedLevels.find((level) => {
+        const itemRequirements = level.itemRequirements.filter((requirement) =>
+          isNamedItem(requirement.item),
+        );
+
+        return itemRequirements.some(
           (requirement) =>
             !isHideoutItemComplete(
               `${station.name}-${level.level}-${requirement.item.name}`,
@@ -258,8 +270,8 @@ const getFirstIncompleteHideoutLevels = (
               completedHideoutItems,
               hideoutItemQuantities,
             ),
-        ),
-      )?.level ?? null;
+        );
+      })?.level ?? null;
 
     firstIncompleteLevelByStation.set(station.name, firstIncompleteLevel);
   });
@@ -422,13 +434,15 @@ export function buildTrackedItems({
     const taskItemSources: TrackedItemSource[] = [];
 
     (task.objectives ?? []).forEach((objective, index) => {
-      if (!objective.items?.length) {
+      const objectiveItems = (objective.items ?? []).filter(isNamedItem);
+
+      if (!objectiveItems.length) {
         return;
       }
       if (shouldSkipTaskItemObjective(objective.description)) {
         return;
       }
-      if (objective.items.length > MAX_DIRECT_ITEM_OPTIONS) {
+      if (objectiveItems.length > MAX_DIRECT_ITEM_OPTIONS) {
         return;
       }
 
@@ -441,9 +455,9 @@ export function buildTrackedItems({
         objectiveKey,
         legacyObjectiveKey,
       );
-      const usesSharedPool = objective.items.length > 1 && requiredCount > 1;
+      const usesSharedPool = objectiveItems.length > 1 && requiredCount > 1;
 
-      const pooledCounts = objective.items.map((item) => {
+      const pooledCounts = objectiveItems.map((item) => {
         const sourceItemKey = item.id || item.name;
         return getTaskObjectiveItemProgress(
           taskObjectiveItemProgress,
@@ -460,7 +474,7 @@ export function buildTrackedItems({
         pooledCounts.reduce((sum, count) => sum + count, 0),
       );
 
-      objective.items.forEach((item) => {
+      objectiveItems.forEach((item) => {
         const sourceItemKey = item.id || item.name;
         const objectiveItemKey = buildTaskObjectiveItemProgressKey(
           objectiveKey,
@@ -591,7 +605,10 @@ export function buildTrackedItems({
 
   hideoutStations.forEach((station) => {
     station.levels.forEach((level) => {
-      const itemKeys = level.itemRequirements.map(
+      const itemRequirements = level.itemRequirements.filter((requirement) =>
+        isNamedItem(requirement.item),
+      );
+      const itemKeys = itemRequirements.map(
         (requirement) =>
           `${station.name}-${level.level}-${requirement.item.name}`,
       );
@@ -600,7 +617,7 @@ export function buildTrackedItems({
         itemKeys.every((itemKey, index) =>
           isHideoutItemComplete(
             itemKey,
-            level.itemRequirements[index].count,
+            itemRequirements[index].count,
             completedHideoutItems,
             hideoutItemQuantities,
           ),
@@ -616,7 +633,7 @@ export function buildTrackedItems({
         firstIncompleteLevelByStation.get(station.name) === level.level &&
         stationRequirementsMet;
 
-      level.itemRequirements.forEach((requirement) => {
+      itemRequirements.forEach((requirement) => {
         const hideoutItemKey = `${station.name}-${level.level}-${requirement.item.name}`;
         const currentCount = getHideoutProgressCount(
           hideoutItemKey,

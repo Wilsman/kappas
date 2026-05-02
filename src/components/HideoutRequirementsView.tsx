@@ -26,6 +26,11 @@ interface RequirementItem {
   foundInRaid: boolean;
 }
 
+const hasNamedRequirementItem = (
+  item: { name?: unknown } | null | undefined,
+): item is { name: string; iconLink?: string } =>
+  typeof item?.name === "string" && item.name.trim().length > 0;
+
 export const HideoutRequirementsView: React.FC<
   HideoutRequirementsViewProps
 > = ({ hideoutStations, completedHideoutItems, onNavigateToStation }) => {
@@ -36,6 +41,10 @@ export const HideoutRequirementsView: React.FC<
     hideoutStations.forEach((station) => {
       station.levels.forEach((level) => {
         level.itemRequirements.forEach((req) => {
+          if (!hasNamedRequirementItem(req.item)) {
+            return;
+          }
+
           const itemKey = `${station.name}-${level.level}-${req.item.name}`;
 
           // Skip if already completed

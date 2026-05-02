@@ -547,12 +547,17 @@ function App() {
     // Try API data first (which is already patched by the overlay in tarkovApi.ts)
     if (apiCollectorItems?.data?.task?.objectives) {
       return apiCollectorItems.data.task.objectives.flatMap((objective) =>
-        (objective.items || []).map((item) => ({
-          name: item.name,
-          order: 0,
-          img: item.iconLink || "",
-          id: item.id || item.name.toLowerCase().replace(/[^a-z0-9]/g, "-"),
-        })),
+        (objective.items || [])
+          .filter(
+            (item) =>
+              typeof item?.name === "string" && item.name.trim().length > 0,
+          )
+          .map((item) => ({
+            name: item.name,
+            order: 0,
+            img: item.iconLink || "",
+            id: item.id || item.name.toLowerCase().replace(/[^a-z0-9]/g, "-"),
+          })),
       );
     }
 

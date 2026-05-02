@@ -50,6 +50,11 @@ interface CollectorViewProps {
 
 type GroupBy = "collector" | "hideout-stations";
 
+const hasNamedRequirementItem = (
+  item: { name?: unknown } | null | undefined,
+): item is { name: string; iconLink?: string } =>
+  typeof item?.name === "string" && item.name.trim().length > 0;
+
 export const CollectorView: React.FC<CollectorViewProps> = ({
   collectorItems,
   completedCollectorItems,
@@ -88,8 +93,10 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
 
         // Filter levels that have matching items
         const filteredLevels = station.levels.filter((level) => {
-          const hasMatchingItems = level.itemRequirements.some((req) =>
-            req.item.name.toLowerCase().includes(term),
+          const hasMatchingItems = level.itemRequirements.some(
+            (req) =>
+              hasNamedRequirementItem(req.item) &&
+              req.item.name.toLowerCase().includes(term),
           );
           const hasMatchingSkills = level.skillRequirements.some((req) =>
             req.skill.name.toLowerCase().includes(term),
@@ -144,13 +151,17 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     level: { itemRequirements: { count: number; item: { name: string } }[] },
   ) => {
     const next = new Set(completedHideoutItems);
-    const levelItemKeys = level.itemRequirements.map(
+    const itemRequirements =
+      level.itemRequirements.filter((req) =>
+        hasNamedRequirementItem(req.item),
+      );
+    const levelItemKeys = itemRequirements.map(
       (req) => `${stationName}-${levelNum}-${req.item.name}`,
     );
     const isLevelComplete = levelItemKeys.every((key) => next.has(key));
 
     if (isLevelComplete) {
-      level.itemRequirements.forEach((req) => {
+      itemRequirements.forEach((req) => {
         const itemKey = `${stationName}-${levelNum}-${req.item.name}`;
         next.delete(itemKey);
         if (onUpdateHideoutItemQuantity) {
@@ -158,7 +169,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
         }
       });
     } else {
-      level.itemRequirements.forEach((req) => {
+      itemRequirements.forEach((req) => {
         const itemKey = `${stationName}-${levelNum}-${req.item.name}`;
         next.add(itemKey);
         if (onUpdateHideoutItemQuantity) {
@@ -307,17 +318,24 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
             {filteredHideoutStations.map((station) => {
               // Calculate total completion for this station
               const totalStationItems = station.levels.reduce(
-                (sum, level) => sum + level.itemRequirements.length,
+                (sum, level) =>
+                  sum +
+                  level.itemRequirements.filter((req) =>
+                    hasNamedRequirementItem(req.item),
+                  ).length,
                 0,
               );
               const completedStationItems = station.levels.reduce(
                 (sum, level) => {
                   return (
                     sum +
-                    level.itemRequirements.filter((req) => {
-                      const itemKey = `${station.name}-${level.level}-${req.item.name}`;
-                      return completedHideoutItems.has(itemKey);
-                    }).length
+                    level.itemRequirements.filter(
+                      (req) =>
+                        hasNamedRequirementItem(req.item) &&
+                        completedHideoutItems.has(
+                          `${station.name}-${level.level}-${req.item.name}`,
+                        ),
+                    ).length
                   );
                 },
                 0,
@@ -365,9 +383,13 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                   <AccordionContent className="p-4 border-t">
                     <div className="space-y-4">
                       {station.levels.map((level) => {
+                        const itemRequirements =
+                          level.itemRequirements.filter((req) =>
+                            hasNamedRequirementItem(req.item),
+                          );
                         // Calculate completion for this level
-                        const totalItems = level.itemRequirements.length;
-                        const completedItems = level.itemRequirements.filter(
+                        const totalItems = itemRequirements.length;
+                        const completedItems = itemRequirements.filter(
                           (req) => {
                             const itemKey = `${station.name}-${level.level}-${req.item.name}`;
                             return completedHideoutItems.has(itemKey);
@@ -503,7 +525,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                 Required Items
                               </h5>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {level.itemRequirements.map((req, idx) => {
+                                {itemRequirements.map((req, idx) => {
                                   const itemKey = `${station.name}-${level.level}-${req.item.name}`;
                                   const isCurrency = isCurrencyItem(
                                     req.item.name,

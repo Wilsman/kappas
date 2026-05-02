@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react";
 import {
+  isExternalAssetLoadError,
   isReactDomMutationError,
   isStaleAssetError,
 } from "@/utils/sentryNoiseFilters";
@@ -37,6 +38,7 @@ if (sentryDsn) {
 
       if (
         isReactDomMutationError(originalException) ||
+        isExternalAssetLoadError(originalException, event) ||
         isStaleAssetError(originalException)
       ) {
         return null;
