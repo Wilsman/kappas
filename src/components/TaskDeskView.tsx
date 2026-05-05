@@ -30,10 +30,10 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import {
-  Link2,
   ChevronUp,
   ChevronDown,
   ArrowRight,
+  ExternalLink,
   Search,
   Minus,
   Plus,
@@ -107,6 +107,21 @@ interface TaskDeskViewProps {
   ) => void;
 }
 
+type TaskFilter = "all" | "kappa" | "lightkeeper" | "btr";
+
+const parseTaskFilter = (value: string | null): TaskFilter | null => {
+  if (
+    value === "all" ||
+    value === "kappa" ||
+    value === "lightkeeper" ||
+    value === "btr"
+  ) {
+    return value;
+  }
+
+  return null;
+};
+
 export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   tasks,
   achievements,
@@ -134,6 +149,7 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   const [urlSearchTerm, setUrlSearchTerm] = useQueryState("tasksSearch", {
     defaultValue: "",
   });
+  const [urlTaskFilter, setUrlTaskFilter] = useQueryState("taskFilter");
   const [searchTerm, setSearchTerm] = useState(urlSearchTerm);
   // Start with all groups collapsed by default
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
@@ -144,7 +160,9 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   const [showNextOnly, setShowNextOnly] = useState<boolean>(false);
   const [showEvents, setShowEvents] = useState<boolean>(false);
   const [extraTaskFilter, setExtraTaskFilter] = useState<"btr" | null>(null);
+  const activeTaskFilter: TaskFilter = extraTaskFilter ?? focusMode;
   const hasAppliedDefaultDeskFocus = useRef(false);
+  const lastWrittenTaskFilter = useRef<string | null | undefined>(undefined);
   const [sortMode, setSortMode] = useState<
     | "name-asc"
     | "level-asc"
@@ -176,6 +194,28 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   }, [extraTaskFilter, focusMode]);
 
   useEffect(() => {
+    if (lastWrittenTaskFilter.current === urlTaskFilter) {
+      lastWrittenTaskFilter.current = undefined;
+      return;
+    }
+
+    const nextFilter = parseTaskFilter(urlTaskFilter);
+    const nextTaskFilter = nextFilter ?? "all";
+    if (nextTaskFilter === activeTaskFilter) return;
+
+    if (nextTaskFilter === "btr") {
+      setExtraTaskFilter("btr");
+      if (focusMode !== "all") onSetFocus("all");
+      return;
+    }
+
+    setExtraTaskFilter(null);
+    if (nextTaskFilter !== focusMode) {
+      onSetFocus(nextTaskFilter);
+    }
+  }, [activeTaskFilter, focusMode, onSetFocus, urlTaskFilter]);
+
+  useEffect(() => {
     if (groupBy !== "trader") {
       onSetGroupBy("trader");
     }
@@ -184,10 +224,11 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   useEffect(() => {
     if (hasAppliedDefaultDeskFocus.current) return;
     hasAppliedDefaultDeskFocus.current = true;
+    if (urlTaskFilter !== null) return;
     if (focusMode === "all" && extraTaskFilter === null) {
       onSetFocus("kappa");
     }
-  }, [extraTaskFilter, focusMode, onSetFocus]);
+  }, [extraTaskFilter, focusMode, onSetFocus, urlTaskFilter]);
 
   // Debounce URL updates while typing to avoid excessive history updates.
   useEffect(() => {
@@ -427,7 +468,15 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
     [eventTasks, buildNextQuestIds],
   );
 
-  const activeTaskFilter = extraTaskFilter ?? focusMode;
+  useEffect(() => {
+    const nextUrlFilter =
+      activeTaskFilter === "all" ? null : activeTaskFilter;
+    if (urlTaskFilter === nextUrlFilter) return;
+
+    lastWrittenTaskFilter.current = nextUrlFilter;
+    void setUrlTaskFilter(nextUrlFilter);
+  }, [activeTaskFilter, setUrlTaskFilter, urlTaskFilter]);
+
   const taskFilterCounts = useMemo(
     () => ({
       all: baseTasks.length,
@@ -668,7 +717,11 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
           : "All";
 
   const handleTaskFilterChange = useCallback(
-    (filter: "all" | "kappa" | "lightkeeper" | "btr") => {
+    (filter: TaskFilter) => {
+      const nextUrlFilter = filter === "all" ? null : filter;
+      lastWrittenTaskFilter.current = nextUrlFilter;
+      void setUrlTaskFilter(nextUrlFilter);
+
       if (filter === "btr") {
         setExtraTaskFilter("btr");
         if (focusMode !== "all") onSetFocus("all");
@@ -678,7 +731,7 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
       setExtraTaskFilter(null);
       onSetFocus(filter);
     },
-    [focusMode, onSetFocus],
+    [focusMode, onSetFocus, setUrlTaskFilter],
   );
 
   const compareTasks = useCallback(
@@ -1670,18 +1723,29 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                     disabled={false}
                                     onClick={(e) => e.stopPropagation()}
                                   />
-                                  {task.wikiLink && (
-                                    <a
-                                      href={task.wikiLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-muted-foreground hover:text-foreground"
-                                      onClick={(e) => e.stopPropagation()}
-                                      aria-label="Open wiki"
-                                    >
-                                      <Link2 className="h-4 w-4" />
-                                    </a>
-                                  )}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <a
+                                          href={task.wikiLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={cn(
+                                            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors",
+                                            "hover:border-border hover:bg-background hover:text-foreground",
+                                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                          )}
+                                          onClick={(e) => e.stopPropagation()}
+                                          aria-label={`Open ${task.name} wiki`}
+                                        >
+                                          <ExternalLink className="h-3.5 w-3.5" />
+                                        </a>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        Open wiki
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
 
                                   {/* Trigger wraps most of the row (except checkbox & wiki link) */}
                                   <CollapsibleTrigger asChild>
