@@ -9,6 +9,8 @@ import {
   Hourglass,
   ListChecks,
   Info,
+  GitBranch,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +43,15 @@ function EndingCard({
   onSelect: () => void;
   onShowRewards: () => void;
 }) {
+  const guidanceClassName =
+    ending.guidanceTone === "avoid"
+      ? "border-red-500/30 bg-red-500/10 text-red-200"
+      : ending.guidanceTone === "recommended"
+        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+        : ending.guidanceTone === "warning"
+          ? "border-amber-500/30 bg-amber-500/10 text-amber-100"
+          : "border-violet-500/30 bg-violet-500/10 text-violet-100";
+
   return (
     <button
       onClick={onSelect}
@@ -73,6 +84,59 @@ function EndingCard({
 
       {/* Description */}
       <p className="text-sm text-muted-foreground mb-4">{ending.description}</p>
+
+      {/* Main Route */}
+      <div
+        className="mb-4 rounded-md border bg-muted/30 px-3 py-3"
+        style={{ borderColor: `${ending.color}66` }}
+      >
+        <div className="mb-3 flex items-start gap-2">
+          <GitBranch
+            className="h-4 w-4 mt-0.5 flex-shrink-0"
+            style={{ color: ending.color }}
+          />
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Main route
+            </p>
+            <p className="text-xs text-muted-foreground/90">
+              {ending.routeNote}
+            </p>
+          </div>
+        </div>
+
+        <ol className="space-y-2">
+          {ending.mainRoute.map((step, index) => {
+            const isFinalStep = index === ending.mainRoute.length - 1;
+
+            return (
+              <li key={step} className="relative flex gap-2">
+                {!isFinalStep && (
+                  <span
+                    className="absolute left-2.5 top-6 h-[calc(100%-0.25rem)] w-px opacity-60"
+                    style={{ backgroundColor: ending.color }}
+                  />
+                )}
+                <span
+                  className="z-10 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-background"
+                  style={{ backgroundColor: ending.color }}
+                >
+                  {index + 1}
+                </span>
+                <span
+                  className={`min-w-0 flex-1 rounded px-2 py-1 text-xs leading-snug ${
+                    isFinalStep
+                      ? "bg-background/80 font-semibold text-foreground"
+                      : "bg-background/40 font-medium text-foreground/90"
+                  }`}
+                >
+                  {step}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -138,8 +202,50 @@ function EndingCard({
         </div>
       </div>
 
-      {/* Rewards Preview */}
+      {/* Requirements */}
       <div className="border-t pt-3">
+        <div className="flex items-center gap-1.5 mb-2">
+          <ListChecks className="h-3.5 w-3.5 text-blue-500" />
+          <span className="text-xs font-medium text-muted-foreground">
+            Requirements / costs
+          </span>
+        </div>
+        <ul className="space-y-1">
+          {ending.requirementHighlights.map((requirement) => (
+            <li
+              key={requirement}
+              className="flex gap-2 text-xs text-muted-foreground/90"
+            >
+              <span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-muted-foreground/50" />
+              <span>{requirement}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {ending.terminalAccessCost && (
+        <div className="mt-3 flex gap-2 rounded-md bg-muted/40 px-3 py-2">
+          <Ticket className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-rose-500" />
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Terminal Access Costs
+            </p>
+            <p className="text-xs text-muted-foreground/90">
+              {ending.terminalAccessCost}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={`mt-3 rounded-md border px-3 py-2 text-xs leading-relaxed ${guidanceClassName}`}
+      >
+        <span className="font-medium">What this means: </span>
+        {ending.playerGuidance}
+      </div>
+
+      {/* Rewards Preview */}
+      <div className="border-t pt-3 mt-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
             <Gift className="h-3.5 w-3.5 text-purple-500" />
@@ -176,14 +282,6 @@ function EndingCard({
             </span>
           )}
         </div>
-      </div>
-
-      {/* Key Decisions */}
-      <div className="mt-3 pt-3 border-t">
-        <p className="text-[10px] text-muted-foreground mb-1">Key decisions:</p>
-        <p className="text-xs text-muted-foreground/80">
-          {ending.keyDecisions.join(" → ")}
-        </p>
       </div>
     </button>
   );

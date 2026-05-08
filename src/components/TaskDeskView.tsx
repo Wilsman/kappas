@@ -163,6 +163,7 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   const activeTaskFilter: TaskFilter = extraTaskFilter ?? focusMode;
   const hasAppliedDefaultDeskFocus = useRef(false);
   const lastWrittenTaskFilter = useRef<string | null | undefined>(undefined);
+  const previousActiveTaskFilter = useRef<TaskFilter | null>(null);
   const [sortMode, setSortMode] = useState<
     | "name-asc"
     | "level-asc"
@@ -194,6 +195,16 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   }, [extraTaskFilter, focusMode]);
 
   useEffect(() => {
+    const nextUrlFilter =
+      activeTaskFilter === "all" ? null : activeTaskFilter;
+    const activeFilterChanged =
+      previousActiveTaskFilter.current !== activeTaskFilter;
+    previousActiveTaskFilter.current = activeTaskFilter;
+
+    if (activeFilterChanged && urlTaskFilter !== nextUrlFilter) {
+      return;
+    }
+
     if (lastWrittenTaskFilter.current === urlTaskFilter) {
       lastWrittenTaskFilter.current = undefined;
       return;

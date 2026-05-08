@@ -26,6 +26,12 @@ export interface EndingInfo {
   color: string;
   icon: string;
   iconUrl: string;
+  routeNote: string;
+  mainRoute: string[];
+  requirementHighlights: string[];
+  terminalAccessCost?: string;
+  playerGuidance: string;
+  guidanceTone: "avoid" | "recommended" | "warning" | "grind";
   // Pre-calculated from path data
   totalCraftHours: number;
   totalTimeGateHours: number;
@@ -272,6 +278,23 @@ export const endingInfos: EndingInfo[] = [
     icon: "🏃",
     iconUrl:
       "https://assets.tarkov.dev/achievement-68e8f02ff3a1196d1a05f2cb-icon.webp",
+    routeNote: "500m if you kept the case, 300m if you handed it to Prapor",
+    mainRoute: [
+      "Case is in your hands",
+      "Don't work with Kerman",
+      "Choose money route",
+      "Survivor Ending",
+    ],
+    requirementHighlights: [
+      "Either 300 million or 500 million roubles",
+      "5 million roubles to buy Terminal entry each failed attempt",
+      "Quickest route, but it is the rouble-money route",
+    ],
+    terminalAccessCost:
+      "Buy a new Terminal note from Prapor for 5 million roubles each attempt.",
+    playerGuidance:
+      "Avoid this ending if you do not want the 300m or 500m rouble route.",
+    guidanceTone: "avoid",
     ...calculateEndingStats(ENDING_NODE_IDS.survivor),
     rewards: [
       { name: "Survivor Armband", icon: "🎗️", description: "Cosmetic only" },
@@ -296,6 +319,24 @@ export const endingInfos: EndingInfo[] = [
     icon: "🛡️",
     iconUrl:
       "https://assets.tarkov.dev/achievement-68e8f0575eb7e5ce5000ba0a-icon.webp",
+    routeNote: "Hand the case to Prapor, unlock Lightkeeper, then work with Kerman",
+    mainRoute: [
+      "Hand over case to Prapor",
+      "Tasks to unlock Lightkeeper",
+      "Work with Kerman",
+      "Lightkeeper already unlocked",
+      "Savior Ending",
+    ],
+    requirementHighlights: [
+      "Must complete every other storyline chapter",
+      "Requires 4.0 Fence rep and 0.4 BTR rep",
+      "Requires Solar Power and final Terminal keycard craft",
+    ],
+    terminalAccessCost:
+      "Each failed Terminal attempt requires crafting the keycard again for 5h 30m, plus a new Blank RFID Card craft that also takes 5h 30m.",
+    playerGuidance:
+      "Cleanest non-money ending, but likely the longest completionist route because it requires completing ALL the other storyline chapters.",
+    guidanceTone: "recommended",
     ...calculateEndingStats(ENDING_NODE_IDS.savior),
     rewards: [
       // All items are Found in Raid (FIR) - PvE exclusive reward
@@ -344,6 +385,23 @@ export const endingInfos: EndingInfo[] = [
     icon: "💀",
     iconUrl:
       "https://assets.tarkov.dev/achievement-68e8f042b8efa2bbeb009d89-icon.webp",
+    routeNote: "Work with Kerman, then refuse or fail to finish helping him",
+    mainRoute: [
+      "Work with Kerman",
+      "Extra tasks or skip tasks",
+      "Pay Prapor",
+      "Fallen Ending",
+    ],
+    requirementHighlights: [
+      "Pay 1,000,000 USD to Prapor",
+      "May require giving up a secure container",
+      "Not the rouble route, but still extremely expensive",
+    ],
+    terminalAccessCost:
+      "Each failed Terminal attempt requires crafting the keycard again for 5h 30m, plus a new Blank RFID Card craft that also takes 5h 30m.",
+    playerGuidance:
+      "This is also a very expensive ending: 1 million USD is a massive payment even though it avoids the 300m/500m rouble route.",
+    guidanceTone: "warning",
     ...calculateEndingStats(ENDING_NODE_IDS.fallen),
     rewards: [
       { name: "10M Roubles", icon: "💰", description: "Cash payout" },
@@ -373,6 +431,25 @@ export const endingInfos: EndingInfo[] = [
     icon: "🔮",
     iconUrl:
       "https://assets.tarkov.dev/achievement-68e8f04eb841bc8ac305350a-icon.webp",
+    routeNote: "Partially help Kerman, then switch over to Lightkeeper",
+    mainRoute: [
+      "Hand over case to Prapor",
+      "Tasks to unlock Lightkeeper",
+      "Work with Kerman",
+      "Lightkeeper already unlocked",
+      "Debtor Ending",
+    ],
+    requirementHighlights: [
+      "Trade 1 Blue Folder with Lightkeeper for a Terminal attempt",
+      "Get 30 PMC kills on Woods",
+      "Give 100 dogtags to Lightkeeper",
+      "Visit every marked room and deliver found amulets",
+    ],
+    terminalAccessCost:
+      "Each failed Terminal attempt costs another Lightkeeper barter for 1 Blue Folder.",
+    playerGuidance:
+      "Heavy grind route: no 300m/500m Survivor payment, but lots of PvP, dogtags, marked room access, and Lightkeeper hand-ins.",
+    guidanceTone: "grind",
     ...calculateEndingStats(ENDING_NODE_IDS.debtor),
     rewards: [
       { name: "30,000 EUR", icon: "💶", description: "Cash reward" },

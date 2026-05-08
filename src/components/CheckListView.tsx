@@ -165,6 +165,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const [showNextOnly, setShowNextOnly] = useState<boolean>(false);
   const [showEvents, setShowEvents] = useState<boolean>(false);
   const lastWrittenTaskFilter = useRef<string | null | undefined>(undefined);
+  const previousActiveTaskFilter = useRef<TaskFocusFilter | null>(null);
   const [sortMode, setSortMode] = useState<
     | "name-asc"
     | "level-asc"
@@ -196,6 +197,16 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       : "all";
 
   useEffect(() => {
+    const nextUrlFilter =
+      activeTaskFilter === "all" ? null : activeTaskFilter;
+    const activeFilterChanged =
+      previousActiveTaskFilter.current !== activeTaskFilter;
+    previousActiveTaskFilter.current = activeTaskFilter;
+
+    if (activeFilterChanged && urlTaskFilter !== nextUrlFilter) {
+      return;
+    }
+
     if (lastWrittenTaskFilter.current === urlTaskFilter) {
       lastWrittenTaskFilter.current = undefined;
       return;
