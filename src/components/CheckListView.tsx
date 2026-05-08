@@ -93,6 +93,7 @@ interface CheckListViewProps {
   hiddenTraders: Set<string>;
   showKappa: boolean;
   showLightkeeper: boolean;
+  onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
   onToggleComplete: (taskId: string) => void;
   onTaskClick: (taskId: string) => void;
   mapFilter?: string | null;
@@ -116,6 +117,16 @@ interface CheckListViewProps {
   ) => void;
 }
 
+type TaskFocusFilter = "all" | "kappa" | "lightkeeper";
+
+const parseTaskFocusFilter = (value: string | null): TaskFocusFilter | null => {
+  if (value === "all" || value === "kappa" || value === "lightkeeper") {
+    return value;
+  }
+
+  return null;
+};
+
 export const CheckListView: React.FC<CheckListViewProps> = ({
   tasks,
   achievements,
@@ -123,6 +134,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   hiddenTraders,
   showKappa,
   showLightkeeper,
+  onSetFocus,
   onToggleComplete,
   onTaskClick: _onTaskClick,
   mapFilter,
@@ -142,6 +154,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const [urlSearchTerm, setUrlSearchTerm] = useQueryState("tasksSearch", {
     defaultValue: "",
   });
+  const [urlTaskFilter, setUrlTaskFilter] = useQueryState("taskFilter");
   const [searchTerm, setSearchTerm] = useState(urlSearchTerm);
   // Start with all groups collapsed by default
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
@@ -151,6 +164,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const [showCompleted, setShowCompleted] = useState<boolean>(true);
   const [showNextOnly, setShowNextOnly] = useState<boolean>(false);
   const [showEvents, setShowEvents] = useState<boolean>(false);
+  const lastWrittenTaskFilter = useRef<string | null | undefined>(undefined);
   const [sortMode, setSortMode] = useState<
     | "name-asc"
     | "level-asc"
@@ -174,6 +188,34 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   useEffect(() => {
     setSearchTerm(urlSearchTerm);
   }, [urlSearchTerm]);
+
+  const activeTaskFilter: TaskFocusFilter = showKappa
+    ? "kappa"
+    : showLightkeeper
+      ? "lightkeeper"
+      : "all";
+
+  useEffect(() => {
+    if (lastWrittenTaskFilter.current === urlTaskFilter) {
+      lastWrittenTaskFilter.current = undefined;
+      return;
+    }
+
+    const nextFilter = parseTaskFocusFilter(urlTaskFilter);
+    const nextTaskFilter = nextFilter ?? "all";
+    if (nextTaskFilter !== activeTaskFilter) {
+      onSetFocus(nextTaskFilter);
+    }
+  }, [activeTaskFilter, onSetFocus, urlTaskFilter]);
+
+  useEffect(() => {
+    const nextUrlFilter =
+      activeTaskFilter === "all" ? null : activeTaskFilter;
+    if (urlTaskFilter === nextUrlFilter) return;
+
+    lastWrittenTaskFilter.current = nextUrlFilter;
+    void setUrlTaskFilter(nextUrlFilter);
+  }, [activeTaskFilter, setUrlTaskFilter, urlTaskFilter]);
 
   // Debounce URL updates while typing to avoid excessive history updates.
   useEffect(() => {

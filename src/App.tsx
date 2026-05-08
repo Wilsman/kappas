@@ -3072,6 +3072,7 @@ function App() {
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
                           showLightkeeper={showLightkeeper}
+                          onSetFocus={handleSetFocus}
                           onToggleComplete={handleToggleComplete}
                           onTaskClick={handleTaskClick}
                           mapFilter={selectedMap}
