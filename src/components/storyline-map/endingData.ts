@@ -88,7 +88,7 @@ function calculateEndingNodeDepths(pathNodes: Node[], pathEdges: Edge[]) {
 
   outgoing.forEach((edges) => {
     edges.sort((left, right) =>
-      sortIdsByOriginalPosition(left.target, right.target)
+      sortIdsByOriginalPosition(left.target, right.target),
     );
   });
 
@@ -107,7 +107,10 @@ function calculateEndingNodeDepths(pathNodes: Node[], pathEdges: Edge[]) {
 
     for (const edge of outgoing.get(current.id) ?? []) {
       const nextDepth = currentDepth + 1;
-      depths.set(edge.target, Math.max(depths.get(edge.target) ?? 0, nextDepth));
+      depths.set(
+        edge.target,
+        Math.max(depths.get(edge.target) ?? 0, nextDepth),
+      );
 
       const remainingIncoming = (incomingCount.get(edge.target) ?? 1) - 1;
       incomingCount.set(edge.target, remainingIncoming);
@@ -162,7 +165,9 @@ function compactEndingPathNodes(pathNodes: Node[], pathEdges: Edge[]): Node[] {
           return fallbackX;
         }
 
-        return parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length;
+        return (
+          parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
+        );
       };
 
       const leftFallback = nodesById.get(left.id)?.position?.x ?? 0;
@@ -272,7 +277,7 @@ export const endingInfos: EndingInfo[] = [
     endingType: "survivor",
     label: "Survivor",
     description:
-      "Escape Tarkov by not working with Kerman - the quickest path with Prapor's help",
+      "Escape Tarkov by not working with Kerman - the quickest path but costs 300m/500m roubles",
     tagline: "The path of independence",
     color: "#22c55e",
     icon: "🏃",
@@ -280,20 +285,18 @@ export const endingInfos: EndingInfo[] = [
       "https://assets.tarkov.dev/achievement-68e8f02ff3a1196d1a05f2cb-icon.webp",
     routeNote: "500m if you kept the case, 300m if you handed it to Prapor",
     mainRoute: [
-      "Case is in your hands",
+      "Keep case (500m) or hand over case (300m)",
       "Don't work with Kerman",
-      "Choose money route",
-      "Survivor Ending",
+      "Hand over (300m/500m) roubles",
     ],
     requirementHighlights: [
       "Either 300 million or 500 million roubles",
       "5 million roubles to buy Terminal entry each failed attempt",
-      "Quickest route, but it is the rouble-money route",
     ],
     terminalAccessCost:
       "Buy a new Terminal note from Prapor for 5 million roubles each attempt.",
     playerGuidance:
-      "Avoid this ending if you do not want the 300m or 500m rouble route.",
+      "Easiest route but requires large payment of 300m/500m roubles.",
     guidanceTone: "avoid",
     ...calculateEndingStats(ENDING_NODE_IDS.survivor),
     rewards: [
@@ -313,19 +316,20 @@ export const endingInfos: EndingInfo[] = [
     endingType: "savior",
     label: "Savior",
     description:
-      "Escape Tarkov by fully helping Kerman find evidence on Terragroup - requires 4.0 Fence rep and BTR rep",
+      "Escape Tarkov by helping Kerman find all major 8 evidence on Terragroup - requires 4.0 Fence rep and BTR rep",
     tagline: "The path of righteousness",
     color: "#f59e0b",
     icon: "🛡️",
     iconUrl:
       "https://assets.tarkov.dev/achievement-68e8f0575eb7e5ce5000ba0a-icon.webp",
-    routeNote: "Hand the case to Prapor, unlock Lightkeeper, then work with Kerman",
+    routeNote:
+      "Hand the case to Prapor, unlock Lightkeeper, work with Kerman, then pay 40 BTC, hand over 8x major evidence on Terragroup to Kerman, also requires 4.0 Fence rep",
     mainRoute: [
       "Hand over case to Prapor",
-      "Tasks to unlock Lightkeeper",
+      "Shortcut to Lightkeeper unlock tasks",
       "Work with Kerman",
-      "Lightkeeper already unlocked",
-      "Savior Ending",
+      "Pay 40 BTC",
+      "Hand over 8x major evidence on Terragroup to Kerman",
     ],
     requirementHighlights: [
       "Must complete every other storyline chapter",
@@ -335,7 +339,7 @@ export const endingInfos: EndingInfo[] = [
     terminalAccessCost:
       "Each failed Terminal attempt requires crafting the keycard again for 5h 30m, plus a new Blank RFID Card craft that also takes 5h 30m.",
     playerGuidance:
-      "Cleanest non-money ending, but likely the longest completionist route because it requires completing ALL the other storyline chapters.",
+      "Most tasks and rep required, 4.0 Fence Rep, 0.4 BTR Rep and completion of ALL the other storyline chapters.",
     guidanceTone: "recommended",
     ...calculateEndingStats(ENDING_NODE_IDS.savior),
     rewards: [
@@ -385,12 +389,13 @@ export const endingInfos: EndingInfo[] = [
     icon: "💀",
     iconUrl:
       "https://assets.tarkov.dev/achievement-68e8f042b8efa2bbeb009d89-icon.webp",
-    routeNote: "Work with Kerman, then refuse or fail to finish helping him",
+    routeNote:
+      "Work with Kerman, Pay 40 BTC, then refuse or fail to finish helping him, pay 1M USD",
     mainRoute: [
       "Work with Kerman",
-      "Extra tasks or skip tasks",
-      "Pay Prapor",
-      "Fallen Ending",
+      "Pay 40 BTC",
+      "Do not help Kerman find Evidence on Terragroup",
+      "Pay Prapor 1M USD",
     ],
     requirementHighlights: [
       "Pay 1,000,000 USD to Prapor",
@@ -399,8 +404,7 @@ export const endingInfos: EndingInfo[] = [
     ],
     terminalAccessCost:
       "Each failed Terminal attempt requires crafting the keycard again for 5h 30m, plus a new Blank RFID Card craft that also takes 5h 30m.",
-    playerGuidance:
-      "This is also a very expensive ending: 1 million USD is a massive payment even though it avoids the 300m/500m rouble route.",
+    playerGuidance: "This is also a very expensive ending: 1 million USD.",
     guidanceTone: "warning",
     ...calculateEndingStats(ENDING_NODE_IDS.fallen),
     rewards: [
@@ -425,19 +429,20 @@ export const endingInfos: EndingInfo[] = [
     endingType: "debtor",
     label: "Debtor",
     description:
-      "Escape Tarkov by partially helping Kerman then switching to Lightkeeper - requires cultist amulets and 100 PMC dogtags",
+      "Escape Tarkov by handing over case to Prapor, unlocking Lightkeeper and then helping Kerman - requires visting all marked rooms and 30 PMC kills on woods",
     tagline: "The path of debt",
     color: "#a78bfa",
     icon: "🔮",
     iconUrl:
       "https://assets.tarkov.dev/achievement-68e8f04eb841bc8ac305350a-icon.webp",
-    routeNote: "Partially help Kerman, then switch over to Lightkeeper",
+    routeNote:
+      "Hand over case to Prapor, unlock Lightkeeper,  work with Kerman, hand over 2x evidence on Terragroup to Kerman, then pay 40 BTC",
     mainRoute: [
       "Hand over case to Prapor",
-      "Tasks to unlock Lightkeeper",
+      "Shortcut to Lightkeeper unlock tasks",
       "Work with Kerman",
-      "Lightkeeper already unlocked",
-      "Debtor Ending",
+      "Pay 40 BTC",
+      "Hand over 2x evidence on Terragroup to Kerman",
     ],
     requirementHighlights: [
       "Trade 1 Blue Folder with Lightkeeper for a Terminal attempt",
@@ -448,7 +453,7 @@ export const endingInfos: EndingInfo[] = [
     terminalAccessCost:
       "Each failed Terminal attempt costs another Lightkeeper barter for 1 Blue Folder.",
     playerGuidance:
-      "Heavy grind route: no 300m/500m Survivor payment, but lots of PvP, dogtags, marked room access, and Lightkeeper hand-ins.",
+      "30 PMC kills, 100 dogtag hand in, marked room access, and Lightkeeper hand-ins.",
     guidanceTone: "grind",
     ...calculateEndingStats(ENDING_NODE_IDS.debtor),
     rewards: [
@@ -514,14 +519,14 @@ export function getEndingPathData(endingId: string): {
     const pvePathNodes = findPathToNode(
       "kill-5-no-scav",
       initialNodes,
-      initialEdges
+      initialEdges,
     );
 
     // Find the path from the convergence point (btr-04) to the ending
     const convergencePathNodes = findPathToNode(
       "savior-ending",
       initialNodes,
-      initialEdges
+      initialEdges,
     );
 
     // Combine all unique nodes
@@ -544,7 +549,7 @@ export function getEndingPathData(endingId: string): {
 
   // Filter edges to only those in the path
   const pathEdges = initialEdges.filter(
-    (e) => pathNodeIds.has(e.source) && pathNodeIds.has(e.target)
+    (e) => pathNodeIds.has(e.source) && pathNodeIds.has(e.target),
   );
 
   return {
