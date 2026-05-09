@@ -274,6 +274,7 @@ describe("TaskStorage - User Preferences", () => {
       playerLevel: 42,
       enableLevelFilter: true,
       showCompleted: false,
+      dismissedAnnouncementIds: ["prestige-requirements-easier-v2"],
     };
 
     await storage.saveUserPreferences(prefs);
@@ -290,6 +291,16 @@ describe("TaskStorage - User Preferences", () => {
 
     expect(loaded.notes).toBe("Initial notes");
     expect(loaded.playerLevel).toBe(10);
+  });
+
+  it("should persist dismissed announcements per profile", async () => {
+    await storage.saveUserPreferences({
+      dismissedAnnouncementIds: ["announcement-a"],
+    });
+
+    const loaded = await storage.loadUserPreferences();
+
+    expect(loaded.dismissedAnnouncementIds).toEqual(["announcement-a"]);
   });
 
   it("should clear user preferences", async () => {

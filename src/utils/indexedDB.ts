@@ -69,6 +69,7 @@ export interface UserPreferences {
   enableLevelFilter: boolean;
   showCompleted: boolean;
   showEvents: boolean;
+  dismissedAnnouncementIds: string[];
 }
 
 export class TaskStorage {
@@ -613,6 +614,13 @@ export class TaskStorage {
             prefs.showCompleted = item.value as boolean;
           else if (item.id === "showEvents")
             prefs.showEvents = item.value as boolean;
+          else if (item.id === "dismissedAnnouncementIds")
+            prefs.dismissedAnnouncementIds = Array.isArray(item.value)
+              ? item.value.filter(
+                  (id): id is string =>
+                    typeof id === "string" && id.length > 0,
+                )
+              : [];
         });
         resolve(prefs);
       };

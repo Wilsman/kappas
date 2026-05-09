@@ -21,6 +21,7 @@ import {
 } from "./types";
 import { QuestProgressPanel } from "./components/QuestProgressPanel";
 import { ContentSkeleton } from "./components/ContentSkeleton";
+import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import SEO from "./components/SEO";
 import {
   taskStorage,
@@ -134,6 +135,10 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import {
+  APP_ANNOUNCEMENTS,
+  getVisibleAnnouncements,
+} from "@/data/announcements";
 // Lazily-loaded heavy views
 const FlowView = lazy(() =>
   import("./components/FlowView").then((m) => ({ default: m.FlowView })),
@@ -328,6 +333,9 @@ function App() {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [refreshErrorDialog, setRefreshErrorDialog] =
     useState<RefreshErrorDialogState | null>(null);
+  const [dismissedAnnouncementIds, setDismissedAnnouncementIds] = useState<
+    string[]
+  >([]);
 
   useEffect(() => {
     const nextFaction = profiles.find((p) => p.id === activeProfileId)?.faction;
@@ -756,6 +764,28 @@ function App() {
     applyCombinedData,
     reportRefreshError,
   ]);
+
+  const handleDismissAnnouncement = useCallback(
+    (announcementId: string) => {
+      if (!activeProfileId) return;
+      setDismissedAnnouncementIds((current) => {
+        if (current.includes(announcementId)) return current;
+        const next = [...current, announcementId];
+        void (async () => {
+          try {
+            taskStorage.setProfile(activeProfileId);
+            await taskStorage.saveUserPreferences({
+              dismissedAnnouncementIds: next,
+            });
+          } catch (err) {
+            console.error("Announcement dismissal save error", err);
+          }
+        })();
+        return next;
+      });
+    },
+    [activeProfileId],
+  );
 
   const loadGameModeData = useCallback(
     async (
@@ -1262,6 +1292,7 @@ function App() {
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
         // Load player level from user preferences
         const savedPrefs = await taskStorage.loadUserPreferences();
+        setDismissedAnnouncementIds(savedPrefs.dismissedAnnouncementIds ?? []);
         const loadedLevel = Number(savedPrefs.playerLevel);
         if (Number.isFinite(loadedLevel)) {
           setPlayerLevel(Math.max(1, loadedLevel));
@@ -1639,6 +1670,7 @@ function App() {
         });
         // Load player level from user preferences (with migration from localStorage)
         const savedPrefs = await taskStorage.loadUserPreferences();
+        setDismissedAnnouncementIds(savedPrefs.dismissedAnnouncementIds ?? []);
         let loadedLevel = Number(savedPrefs.playerLevel);
         if (!Number.isFinite(loadedLevel)) {
           // Migrate from localStorage if exists
@@ -2772,6 +2804,13 @@ function App() {
   }, [focusMode]);
   const isTaskDataLoading =
     isLoading || (isGameModeLoading && allTasks.length === 0);
+  const visibleAnnouncements = useMemo(
+    () =>
+      activeProfileId
+        ? getVisibleAnnouncements(APP_ANNOUNCEMENTS, dismissedAnnouncementIds)
+        : [],
+    [activeProfileId, dismissedAnnouncementIds],
+  );
 
   // Removed full-page loading screen - now showing skeleton layout instead
 
@@ -3036,6 +3075,11 @@ function App() {
                 </div>
               </div>
             </header>
+
+            <AnnouncementBanner
+              announcements={visibleAnnouncements}
+              onDismiss={handleDismissAnnouncement}
+            />
 
             {/* Main + Right Progress */}
             <div className="flex flex-1 min-h-0 overflow-hidden">
