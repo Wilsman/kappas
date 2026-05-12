@@ -1,4 +1,4 @@
-import { isProfileDeleted } from "./profile";
+import { isProfileDeleted, type Profile } from "./profile";
 import type { GameMode } from "@/utils/gameMode";
 import {
   DEFAULT_LANGUAGE,
@@ -22,6 +22,18 @@ const TASK_OBJECTIVES_STORE = "completedTaskObjectives";
 const TASK_OBJECTIVE_ITEM_PROGRESS_STORE = "taskObjectiveItemProgress";
 const API_CACHE_STORE = "apiCache";
 const TASKS_SNAPSHOT_KEY = "taskTracker_completedTasks_snapshot_v1";
+const AUTO_BACKUP_MANIFEST_KEY = "taskTracker_autoBackups_v1";
+const AUTO_BACKUP_ENTRY_PREFIX = "taskTracker_autoBackup_v1";
+const MAX_AUTO_BACKUPS = 5;
+const AUTO_BACKUP_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+export interface AutoBackupMetadata {
+  id: string;
+  createdAt: string;
+  reason: string;
+  profileCount: number;
+  activeProfileId: string;
+}
 
 function getTaskSnapshotStorageKey(profileId: string): string {
   return `${TASKS_SNAPSHOT_KEY}::${profileId || "default"}`;
@@ -1069,6 +1081,119 @@ export class ExportImportService {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+}
+
+function readAutoBackupManifest(): AutoBackupMetadata[] {
+  try {
+    const raw = localStorage.getItem(AUTO_BACKUP_MANIFEST_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (entry): entry is AutoBackupMetadata =>
+        typeof entry?.id === "string" &&
+        typeof entry.createdAt === "string" &&
+        typeof entry.reason === "string" &&
+        typeof entry.profileCount === "number" &&
+        typeof entry.activeProfileId === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeAutoBackupManifest(manifest: AutoBackupMetadata[]): void {
+  localStorage.setItem(AUTO_BACKUP_MANIFEST_KEY, JSON.stringify(manifest));
+}
+
+function getAutoBackupEntryKey(id: string): string {
+  return `${AUTO_BACKUP_ENTRY_PREFIX}::${id}`;
+}
+
+function pruneAutoBackups(manifest: AutoBackupMetadata[]): AutoBackupMetadata[] {
+  const sorted = [...manifest].sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  );
+  const kept = sorted.slice(0, MAX_AUTO_BACKUPS);
+  const keptIds = new Set(kept.map((entry) => entry.id));
+  sorted.forEach((entry) => {
+    if (!keptIds.has(entry.id)) {
+      localStorage.removeItem(getAutoBackupEntryKey(entry.id));
+    }
+  });
+  return kept;
+}
+
+export class AutoBackupService {
+  static listBackups(): AutoBackupMetadata[] {
+    return pruneAutoBackups(readAutoBackupManifest());
+  }
+
+  static readBackup(id: string): AllProfilesExportData | null {
+    try {
+      const raw = localStorage.getItem(getAutoBackupEntryKey(id));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return ExportImportService.isAllProfilesExport(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  static async createBackup(
+    profiles: Profile[],
+    activeProfileId: string,
+    reason: string,
+    options: { force?: boolean } = {},
+  ): Promise<AutoBackupMetadata | null> {
+    if (!profiles.length) return null;
+
+    const manifest = readAutoBackupManifest();
+    const mostRecent = manifest
+      .filter((entry) => entry.reason === reason)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+    if (
+      !options.force &&
+      mostRecent &&
+      Date.now() - Date.parse(mostRecent.createdAt) < AUTO_BACKUP_MIN_INTERVAL_MS
+    ) {
+      return mostRecent;
+    }
+
+    const exportData = await ExportImportService.exportAllProfiles(
+      profiles,
+      activeProfileId,
+    );
+    const metadata: AutoBackupMetadata = {
+      id: `${Date.now()}-${crypto.randomUUID()}`,
+      createdAt: new Date().toISOString(),
+      reason,
+      profileCount: exportData.profiles.length,
+      activeProfileId,
+    };
+
+    const writeBackup = (nextManifest: AutoBackupMetadata[]) => {
+      localStorage.setItem(
+        getAutoBackupEntryKey(metadata.id),
+        JSON.stringify(exportData),
+      );
+      writeAutoBackupManifest(nextManifest);
+    };
+
+    try {
+      writeBackup(pruneAutoBackups([metadata, ...manifest]));
+      return metadata;
+    } catch (err) {
+      try {
+        writeBackup(pruneAutoBackups([metadata]));
+        return metadata;
+      } catch (retryErr) {
+        console.warn("[Backup] Failed to create automatic backup", retryErr);
+        console.warn("[Backup] Original backup error", err);
+        return null;
+      }
+    }
   }
 }
 

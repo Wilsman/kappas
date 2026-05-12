@@ -28,6 +28,7 @@ import {
   migrateLegacyDataIfNeeded,
   migrateDefaultDbIfNeeded,
   ExportImportService,
+  AutoBackupService,
 } from "./utils/indexedDB";
 import "./utils/debug"; // Registers window.debugTracker() for user support
 import {
@@ -1449,6 +1450,12 @@ function App() {
         resolvedInitialLanguage = initialLanguage;
         setActiveProfileGameMode(initialGameMode);
 
+        await AutoBackupService.createBackup(
+          ensured.profiles,
+          ensured.activeId,
+          "startup-safety",
+        );
+
         // One-time migrate legacy single-DB data into the first profile
         await migrateLegacyDataIfNeeded(ensured.activeId);
 
@@ -2499,28 +2506,36 @@ function App() {
       const resetWorkingOnItems = resetAll || options.workingOnItems;
       const resetTrackedItems = resetAll || options.trackedItems;
 
-      // Reset state for selected areas
-      if (resetNormalTasks) setCompletedTasks(new Set());
-      if (resetNormalTasks || resetTrackedItems)
-        setTaskObjectiveItemProgress({});
-      if (resetCollectorItems || resetTrackedItems)
-        setCompletedCollectorItems(new Set());
-      if (resetHideoutItems) setCompletedHideoutItems(new Set());
-      if (resetHideoutItems || resetTrackedItems) setHideoutItemQuantities({});
-      if (resetTrackedItems) setCompletedTaskObjectives(new Set());
-      if (resetAchievements) setCompletedAchievements(new Set());
-      if (resetStorylineQuests) {
-        setCompletedStorylineObjectives(new Set());
-        setCompletedStorylineMapNodes(new Set());
-      }
-      if (resetWorkingOnItems) {
-        setWorkingOnTasks(new Set());
-        setWorkingOnStorylineObjectives(new Set());
-        setWorkingOnCollectorItems(new Set());
-        setWorkingOnHideoutStations(new Set());
-      }
-
       try {
+        await AutoBackupService.createBackup(
+          getProfiles(),
+          activeProfileId,
+          "before-reset",
+          { force: true },
+        );
+
+        // Reset state for selected areas
+        if (resetNormalTasks) setCompletedTasks(new Set());
+        if (resetNormalTasks || resetTrackedItems)
+          setTaskObjectiveItemProgress({});
+        if (resetCollectorItems || resetTrackedItems)
+          setCompletedCollectorItems(new Set());
+        if (resetHideoutItems) setCompletedHideoutItems(new Set());
+        if (resetHideoutItems || resetTrackedItems)
+          setHideoutItemQuantities({});
+        if (resetTrackedItems) setCompletedTaskObjectives(new Set());
+        if (resetAchievements) setCompletedAchievements(new Set());
+        if (resetStorylineQuests) {
+          setCompletedStorylineObjectives(new Set());
+          setCompletedStorylineMapNodes(new Set());
+        }
+        if (resetWorkingOnItems) {
+          setWorkingOnTasks(new Set());
+          setWorkingOnStorylineObjectives(new Set());
+          setWorkingOnCollectorItems(new Set());
+          setWorkingOnHideoutStations(new Set());
+        }
+
         taskStorage.setProfile(activeProfileId);
         await taskStorage.init();
 
@@ -2664,6 +2679,13 @@ function App() {
   // Handler for importing data into a new profile
   const handleImportAsNewProfile = useCallback(
     async (name: string, data: import("@/utils/indexedDB").ExportData) => {
+      await AutoBackupService.createBackup(
+        getProfiles(),
+        getActiveProfileId(),
+        "before-import-new-profile",
+        { force: true },
+      );
+
       // Create the new profile
       const newProfile = createProfile(name);
       setProfiles(getProfiles());
@@ -2752,6 +2774,13 @@ function App() {
   // Handler for importing all profiles from a bundle
   const handleImportAllProfiles = useCallback(
     async (data: import("@/utils/indexedDB").AllProfilesExportData) => {
+      await AutoBackupService.createBackup(
+        getProfiles(),
+        getActiveProfileId(),
+        "before-import-all-profiles",
+        { force: true },
+      );
+
       // Import each profile as a new profile with unique names
       for (const profileData of data.profiles) {
         // Create a new profile with a unique name to avoid duplicates

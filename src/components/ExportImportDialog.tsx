@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AutoBackupService,
   ExportImportService,
   type ExportData,
   type AllProfilesExportData,
@@ -178,6 +179,12 @@ export function ExportImportDialog({
     setIsProcessing(true);
     setError(null);
     try {
+      await AutoBackupService.createBackup(
+        profiles,
+        activeProfileId,
+        "before-import-current-profile",
+        { force: true },
+      );
       await ExportImportService.importAllData(importPreview.data);
       setSuccess("Import completed successfully!");
       // Trigger app refresh
@@ -190,7 +197,7 @@ export function ExportImportDialog({
     } finally {
       setIsProcessing(false);
     }
-  }, [importPreview, onImportComplete, handleClose]);
+  }, [activeProfileId, importPreview, onImportComplete, handleClose, profiles]);
 
   const handleImportToNewProfile = useCallback(async () => {
     if (!importPreview || !newProfileName.trim()) return;
@@ -232,6 +239,19 @@ export function ExportImportDialog({
     }
   }, [allProfilesImportPreview, onImportAllProfiles, handleClose]);
 
+  const handleDownloadAutoBackup = useCallback((backupId: string) => {
+    const data = AutoBackupService.readBackup(backupId);
+    if (!data) {
+      setError("Automatic backup could not be read");
+      return;
+    }
+    ExportImportService.downloadAllProfilesExport(
+      data,
+      `eft-tracker-auto-backup-${backupId}.json`,
+    );
+    setSuccess("Automatic backup downloaded successfully!");
+  }, []);
+
   const formatDate = (isoString: string) => {
     try {
       return new Date(isoString).toLocaleString();
@@ -266,6 +286,8 @@ export function ExportImportDialog({
       },
     ];
   };
+
+  const autoBackups = AutoBackupService.listBackups();
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -330,6 +352,23 @@ export function ExportImportDialog({
                   </div>
                 </div>
               </Button>
+              {autoBackups.length > 0 && (
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                  <div className="font-medium">Automatic safety backups</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Latest: {formatDate(autoBackups[0].createdAt)} (
+                    {autoBackups[0].reason})
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 h-7 px-2 text-xs"
+                    onClick={() => handleDownloadAutoBackup(autoBackups[0].id)}
+                  >
+                    Download Latest Auto Backup
+                  </Button>
+                </div>
+              )}
             </div>
           </>
         )}
