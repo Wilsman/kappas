@@ -69,6 +69,7 @@ import {
   buildLegacyTaskObjectiveProgressKey,
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveProgressKey,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
@@ -107,13 +108,13 @@ interface CheckListViewProps {
   onToggleTaskObjective: (
     taskId: string,
     objectiveKey: string,
-    legacyObjectiveKey?: string,
+    legacyObjectiveKey?: string | string[],
   ) => void;
   taskObjectiveItemProgress: Record<string, number>;
   onUpdateTaskObjectiveItemProgress: (
     objectiveItemKey: string,
     count: number,
-    legacyObjectiveItemKey?: string,
+    legacyObjectiveItemKey?: string | string[],
   ) => void;
 }
 
@@ -390,7 +391,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       objectiveItemKey: string,
       delta: number,
       maxCount: number,
-      legacyObjectiveItemKey?: string,
+      legacyObjectiveItemKey?: string | string[],
     ) => {
       const current = getTaskObjectiveItemProgress(
         taskObjectiveItemProgress,
@@ -412,7 +413,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       objectiveProgressKey: string,
       delta: number,
       maxCount: number,
-      legacyObjectiveProgressKey?: string,
+      legacyObjectiveProgressKey?: string | string[],
     ) => {
       const current = getTaskObjectiveProgress(
         taskObjectiveItemProgress,
@@ -1745,9 +1746,10 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                               index,
                                             );
                                           const legacyObjectiveKey =
-                                            buildLegacyTaskObjectiveKey(
-                                              task.id,
+                                            buildTaskObjectiveFallbackKeys(
+                                              task,
                                               index,
+                                              objectiveKey,
                                             );
                                           const isObjectiveChecked =
                                             isTaskObjectiveCompleted(
@@ -1781,10 +1783,17 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                               objectiveKey,
                                             );
                                           const legacyObjectiveProgressKey =
-                                            buildLegacyTaskObjectiveProgressKey(
-                                              task.id,
-                                              index,
-                                            );
+                                            [
+                                              ...legacyObjectiveKey.map((key) =>
+                                                buildTaskObjectiveProgressKey(
+                                                  key,
+                                                ),
+                                              ),
+                                              buildLegacyTaskObjectiveProgressKey(
+                                                task.id,
+                                                index,
+                                              ),
+                                            ];
                                           const currentObjectiveCount =
                                             Math.min(
                                               requiredCount,
@@ -1815,11 +1824,20 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                                   item.id || item.name,
                                                 );
                                               const legacyItemKey =
-                                                buildLegacyTaskObjectiveItemProgressKey(
-                                                  task.id,
-                                                  index,
-                                                  item.id || item.name,
-                                                );
+                                                [
+                                                  ...legacyObjectiveKey.map(
+                                                    (key) =>
+                                                      buildTaskObjectiveItemProgressKey(
+                                                        key,
+                                                        item.id || item.name,
+                                                      ),
+                                                  ),
+                                                  buildLegacyTaskObjectiveItemProgressKey(
+                                                    task.id,
+                                                    index,
+                                                    item.id || item.name,
+                                                  ),
+                                                ];
                                               const currentCount = Math.min(
                                                 requiredCount,
                                                 getTaskObjectiveItemProgress(

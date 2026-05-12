@@ -54,7 +54,7 @@ interface TrackedItemsViewProps {
   onUpdateTaskObjectiveItemProgress: (
     objectiveItemKey: string,
     count: number,
-    legacyObjectiveItemKey?: string,
+    legacyObjectiveItemKey?: string | string[],
   ) => void;
   hideoutStations: HideoutStation[];
   completedHideoutItems: Set<string>;

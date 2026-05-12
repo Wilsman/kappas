@@ -63,8 +63,10 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
 import {
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
+  formatTaskObjectiveLabel,
   getTaskObjectiveItemProgress,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
@@ -97,13 +99,13 @@ interface TaskDeskViewProps {
   onToggleTaskObjective: (
     taskId: string,
     objectiveKey: string,
-    legacyObjectiveKey?: string,
+    legacyObjectiveKey?: string | string[],
   ) => void;
   taskObjectiveItemProgress: Record<string, number>;
   onUpdateTaskObjectiveItemProgress: (
     objectiveItemKey: string,
     count: number,
-    legacyObjectiveItemKey?: string,
+    legacyObjectiveItemKey?: string | string[],
   ) => void;
 }
 
@@ -403,7 +405,7 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
       objectiveItemKey: string,
       delta: number,
       maxCount: number,
-      legacyObjectiveItemKey?: string,
+      legacyObjectiveItemKey?: string | string[],
     ) => {
       const current = getTaskObjectiveItemProgress(
         taskObjectiveItemProgress,
@@ -1902,17 +1904,17 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                   <ul className="space-y-1 text-xs text-foreground">
                                                     {(task.objectives ?? [])
                                                       .slice(0, 3)
-                                                      .map(
-                                                        (objective, index) => (
+                                                      .map((objective, index) => (
                                                           <li
                                                             key={`${task.id}-hover-objective-${index}`}
                                                             className="rounded-lg border border-border bg-card px-2 py-1.5"
                                                           >
-                                                            {objective.description ??
+                                                            {formatTaskObjectiveLabel(
+                                                              objective,
+                                                            ) ||
                                                               `Objective ${index + 1}`}
                                                           </li>
-                                                        ),
-                                                      )}
+                                                        ))}
                                                   </ul>
                                                 </div>
                                               )}
@@ -1950,9 +1952,10 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                       index,
                                                     );
                                                   const legacyObjectiveKey =
-                                                    buildLegacyTaskObjectiveKey(
-                                                      task.id,
+                                                    buildTaskObjectiveFallbackKeys(
+                                                      task,
                                                       index,
+                                                      objectiveKey,
                                                     );
                                                   const isObjectiveChecked =
                                                     isTaskObjectiveCompleted(
@@ -1995,12 +1998,22 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                               item.name,
                                                           );
                                                         const legacyItemKey =
-                                                          buildLegacyTaskObjectiveItemProgressKey(
-                                                            task.id,
-                                                            index,
-                                                            item.id ||
-                                                              item.name,
-                                                          );
+                                                          [
+                                                            ...legacyObjectiveKey.map(
+                                                              (key) =>
+                                                                buildTaskObjectiveItemProgressKey(
+                                                                  key,
+                                                                  item.id ||
+                                                                    item.name,
+                                                                ),
+                                                            ),
+                                                            buildLegacyTaskObjectiveItemProgressKey(
+                                                              task.id,
+                                                              index,
+                                                              item.id ||
+                                                                item.name,
+                                                            ),
+                                                          ];
                                                         const currentCount =
                                                           Math.min(
                                                             requiredCount,
@@ -2037,6 +2050,11 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                             objectiveTotalCollected,
                                                         )
                                                       : 0;
+                                                  const objectiveLabel =
+                                                    formatTaskObjectiveLabel(
+                                                      objective,
+                                                    ) ||
+                                                    `Objective ${index + 1}`;
                                                   return (
                                                     <li key={index}>
                                                       <div
@@ -2113,10 +2131,7 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                                 "line-through",
                                                             )}
                                                           >
-                                                            {"playerLevel" in
-                                                            objective
-                                                              ? `Reach level ${objective.playerLevel}`
-                                                              : objective.description}
+                                                            {objectiveLabel}
                                                           </span>
                                                           {objective.foundInRaid && (
                                                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 font-medium ml-2">

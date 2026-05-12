@@ -4,6 +4,7 @@ import {
   buildLegacyTaskObjectiveProgressKey,
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveProgressKey,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
@@ -62,6 +63,39 @@ describe('task objective key utilities', () => {
     expect(keys[0]).not.toEqual(keys[1]);
     expect(keys[0]?.endsWith('::1')).toBe(true);
     expect(keys[1]?.endsWith('::2')).toBe(true);
+  });
+
+  it('prefers objective ids for persistent keys when available', () => {
+    const keys = buildTaskObjectiveKeys(
+      makeTask([
+        { id: 'objective-1', description: 'Old text' },
+        { id: 'objective-2', description: 'Other text' },
+      ]),
+    );
+
+    expect(keys[0]).toBe('task-1::objective-id::objective-1');
+    expect(keys[1]).toBe('task-1::objective-id::objective-2');
+  });
+
+  it('keeps content-derived and index keys as fallbacks for existing progress', () => {
+    const task = makeTask([{ id: 'objective-1', description: 'Fixed text' }]);
+    const [objectiveKey] = buildTaskObjectiveKeys(task);
+    const fallbackKeys = buildTaskObjectiveFallbackKeys(task, 0, objectiveKey);
+    const oldContentKey = fallbackKeys.find((key) =>
+      key.includes('::objective::'),
+    );
+    const oldIndexKey = buildLegacyTaskObjectiveKey('task-1', 0);
+
+    expect(objectiveKey).toBe('task-1::objective-id::objective-1');
+    expect(oldContentKey).toBeTruthy();
+    expect(fallbackKeys).toContain(oldIndexKey);
+    expect(
+      isTaskObjectiveCompleted(
+        new Set<string>([oldContentKey!]),
+        objectiveKey!,
+        fallbackKeys,
+      ),
+    ).toBe(true);
   });
 
   it('supports legacy objective completion keys', () => {

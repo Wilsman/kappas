@@ -311,6 +311,7 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
     const objectiveList = (task.objectives || []).map((objective) => {
       const items = normalizeObjectiveItems(objective);
       return {
+        id: objective.id,
         description: objective.description,
         maps: objective.maps?.map((map) => ({ name: map.name })),
         items: items.length > 0 ? items : undefined,
@@ -1002,10 +1003,11 @@ const buildCombinedQuery = (gameMode: GameMode, language: LanguageCode) => `
       }
       items { item { name iconLink } count }
     }
-    objectives {
-      maps { name }
-      description
-      ... on TaskObjectiveItem { items { id name iconLink } count foundInRaid }
+      objectives {
+        maps { name }
+        id
+        description
+        ... on TaskObjectiveItem { items { id name iconLink } count foundInRaid }
       ... on TaskObjectiveShoot { count }
       ... on TaskObjectivePlayerLevel { playerLevel }
     }

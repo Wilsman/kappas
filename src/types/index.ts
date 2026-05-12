@@ -38,6 +38,7 @@ export interface Task {
 }
 
 export interface TaskObjective {
+  id?: string;
   description?: string;
   playerLevel?: number;
   maps?: {

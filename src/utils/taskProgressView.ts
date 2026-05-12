@@ -2,6 +2,7 @@ import type { Task } from "@/types";
 import type { GameMode } from "@/utils/gameMode";
 import {
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveKeys,
 } from "@/utils/taskObjectives";
 import { buildLogicalTaskKey } from "@/utils/taskVariants";
@@ -9,6 +10,7 @@ import { buildLogicalTaskKey } from "@/utils/taskVariants";
 type TasksByMode = Partial<Record<GameMode, Task[]>>;
 
 const OBJECTIVE_KEY_MARKER = "::objective::";
+const OBJECTIVE_ID_KEY_MARKER = "::objective-id::";
 
 export function buildLogicalTaskIdGroups(
   tasksByMode: TasksByMode,
@@ -53,9 +55,27 @@ export function expandCompletedTasks(
 }
 
 function getObjectiveKeySuffix(objectiveKey: string): string | null {
-  const markerIndex = objectiveKey.indexOf(OBJECTIVE_KEY_MARKER);
-  if (markerIndex === -1) return null;
-  return objectiveKey.slice(markerIndex + OBJECTIVE_KEY_MARKER.length);
+  const marker =
+    objectiveKey.includes(OBJECTIVE_KEY_MARKER)
+      ? OBJECTIVE_KEY_MARKER
+      : objectiveKey.includes(OBJECTIVE_ID_KEY_MARKER)
+        ? OBJECTIVE_ID_KEY_MARKER
+        : null;
+  if (!marker) return null;
+  const markerIndex = objectiveKey.indexOf(marker);
+  return objectiveKey.slice(markerIndex + marker.length);
+}
+
+function getObjectiveIndexForKey(task: Task, objectiveKey: string): number | null {
+  const primaryIndex = buildTaskObjectiveKeys(task).findIndex(
+    (key) => key === objectiveKey,
+  );
+  if (primaryIndex >= 0) return primaryIndex;
+
+  const fallbackIndex = (task.objectives ?? []).findIndex((_, index) =>
+    buildTaskObjectiveFallbackKeys(task, index).includes(objectiveKey),
+  );
+  return fallbackIndex >= 0 ? fallbackIndex : null;
 }
 
 function getLegacyObjectiveIndex(
@@ -80,14 +100,28 @@ export function getEquivalentTaskObjectiveKeys(
   if (!suffix) return [objectiveKey];
 
   const keys = new Set<string>([objectiveKey]);
+  const sourceTask = tasksById.get(taskId);
+  const objectiveIndex = sourceTask
+    ? getObjectiveIndexForKey(sourceTask, objectiveKey)
+    : null;
   getEquivalentTaskIds(taskId, logicalTaskIdsByTaskId).forEach((id) => {
     const task = tasksById.get(id);
     if (!task) return;
-    buildTaskObjectiveKeys(task).forEach((key) => {
+    const taskObjectiveKeys = buildTaskObjectiveKeys(task);
+    taskObjectiveKeys.forEach((key) => {
       if (getObjectiveKeySuffix(key) === suffix) {
         keys.add(key);
       }
     });
+    if (objectiveIndex !== null) {
+      const equivalentKey = taskObjectiveKeys[objectiveIndex];
+      if (equivalentKey) keys.add(equivalentKey);
+      buildTaskObjectiveFallbackKeys(
+        task,
+        objectiveIndex,
+        equivalentKey,
+      ).forEach((key) => keys.add(key));
+    }
   });
 
   return Array.from(keys);

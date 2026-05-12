@@ -1,6 +1,7 @@
 import { Task, TaskObjective } from "@/types";
 
 const taskObjectiveKeysCache = new WeakMap<object, string[]>();
+type FallbackKeys = string | string[] | undefined;
 
 function normalizePart(value?: string | null): string {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -40,6 +41,15 @@ function encodeKeyPart(value: string): string {
   return encodeURIComponent(value);
 }
 
+function buildContentTaskObjectiveKey(
+  taskId: string,
+  objective: TaskObjective,
+  duplicateOrdinal: number,
+): string {
+  const signature = serializeObjective(objective);
+  return `${taskId}::objective::${encodeKeyPart(signature)}::${duplicateOrdinal}`;
+}
+
 export function buildTaskObjectiveKeys(
   task: Pick<Task, "id" | "objectives">,
 ): string[] {
@@ -48,15 +58,47 @@ export function buildTaskObjectiveKeys(
   if (cached) return cached;
 
   const seenPerSignature = new Map<string, number>();
+  const seenPerId = new Map<string, number>();
   const keys = (task.objectives ?? []).map((objective) => {
     const signature = serializeObjective(objective);
     const seen = (seenPerSignature.get(signature) ?? 0) + 1;
     seenPerSignature.set(signature, seen);
-    return `${task.id}::objective::${encodeKeyPart(signature)}::${seen}`;
+    if (objective.id) {
+      const idSeen = (seenPerId.get(objective.id) ?? 0) + 1;
+      seenPerId.set(objective.id, idSeen);
+      const suffix = idSeen > 1 ? `::${idSeen}` : "";
+      return `${task.id}::objective-id::${encodeKeyPart(objective.id)}${suffix}`;
+    }
+    return buildContentTaskObjectiveKey(task.id, objective, seen);
   });
 
   taskObjectiveKeysCache.set(cacheKey, keys);
   return keys;
+}
+
+export function buildTaskObjectiveFallbackKeys(
+  task: Pick<Task, "id" | "objectives">,
+  objectiveIndex: number,
+  primaryObjectiveKey?: string,
+): string[] {
+  const objective = task.objectives?.[objectiveIndex];
+  const fallbacks = new Set<string>([
+    buildLegacyTaskObjectiveKey(task.id, objectiveIndex),
+  ]);
+
+  if (objective) {
+    const sameSignatureOrdinal =
+      (task.objectives ?? [])
+        .slice(0, objectiveIndex + 1)
+        .filter((candidate) => serializeObjective(candidate) === serializeObjective(objective))
+        .length || 1;
+    fallbacks.add(
+      buildContentTaskObjectiveKey(task.id, objective, sameSignatureOrdinal),
+    );
+  }
+
+  if (primaryObjectiveKey) fallbacks.delete(primaryObjectiveKey);
+  return Array.from(fallbacks);
 }
 
 export function buildLegacyTaskObjectiveKey(
@@ -95,30 +137,42 @@ export function buildLegacyTaskObjectiveProgressKey(
 export function isTaskObjectiveCompleted(
   completedTaskObjectives: Set<string>,
   objectiveKey: string,
-  legacyObjectiveKey?: string,
+  legacyObjectiveKey?: FallbackKeys,
 ): boolean {
+  const fallbackKeys = Array.isArray(legacyObjectiveKey)
+    ? legacyObjectiveKey
+    : legacyObjectiveKey
+      ? [legacyObjectiveKey]
+      : [];
   return (
     completedTaskObjectives.has(objectiveKey) ||
-    (!!legacyObjectiveKey && completedTaskObjectives.has(legacyObjectiveKey))
+    fallbackKeys.some((key) => completedTaskObjectives.has(key))
   );
 }
 
 export function getTaskObjectiveItemProgress(
   taskObjectiveItemProgress: Record<string, number>,
   objectiveItemKey: string,
-  legacyObjectiveItemKey?: string,
+  legacyObjectiveItemKey?: FallbackKeys,
 ): number {
   const stableCount = taskObjectiveItemProgress[objectiveItemKey];
   if (typeof stableCount === "number") return stableCount;
-  if (!legacyObjectiveItemKey) return 0;
-  const legacyCount = taskObjectiveItemProgress[legacyObjectiveItemKey];
-  return typeof legacyCount === "number" ? legacyCount : 0;
+  const fallbackKeys = Array.isArray(legacyObjectiveItemKey)
+    ? legacyObjectiveItemKey
+    : legacyObjectiveItemKey
+      ? [legacyObjectiveItemKey]
+      : [];
+  for (const fallbackKey of fallbackKeys) {
+    const legacyCount = taskObjectiveItemProgress[fallbackKey];
+    if (typeof legacyCount === "number") return legacyCount;
+  }
+  return 0;
 }
 
 export function getTaskObjectiveProgress(
   taskObjectiveItemProgress: Record<string, number>,
   objectiveProgressKey: string,
-  legacyObjectiveProgressKey?: string,
+  legacyObjectiveProgressKey?: FallbackKeys,
 ): number {
   return getTaskObjectiveItemProgress(
     taskObjectiveItemProgress,

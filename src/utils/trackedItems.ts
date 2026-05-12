@@ -2,6 +2,7 @@ import type { HideoutStation, Task } from "@/types";
 import {
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
   getTaskObjectiveItemProgress,
@@ -30,10 +31,10 @@ export interface TrackedItemSource {
   isAlternative: boolean;
   iconLink?: string;
   objectiveItemKey?: string;
-  legacyObjectiveItemKey?: string;
+  legacyObjectiveItemKey?: string | string[];
   objectiveProgressTargets?: Array<{
     objectiveItemKey: string;
-    legacyObjectiveItemKey?: string;
+    legacyObjectiveItemKey?: string | string[];
   }>;
   hideoutItemKey?: string;
 }
@@ -449,7 +450,11 @@ export function buildTrackedItems({
       const requiredCount = Math.max(1, objective.count ?? 1);
       const objectiveKey =
         objectiveKeys[index] ?? buildLegacyTaskObjectiveKey(task.id, index);
-      const legacyObjectiveKey = buildLegacyTaskObjectiveKey(task.id, index);
+      const legacyObjectiveKey = buildTaskObjectiveFallbackKeys(
+        task,
+        index,
+        objectiveKey,
+      );
       const objectiveCompleted = isTaskObjectiveCompleted(
         completedTaskObjectives,
         objectiveKey,
@@ -462,11 +467,16 @@ export function buildTrackedItems({
         return getTaskObjectiveItemProgress(
           taskObjectiveItemProgress,
           buildTaskObjectiveItemProgressKey(objectiveKey, sourceItemKey),
-          buildLegacyTaskObjectiveItemProgressKey(
-            task.id,
-            index,
-            sourceItemKey,
-          ),
+          [
+            ...legacyObjectiveKey.map((key) =>
+              buildTaskObjectiveItemProgressKey(key, sourceItemKey),
+            ),
+            buildLegacyTaskObjectiveItemProgressKey(
+              task.id,
+              index,
+              sourceItemKey,
+            ),
+          ],
         );
       });
       const totalPooledCount = Math.min(
@@ -480,11 +490,12 @@ export function buildTrackedItems({
           objectiveKey,
           sourceItemKey,
         );
-        const legacyObjectiveItemKey = buildLegacyTaskObjectiveItemProgressKey(
-          task.id,
-          index,
-          sourceItemKey,
-        );
+        const legacyObjectiveItemKey = [
+          ...legacyObjectiveKey.map((key) =>
+            buildTaskObjectiveItemProgressKey(key, sourceItemKey),
+          ),
+          buildLegacyTaskObjectiveItemProgressKey(task.id, index, sourceItemKey),
+        ];
         const persistedCount = getTaskObjectiveItemProgress(
           taskObjectiveItemProgress,
           objectiveItemKey,

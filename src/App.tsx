@@ -65,6 +65,7 @@ import {
 import { buildTaskDependencyMap, getAllDependencies } from "./utils/taskUtils";
 import {
   buildLegacyTaskObjectiveKey,
+  buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveKeys,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
@@ -845,6 +846,24 @@ function App() {
   const [workingOnHideoutStations, setWorkingOnHideoutStations] = useState<
     Set<string>
   >(new Set());
+  const ignoredTasksStorageKey = `ignoredTasks:${activeProfileId}`;
+  const [ignoredTasks, setIgnoredTasks] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(ignoredTasksStorageKey);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ignoredTasksStorageKey);
+      setIgnoredTasks(saved ? new Set(JSON.parse(saved)) : new Set());
+    } catch {
+      setIgnoredTasks(new Set());
+    }
+  }, [ignoredTasksStorageKey]);
 
   // Storyline view state for URL synchronization
   const [storylineView, setStorylineView] = useState<
@@ -1985,16 +2004,15 @@ function App() {
               tasksWithEvents.find((entry) => entry.id === equivalentTaskId);
             const objectiveKeys = task ? buildTaskObjectiveKeys(task) : [];
             objectiveKeys.forEach((objectiveKey, index) => {
-              const legacyKey = buildLegacyTaskObjectiveKey(
-                equivalentTaskId,
-                index,
-              );
+              const legacyKeys = task
+                ? buildTaskObjectiveFallbackKeys(task, index, objectiveKey)
+                : [buildLegacyTaskObjectiveKey(equivalentTaskId, index)];
               if (markComplete) {
                 nextTaskObjectives.add(objectiveKey);
-                nextTaskObjectives.add(legacyKey);
+                legacyKeys.forEach((key) => nextTaskObjectives.add(key));
               } else {
                 nextTaskObjectives.delete(objectiveKey);
-                nextTaskObjectives.delete(legacyKey);
+                legacyKeys.forEach((key) => nextTaskObjectives.delete(key));
               }
             });
           },
@@ -2187,7 +2205,7 @@ function App() {
         isTaskObjectiveCompleted(
           objectiveProgress,
           objectiveKey,
-          buildLegacyTaskObjectiveKey(task.id, index),
+          buildTaskObjectiveFallbackKeys(task, index, objectiveKey),
         ),
       );
     },
@@ -2198,7 +2216,7 @@ function App() {
     async (
       taskId: string,
       objectiveKey: string,
-      legacyObjectiveKey?: string,
+      legacyObjectiveKey?: string | string[],
     ) => {
       if (!activeProfileId) return;
 
@@ -2214,10 +2232,17 @@ function App() {
         logicalTaskIdsByTaskId,
       );
       const equivalentLegacyObjectiveKeys =
-        getEquivalentLegacyTaskObjectiveKeys(
-          taskId,
-          legacyObjectiveKey,
-          logicalTaskIdsByTaskId,
+        (Array.isArray(legacyObjectiveKey)
+          ? legacyObjectiveKey
+          : legacyObjectiveKey
+            ? [legacyObjectiveKey]
+            : []
+        ).flatMap((key) =>
+          getEquivalentLegacyTaskObjectiveKeys(
+            taskId,
+            key,
+            logicalTaskIdsByTaskId,
+          ),
         );
       const equivalentKeys = [
         ...equivalentObjectiveKeys,
@@ -2280,21 +2305,31 @@ function App() {
     (
       objectiveItemKey: string,
       count: number,
-      legacyObjectiveItemKey?: string,
+      legacyObjectiveItemKey?: string | string[],
     ) => {
       if (!activeProfileId) return;
       setTaskObjectiveItemProgress((prev) => {
         const next = { ...prev };
         if (count <= 0) {
           delete next[objectiveItemKey];
-          if (legacyObjectiveItemKey) {
-            delete next[legacyObjectiveItemKey];
-          }
+          const legacyKeys = Array.isArray(legacyObjectiveItemKey)
+            ? legacyObjectiveItemKey
+            : legacyObjectiveItemKey
+              ? [legacyObjectiveItemKey]
+              : [];
+          legacyKeys.forEach((key) => {
+            delete next[key];
+          });
         } else {
           next[objectiveItemKey] = count;
-          if (legacyObjectiveItemKey) {
-            next[legacyObjectiveItemKey] = count;
-          }
+          const legacyKeys = Array.isArray(legacyObjectiveItemKey)
+            ? legacyObjectiveItemKey
+            : legacyObjectiveItemKey
+              ? [legacyObjectiveItemKey]
+              : [];
+          legacyKeys.forEach((key) => {
+            next[key] = count;
+          });
         }
         taskStorage.setProfile(activeProfileId);
         taskStorage
@@ -2360,6 +2395,27 @@ function App() {
       workingOnHideoutStations,
       activeProfileId,
     ],
+  );
+
+  const handleToggleIgnoredTask = useCallback(
+    async (taskId: string) => {
+      const next = new Set(ignoredTasks);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      setIgnoredTasks(next);
+      try {
+        localStorage.setItem(
+          ignoredTasksStorageKey,
+          JSON.stringify(Array.from(next)),
+        );
+      } catch (err) {
+        console.error("Save ignored tasks error", err);
+      }
+    },
+    [ignoredTasks, ignoredTasksStorageKey],
   );
 
   const handleToggleWorkingOnStorylineObjective = useCallback(
@@ -2441,12 +2497,17 @@ function App() {
       const resetAchievements = resetAll || options.achievements;
       const resetPrestiges = resetAll || options.prestiges;
       const resetWorkingOnItems = resetAll || options.workingOnItems;
+      const resetTrackedItems = resetAll || options.trackedItems;
 
       // Reset state for selected areas
       if (resetNormalTasks) setCompletedTasks(new Set());
-      if (resetNormalTasks) setTaskObjectiveItemProgress({});
-      if (resetCollectorItems) setCompletedCollectorItems(new Set());
+      if (resetNormalTasks || resetTrackedItems)
+        setTaskObjectiveItemProgress({});
+      if (resetCollectorItems || resetTrackedItems)
+        setCompletedCollectorItems(new Set());
       if (resetHideoutItems) setCompletedHideoutItems(new Set());
+      if (resetHideoutItems || resetTrackedItems) setHideoutItemQuantities({});
+      if (resetTrackedItems) setCompletedTaskObjectives(new Set());
       if (resetAchievements) setCompletedAchievements(new Set());
       if (resetStorylineQuests) {
         setCompletedStorylineObjectives(new Set());
@@ -2465,12 +2526,16 @@ function App() {
 
         // Save empty sets for selected areas
         if (resetNormalTasks) await taskStorage.saveCompletedTasks(new Set());
-        if (resetNormalTasks)
+        if (resetNormalTasks || resetTrackedItems)
           await taskStorage.saveTaskObjectiveItemProgress({});
-        if (resetCollectorItems)
+        if (resetCollectorItems || resetTrackedItems)
           await taskStorage.saveCompletedCollectorItems(new Set());
         if (resetHideoutItems)
           await taskStorage.saveCompletedHideoutItems(new Set());
+        if (resetHideoutItems || resetTrackedItems)
+          await taskStorage.saveHideoutItemQuantities({});
+        if (resetTrackedItems)
+          await taskStorage.saveCompletedTaskObjectives(new Set());
         if (resetAchievements)
           await taskStorage.saveCompletedAchievements(new Set());
         if (resetStorylineQuests) {
@@ -3274,6 +3339,7 @@ function App() {
                             completedStorylineObjectives
                           }
                           completedHideoutItems={completedHideoutItems}
+                          ignoredTasks={ignoredTasks}
                           playerLevel={playerLevel}
                           onToggleWorkingOnTask={handleToggleWorkingOnTask}
                           onToggleWorkingOnStorylineObjective={
@@ -3288,6 +3354,7 @@ function App() {
                             handleToggleStorylineObjective
                           }
                           onToggleHideoutItem={handleToggleHideoutItem}
+                          onToggleIgnoredTask={handleToggleIgnoredTask}
                           completedTaskObjectives={
                             visibleCompletedTaskObjectives
                           }

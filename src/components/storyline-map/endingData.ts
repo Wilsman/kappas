@@ -296,7 +296,7 @@ export const endingInfos: EndingInfo[] = [
     terminalAccessCost:
       "Buy a new Terminal note from Prapor for 5 million roubles each attempt.",
     playerGuidance:
-      "Easiest route but requires large payment of 300m/500m roubles.",
+      "Avoid this ending unless you want the easiest route and can pay 300m/500m roubles.",
     guidanceTone: "avoid",
     ...calculateEndingStats(ENDING_NODE_IDS.survivor),
     rewards: [
