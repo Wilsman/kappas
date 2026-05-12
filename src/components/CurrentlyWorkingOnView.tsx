@@ -29,6 +29,8 @@ import {
   Plus,
   Minus,
   Search,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react";
 import { TRADER_COLORS } from "@/data/traders";
 import { cn } from "@/lib/utils";
@@ -152,6 +154,10 @@ export function CurrentlyWorkingOnView({
     const saved = localStorage.getItem("nextQuestsCollapsed");
     return saved === "true";
   });
+  const [layoutMode, setLayoutMode] = useState<"standard" | "compact">(() => {
+    const saved = localStorage.getItem("layoutMode");
+    return saved === "compact" ? "compact" : "standard";
+  });
   const [nextQuestsSearch, setNextQuestsSearch] = useState("");
   const [activeQuestsSearch, setActiveQuestsSearch] = useState("");
   const [nextQuestsSelectedIndex, setNextQuestsSelectedIndex] = useState(0);
@@ -179,6 +185,10 @@ export function CurrentlyWorkingOnView({
   useEffect(() => {
     localStorage.setItem("nextQuestsCollapsed", String(isNextQuestsCollapsed));
   }, [isNextQuestsCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem("layoutMode", layoutMode);
+  }, [layoutMode]);
 
   const logicalTaskGroupsByTaskId = useMemo(
     () => buildLogicalTaskGroupsByTaskId(tasks),
@@ -746,11 +756,48 @@ export function CurrentlyWorkingOnView({
             <div className="flex items-center gap-2">
               <User className="h-5 w-5" />
               <CardTitle>Quests ({activeTasks.length})</CardTitle>
-              {isQuestsCollapsed ? (
-                <ChevronDown className="h-4 w-4 ml-auto" />
-              ) : (
-                <ChevronUp className="h-4 w-4 ml-auto" />
-              )}
+              <div
+                className="flex items-center gap-1 ml-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={
+                          layoutMode === "standard" ? "default" : "ghost"
+                        }
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setLayoutMode("standard")}
+                      >
+                        <LayoutList className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Standard view</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={layoutMode === "compact" ? "default" : "ghost"}
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setLayoutMode("compact")}
+                      >
+                        <LayoutGrid className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Compact view</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {isQuestsCollapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </div>
             </div>
             <CardDescription>
               Regular tasks you're currently working on
@@ -864,14 +911,23 @@ export function CurrentlyWorkingOnView({
                         <MapPin className="h-4 w-4" />
                         {mapName}
                       </div>
-                      <div className="space-y-2 ml-6">
+                      <div
+                        className={cn(
+                          layoutMode === "compact"
+                            ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 ml-6"
+                            : "space-y-2 ml-6",
+                        )}
+                      >
                         {mapTasks.map((task) => {
                           const isTaskCompleted = isLogicalTaskCompleted(
                             task.id,
                             completedTasks,
                             logicalTaskGroupsByTaskId,
                           );
-                          const isExpanded = expandedTasks.has(task.id);
+                          const isExpanded =
+                            layoutMode === "compact"
+                              ? false
+                              : expandedTasks.has(task.id);
                           const objectiveKeys = buildTaskObjectiveKeys(task);
                           const objectiveProgress =
                             objectiveProgressByTaskId.get(task.id);
@@ -879,130 +935,281 @@ export function CurrentlyWorkingOnView({
                             <div
                               key={task.id}
                               className={cn(
-                                "rounded-lg border bg-card transition-colors",
+                                "rounded-xl border bg-card transition-all duration-300",
                                 isTaskCompleted && "opacity-60",
+                                layoutMode === "compact"
+                                  ? "group relative overflow-hidden border-border/40 bg-gradient-to-br from-card to-card/60 backdrop-blur-sm hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+                                  : "rounded-lg hover:shadow-md",
                               )}
                             >
-                              <div className="flex items-start justify-between gap-4 p-3">
-                                <div className="flex items-start gap-3 flex-1 min-w-0">
-                                  <Checkbox
-                                    checked={isTaskCompleted}
-                                    onCheckedChange={() =>
-                                      onToggleTask(task.id)
-                                    }
-                                    className="mt-1 h-5 w-5"
+                              {layoutMode === "compact" &&
+                                task.trader?.name && (
+                                  <div
+                                    className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl transition-all group-hover:w-[4px]"
+                                    style={{
+                                      backgroundColor:
+                                        TRADER_COLORS[
+                                          task.trader
+                                            .name as keyof typeof TRADER_COLORS
+                                        ] || "#6b7280",
+                                    }}
                                   />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      {task.trader?.imageLink && (
-                                        <img
-                                          src={task.trader.imageLink}
-                                          alt={task.trader.name}
-                                          loading="lazy"
-                                          className="h-5 w-5 rounded-full object-cover flex-shrink-0"
-                                        />
-                                      )}
+                                )}
+                              <div
+                                className={cn(
+                                  "flex items-start justify-between gap-2",
+                                  layoutMode === "compact" ? "pr-1" : "p-3",
+                                )}
+                              >
+                                {layoutMode === "compact" ? (
+                                  <div className="flex items-start gap-2 flex-1 min-w-0 p-3 pl-4">
+                                    <Checkbox
+                                      checked={isTaskCompleted}
+                                      onCheckedChange={() =>
+                                        onToggleTask(task.id)
+                                      }
+                                      className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0 space-y-1.5">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          {task.trader?.imageLink && (
+                                            <img
+                                              src={task.trader.imageLink}
+                                              alt={task.trader.name}
+                                              loading="lazy"
+                                              className="h-4 w-4 rounded-full object-cover flex-shrink-0"
+                                            />
+                                          )}
+                                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground truncate">
+                                            {task.trader.name}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                          {objectiveProgress && (
+                                            <span className="text-[10px] tabular-nums font-medium text-muted-foreground">
+                                              {objectiveProgress.completed}/
+                                              {objectiveProgress.total}
+                                            </span>
+                                          )}
+                                          <span className="text-[10px] text-muted-foreground/60">
+                                            Lvl {task.minPlayerLevel}
+                                          </span>
+                                        </div>
+                                      </div>
                                       <h4
                                         className={cn(
-                                          "font-medium",
+                                          "text-xs font-semibold leading-snug line-clamp-2",
                                           isTaskCompleted &&
                                             "line-through text-muted-foreground",
                                         )}
                                       >
                                         {task.name}
                                       </h4>
-                                      <Badge
-                                        variant="outline"
-                                        style={{
-                                          borderColor:
-                                            TRADER_COLORS[
-                                              task.trader
-                                                .name as keyof typeof TRADER_COLORS
-                                            ] || "#6b7280",
-                                          color:
-                                            TRADER_COLORS[
-                                              task.trader
-                                                .name as keyof typeof TRADER_COLORS
-                                            ] || "#6b7280",
-                                        }}
-                                      >
-                                        {task.trader.name}
-                                      </Badge>
-                                      <Badge variant="secondary">
-                                        Lvl {task.minPlayerLevel}
-                                      </Badge>
                                       {objectiveProgress && (
-                                        <Badge
-                                          variant="outline"
-                                          className={cn(
-                                            "inline-flex items-center gap-1",
-                                            objectiveProgress.completed >=
-                                              objectiveProgress.total
-                                              ? "border-green-500/30 bg-green-500/10 text-green-400"
-                                              : "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
-                                          )}
-                                        >
-                                          <ListTodo className="h-3 w-3" />
-                                          {objectiveProgress.completed}/
-                                          {objectiveProgress.total}
-                                        </Badge>
-                                      )}
-                                      <a
-                                        href={task.wikiLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-xs transition-colors"
-                                        title="View quest wiki"
-                                      >
-                                        <ExternalLink size={12} />
-                                        Wiki
-                                      </a>
-                                    </div>
-                                    {task.objectives &&
-                                      task.objectives.length > 0 && (
-                                        <div className="mt-1 flex items-center gap-2">
-                                          <span className="text-xs text-muted-foreground">
-                                            {task.objectives.length} objective
-                                            {task.objectives.length !== 1
-                                              ? "s"
-                                              : ""}
-                                          </span>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2 text-xs"
-                                            onClick={() =>
-                                              toggleTaskExpanded(task.id)
-                                            }
-                                          >
-                                            {isExpanded ? (
-                                              <>
-                                                <ChevronUp className="h-3 w-3 mr-1" />
-                                                Hide
-                                              </>
-                                            ) : (
-                                              <>
-                                                <ChevronDown className="h-3 w-3 mr-1" />
-                                                Show
-                                              </>
-                                            )}
-                                          </Button>
+                                        <div className="flex items-center gap-2">
+                                          <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden">
+                                            <div
+                                              className="h-full rounded-full transition-all duration-500"
+                                              style={{
+                                                width: `${(objectiveProgress.completed / objectiveProgress.total) * 100}%`,
+                                                backgroundColor:
+                                                  TRADER_COLORS[
+                                                    task.trader
+                                                      .name as keyof typeof TRADER_COLORS
+                                                  ] || "#6b7280",
+                                              }}
+                                            />
+                                          </div>
                                         </div>
                                       )}
+                                    </div>
                                   </div>
-                                </div>
+                                ) : (
+                                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                                    <Checkbox
+                                      checked={isTaskCompleted}
+                                      onCheckedChange={() =>
+                                        onToggleTask(task.id)
+                                      }
+                                      className="mt-1 h-5 w-5 flex-shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {task.trader?.imageLink && (
+                                          <img
+                                            src={task.trader.imageLink}
+                                            alt={task.trader.name}
+                                            loading="lazy"
+                                            className="h-5 w-5 rounded-full object-cover flex-shrink-0"
+                                          />
+                                        )}
+                                        <h4
+                                          className={cn(
+                                            "font-medium",
+                                            isTaskCompleted &&
+                                              "line-through text-muted-foreground",
+                                          )}
+                                        >
+                                          {task.name}
+                                        </h4>
+                                        <Badge
+                                          variant="outline"
+                                          style={{
+                                            borderColor:
+                                              TRADER_COLORS[
+                                                task.trader
+                                                  .name as keyof typeof TRADER_COLORS
+                                              ] || "#6b7280",
+                                            color:
+                                              TRADER_COLORS[
+                                                task.trader
+                                                  .name as keyof typeof TRADER_COLORS
+                                              ] || "#6b7280",
+                                          }}
+                                        >
+                                          {task.trader.name}
+                                        </Badge>
+                                        <Badge variant="secondary">
+                                          Lvl {task.minPlayerLevel}
+                                        </Badge>
+                                        {objectiveProgress && (
+                                          <Badge
+                                            variant="outline"
+                                            className={cn(
+                                              "inline-flex items-center gap-1",
+                                              objectiveProgress.completed >=
+                                                objectiveProgress.total
+                                                ? "border-green-500/30 bg-green-500/10 text-green-400"
+                                                : "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
+                                            )}
+                                          >
+                                            <ListTodo className="h-3 w-3" />
+                                            {objectiveProgress.completed}/
+                                            {objectiveProgress.total}
+                                          </Badge>
+                                        )}
+                                        <a
+                                          href={task.wikiLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-xs transition-colors"
+                                          title="View quest wiki"
+                                        >
+                                          <ExternalLink size={12} />
+                                          Wiki
+                                        </a>
+                                      </div>
+                                      {task.objectives &&
+                                        task.objectives.length > 0 && (
+                                          <div className="mt-1 flex items-center gap-2">
+                                            <span className="text-xs text-muted-foreground">
+                                              {task.objectives.length} objective
+                                              {task.objectives.length !== 1
+                                                ? "s"
+                                                : ""}
+                                            </span>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-6 px-2 text-xs"
+                                              onClick={() =>
+                                                toggleTaskExpanded(task.id)
+                                              }
+                                            >
+                                              {isExpanded ? (
+                                                <>
+                                                  <ChevronUp className="h-3 w-3 mr-1" />
+                                                  Hide
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <ChevronDown className="h-3 w-3 mr-1" />
+                                                  Show
+                                                </>
+                                              )}
+                                            </Button>
+                                          </div>
+                                        )}
+                                    </div>
+                                  </div>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => onToggleWorkingOnTask(task.id)}
-                                  className="flex-shrink-0"
+                                  className={cn(
+                                    "flex-shrink-0",
+                                    layoutMode === "compact"
+                                      ? "h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
+                                      : "",
+                                  )}
                                   title="Remove from working on"
                                 >
-                                  <X className="h-4 w-4" />
+                                  <X
+                                    className={cn(
+                                      layoutMode === "compact"
+                                        ? "h-3 w-3"
+                                        : "h-4 w-4",
+                                    )}
+                                  />
                                 </Button>
                               </div>
+                              {/* Compact objectives */}
+                              {layoutMode === "compact" &&
+                                task.objectives &&
+                                task.objectives.length > 0 && (
+                                  <div className="px-3 pb-3 pl-4 space-y-1 border-t border-border/20 mt-1 pt-2">
+                                    {task.objectives.map((obj, idx) => {
+                                      const objectiveKey =
+                                        objectiveKeys[idx] ??
+                                        buildLegacyTaskObjectiveKey(
+                                          task.id,
+                                          idx,
+                                        );
+                                      const legacyObjectiveKey =
+                                        buildTaskObjectiveFallbackKeys(
+                                          task,
+                                          idx,
+                                          objectiveKey,
+                                        );
+                                      const isObjCompleted =
+                                        isTaskObjectiveCompleted(
+                                          completedTaskObjectives,
+                                          objectiveKey,
+                                          legacyObjectiveKey,
+                                        );
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className={cn(
+                                            "flex items-center gap-1.5",
+                                            isObjCompleted &&
+                                              "opacity-50 line-through",
+                                          )}
+                                        >
+                                          <Checkbox
+                                            checked={isObjCompleted}
+                                            onCheckedChange={() =>
+                                              onToggleTaskObjective(
+                                                task.id,
+                                                objectiveKey,
+                                                legacyObjectiveKey,
+                                              )
+                                            }
+                                            className="h-3 w-3 flex-shrink-0"
+                                          />
+                                          <span className="text-[10px] text-muted-foreground leading-tight line-clamp-1">
+                                            {formatTaskObjectiveLabel(obj)}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               {/* Expanded objectives */}
-                              {isExpanded &&
+                              {layoutMode === "standard" &&
+                                isExpanded &&
                                 task.objectives &&
                                 task.objectives.length > 0 && (
                                   <div className="px-3 pb-3 ml-8 space-y-2 border-t mt-2 pt-3">
@@ -1108,21 +1315,20 @@ export function CurrentlyWorkingOnView({
                                                     objectiveKey,
                                                     item.id || item.name,
                                                   );
-                                                const legacyItemKey =
-                                                  [
-                                                    ...legacyObjectiveKey.map(
-                                                      (key) =>
-                                                        buildTaskObjectiveItemProgressKey(
-                                                          key,
-                                                          item.id || item.name,
-                                                        ),
-                                                    ),
-                                                    buildLegacyTaskObjectiveItemProgressKey(
-                                                      task.id,
-                                                      idx,
-                                                      item.id || item.name,
-                                                    ),
-                                                  ];
+                                                const legacyItemKey = [
+                                                  ...legacyObjectiveKey.map(
+                                                    (key) =>
+                                                      buildTaskObjectiveItemProgressKey(
+                                                        key,
+                                                        item.id || item.name,
+                                                      ),
+                                                  ),
+                                                  buildLegacyTaskObjectiveItemProgressKey(
+                                                    task.id,
+                                                    idx,
+                                                    item.id || item.name,
+                                                  ),
+                                                ];
                                                 const currentCount = Math.min(
                                                   requiredCount,
                                                   getTaskObjectiveItemProgress(
