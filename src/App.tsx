@@ -10,6 +10,8 @@ import {
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { BaseToastViewport } from "@/components/ui/base-toast";
+import { taskToastManager } from "@/utils/taskToastManager";
 import { useIsMobile } from "./hooks/use-mobile";
 import { RotateCcw, BarChart3, Search, Copy, ExternalLink } from "lucide-react";
 import {
@@ -65,11 +67,15 @@ import {
 } from "@/utils/prestige";
 import { buildTaskDependencyMap, getAllDependencies } from "./utils/taskUtils";
 import {
-  buildLegacyTaskObjectiveKey,
   buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveKeys,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
+import {
+  completeTaskOnly,
+  completeTaskWithDependencies,
+  uncompleteTask,
+} from "@/utils/taskCompletion";
 import {
   buildLogicalTaskIdGroups,
   createObjectiveEquivalentsMap,
@@ -95,6 +101,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+const AUTO_COMPLETION_UNDO_TOAST_PREFIX = "automatic-previous-quest-completion";
 
 // Helper to load data with retry logic for Chrome session restore scenarios
 async function loadWithRetry<T>(
@@ -487,6 +495,9 @@ function App() {
   const [completedTaskObjectives, setCompletedTaskObjectives] = useState<
     Set<string>
   >(new Set());
+  const completedTasksRef = useRef(completedTasks);
+  const completedTaskObjectivesRef = useRef(completedTaskObjectives);
+  const autoCompletionUndoToastCountRef = useRef(0);
   const [taskObjectiveItemProgress, setTaskObjectiveItemProgress] = useState<
     Record<string, number>
   >({});
@@ -1995,58 +2006,120 @@ function App() {
     };
   }, []);
 
+  const showAutoCompletionUndoToast = useCallback(
+    (params: {
+      clickedTaskId: string;
+      clickedTaskName: string;
+      autoCompletedTaskIds: string[];
+      previousCompletedTasks: Set<string>;
+      previousCompletedTaskObjectives: Set<string>;
+    }) => {
+      const toastId = `${AUTO_COMPLETION_UNDO_TOAST_PREFIX}-${Date.now()}-${autoCompletionUndoToastCountRef.current++}`;
+      taskToastManager.add({
+        id: toastId,
+        title: `Backfilled previous quests for ${params.clickedTaskName}`,
+        description: "Undo automatic previous quest completion.",
+        actionProps: {
+          children: "Undo",
+          onClick: async () => {
+            const nextTasks = new Set(completedTasksRef.current);
+            const nextTaskObjectives = new Set(
+              completedTaskObjectivesRef.current,
+            );
+            params.autoCompletedTaskIds.forEach((taskId) => {
+              if (!params.previousCompletedTasks.has(taskId)) {
+                nextTasks.delete(taskId);
+              }
+            });
+            Array.from(nextTaskObjectives).forEach((objectiveKey) => {
+              if (!params.previousCompletedTaskObjectives.has(objectiveKey)) {
+                nextTaskObjectives.delete(objectiveKey);
+              }
+            });
+            const undoState = completeTaskOnly({
+              taskId: params.clickedTaskId,
+              tasks: tasksWithEvents,
+              knownTasksById,
+              completedTasks: nextTasks,
+              completedTaskObjectives: nextTaskObjectives,
+              logicalTaskIdsByTaskId,
+            });
+
+            taskToastManager.close(toastId);
+            completedTasksRef.current = undoState.completedTasks;
+            completedTaskObjectivesRef.current =
+              undoState.completedTaskObjectives;
+            setCompletedTasks(undoState.completedTasks);
+            setCompletedTaskObjectives(undoState.completedTaskObjectives);
+            try {
+              taskStorage.setProfile(activeProfileId);
+              await taskStorage.init();
+              await Promise.all([
+                taskStorage.saveCompletedTasks(undoState.completedTasks),
+                taskStorage.saveCompletedTaskObjectives(
+                  undoState.completedTaskObjectives,
+                ),
+              ]);
+            } catch (err) {
+              console.error("Undo save error", err);
+            }
+          },
+        },
+      });
+    },
+    [activeProfileId, knownTasksById, logicalTaskIdsByTaskId, tasksWithEvents],
+  );
+
   const handleToggleComplete = useCallback(
     async (taskId: string) => {
       if (!activeProfileId) return; // Don't save if profile not initialized
-      const next = new Set(completedTasks);
-      const nextTaskObjectives = new Set(completedTaskObjectives);
-      const applyTaskObjectiveCompletion = (
-        targetTaskId: string,
-        markComplete: boolean,
-      ) => {
-        getEquivalentTaskIds(targetTaskId, logicalTaskIdsByTaskId).forEach(
-          (equivalentTaskId) => {
-            const task =
-              knownTasksById.get(equivalentTaskId) ??
-              tasksWithEvents.find((entry) => entry.id === equivalentTaskId);
-            const objectiveKeys = task ? buildTaskObjectiveKeys(task) : [];
-            objectiveKeys.forEach((objectiveKey, index) => {
-              const legacyKeys = task
-                ? buildTaskObjectiveFallbackKeys(task, index, objectiveKey)
-                : [buildLegacyTaskObjectiveKey(equivalentTaskId, index)];
-              if (markComplete) {
-                nextTaskObjectives.add(objectiveKey);
-                legacyKeys.forEach((key) => nextTaskObjectives.add(key));
-              } else {
-                nextTaskObjectives.delete(objectiveKey);
-                legacyKeys.forEach((key) => nextTaskObjectives.delete(key));
-              }
-            });
-          },
-        );
-      };
       const equivalentTaskIds = getEquivalentTaskIds(
         taskId,
         logicalTaskIdsByTaskId,
       );
-      if (equivalentTaskIds.some((id) => next.has(id))) {
-        equivalentTaskIds.forEach((id) => {
-          next.delete(id);
-          applyTaskObjectiveCompletion(id, false);
-        });
+      const previousCompletedTasks = new Set(completedTasks);
+      const previousCompletedTaskObjectives = new Set(completedTaskObjectives);
+      const completionParams = {
+        taskId,
+        tasks: tasksWithEvents,
+        knownTasksById,
+        completedTasks,
+        completedTaskObjectives,
+        logicalTaskIdsByTaskId,
+      };
+      let next: Set<string>;
+      let nextTaskObjectives: Set<string>;
+      let autoCompletedTaskIds: string[] = [];
+
+      if (equivalentTaskIds.some((id) => completedTasks.has(id))) {
+        const uncompleted = uncompleteTask(completionParams);
+        next = uncompleted.completedTasks;
+        nextTaskObjectives = uncompleted.completedTaskObjectives;
       } else {
-        const depMap = buildTaskDependencyMap(tasksWithEvents);
-        const deps = getAllDependencies(taskId, depMap);
-        const relatedTaskIds = [taskId, ...deps];
-        relatedTaskIds.forEach((id) => {
-          getEquivalentTaskIds(id, logicalTaskIdsByTaskId).forEach(
-            (equivalentTaskId) => next.add(equivalentTaskId),
-          );
-          applyTaskObjectiveCompletion(id, true);
-        });
+        const completed = completeTaskWithDependencies(completionParams);
+        next = completed.completedTasks;
+        nextTaskObjectives = completed.completedTaskObjectives;
+        autoCompletedTaskIds = completed.autoCompletedTaskIds;
       }
       setCompletedTasks(next);
       setCompletedTaskObjectives(nextTaskObjectives);
+      completedTasksRef.current = next;
+      completedTaskObjectivesRef.current = nextTaskObjectives;
+
+      if (autoCompletedTaskIds.length > 0) {
+        const taskName =
+          knownTasksById.get(taskId)?.name ??
+          tasksWithEvents.find((task) => task.id === taskId)?.name ??
+          "selected quest";
+        showAutoCompletionUndoToast({
+          clickedTaskId: taskId,
+          clickedTaskName: taskName,
+          autoCompletedTaskIds,
+          previousCompletedTasks,
+          previousCompletedTaskObjectives,
+        });
+      }
+
       try {
         // Ensure taskStorage is using the correct profile before saving
         taskStorage.setProfile(activeProfileId);
@@ -2065,6 +2138,7 @@ function App() {
       completedTasks,
       knownTasksById,
       logicalTaskIdsByTaskId,
+      showAutoCompletionUndoToast,
       tasksWithEvents,
     ],
   );
@@ -2174,17 +2248,27 @@ function App() {
       currentCompletedTasks: Set<string>,
       wasAllObjectivesCompleted: boolean,
       isAllObjectivesCompleted: boolean,
-    ): Set<string> => {
+    ): { completedTasks: Set<string>; autoCompletedTaskIds: string[] } => {
       const task = tasksWithEvents.find((entry) => entry.id === taskId);
       if (!task || !task.objectives || task.objectives.length === 0) {
-        return currentCompletedTasks;
+        return { completedTasks: currentCompletedTasks, autoCompletedTaskIds: [] };
       }
 
       const nextCompletedTasks = new Set(currentCompletedTasks);
+      const autoCompletedTaskIds = new Set<string>();
       if (isAllObjectivesCompleted) {
         const depMap = buildTaskDependencyMap(tasksWithEvents);
         const deps = getAllDependencies(taskId, depMap);
         [taskId, ...deps].forEach((id) => {
+          if (id !== taskId) {
+            getEquivalentTaskIds(id, logicalTaskIdsByTaskId).forEach(
+              (equivalentTaskId) => {
+                if (!currentCompletedTasks.has(equivalentTaskId)) {
+                  autoCompletedTaskIds.add(equivalentTaskId);
+                }
+              },
+            );
+          }
           getEquivalentTaskIds(id, logicalTaskIdsByTaskId).forEach(
             (equivalentTaskId) => nextCompletedTasks.add(equivalentTaskId),
           );
@@ -2195,10 +2279,21 @@ function App() {
         );
       }
 
-      return nextCompletedTasks;
+      return {
+        completedTasks: nextCompletedTasks,
+        autoCompletedTaskIds: Array.from(autoCompletedTaskIds),
+      };
     },
     [logicalTaskIdsByTaskId, tasksWithEvents],
   );
+
+  useEffect(() => {
+    completedTasksRef.current = completedTasks;
+  }, [completedTasks]);
+
+  useEffect(() => {
+    completedTaskObjectivesRef.current = completedTaskObjectives;
+  }, [completedTaskObjectives]);
 
   const areAllTaskObjectivesCompleted = useCallback(
     (taskId: string, objectiveProgress: Set<string>): boolean => {
@@ -2228,6 +2323,8 @@ function App() {
       if (!activeProfileId) return;
 
       const next = new Set(completedTaskObjectives);
+      const previousCompletedTasks = new Set(completedTasks);
+      const previousCompletedTaskObjectives = new Set(completedTaskObjectives);
       const wasAllObjectivesCompleted = areAllTaskObjectivesCompleted(
         taskId,
         visibleCompletedTaskObjectives,
@@ -2275,14 +2372,30 @@ function App() {
         taskId,
         nextVisibleTaskObjectives,
       );
-      const nextCompletedTasks = syncTaskCompletionFromObjectives(
+      const completionSync = syncTaskCompletionFromObjectives(
         taskId,
         completedTasks,
         wasAllObjectivesCompleted,
         isAllObjectivesCompleted,
       );
+      const nextCompletedTasks = completionSync.completedTasks;
       setCompletedTaskObjectives(next);
       setCompletedTasks(nextCompletedTasks);
+      completedTasksRef.current = nextCompletedTasks;
+      completedTaskObjectivesRef.current = next;
+      if (completionSync.autoCompletedTaskIds.length > 0) {
+        const taskName =
+          knownTasksById.get(taskId)?.name ??
+          tasksWithEvents.find((task) => task.id === taskId)?.name ??
+          "selected quest";
+        showAutoCompletionUndoToast({
+          clickedTaskId: taskId,
+          clickedTaskName: taskName,
+          autoCompletedTaskIds: completionSync.autoCompletedTaskIds,
+          previousCompletedTasks,
+          previousCompletedTaskObjectives,
+        });
+      }
       try {
         taskStorage.setProfile(activeProfileId);
         await taskStorage.init();
@@ -2303,7 +2416,9 @@ function App() {
       logicalTaskIdsByTaskId,
       modeTasksByMode,
       objectiveEquivalentsByKey,
+      showAutoCompletionUndoToast,
       syncTaskCompletionFromObjectives,
+      tasksWithEvents,
       visibleCompletedTaskObjectives,
     ],
   );
@@ -3586,6 +3701,7 @@ function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <BaseToastViewport />
       <Toaster position="bottom-right" richColors />
     </NuqsAdapter>
   );

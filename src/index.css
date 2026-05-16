@@ -217,3 +217,81 @@
     }
   }
 }
+
+@layer components {
+  .task-toast-viewport {
+    width: min(420px, calc(100vw - 2rem));
+    height: var(--toast-frontmost-height);
+    transition: height 200ms ease;
+  }
+
+  .task-toast-viewport[data-expanded] {
+    height: calc(var(--toast-offset-y) + var(--toast-frontmost-height));
+  }
+
+  .task-toast {
+    --task-toast-collapsed-y: calc(var(--toast-index) * -18%);
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: calc(1000 - var(--toast-index));
+    transform:
+      translateX(var(--toast-swipe-movement-x))
+      translateY(
+        calc(
+          var(--toast-swipe-movement-y) + var(--task-toast-collapsed-y)
+        )
+      )
+      scale(calc(1 - (var(--toast-index) * 0.06)));
+    transform-origin: bottom right;
+    transition:
+      transform 200ms ease,
+      opacity 200ms ease;
+  }
+
+  .task-toast[data-expanded] {
+    transform:
+      translateX(var(--toast-swipe-movement-x))
+      translateY(calc(var(--toast-swipe-movement-y) - var(--toast-offset-y)))
+      scale(1);
+  }
+
+  .task-toast[data-starting-style] {
+    opacity: 0;
+    transform: translateX(100%) translateY(var(--task-toast-collapsed-y))
+      scale(calc(1 - (var(--toast-index) * 0.06)));
+  }
+
+  .task-toast[data-ending-style] {
+    opacity: 0;
+  }
+
+  .task-toast[data-ending-style][data-swipe-direction="right"] {
+    transform:
+      translateX(calc(var(--toast-swipe-movement-x) + 120%))
+      translateY(
+        calc(
+          var(--toast-swipe-movement-y) + var(--task-toast-collapsed-y)
+        )
+      );
+  }
+
+  .task-toast[data-ending-style][data-swipe-direction="down"] {
+    transform:
+      translateX(var(--toast-swipe-movement-x))
+      translateY(calc(var(--toast-swipe-movement-y) + 120%));
+  }
+
+  .task-toast-content {
+    overflow: hidden;
+    transition: opacity 200ms ease;
+  }
+
+  .task-toast-content[data-behind] {
+    opacity: 0;
+  }
+
+  .task-toast-content[data-expanded] {
+    opacity: 1;
+  }
+}

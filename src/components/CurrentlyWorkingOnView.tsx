@@ -41,6 +41,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
   buildLegacyTaskObjectiveProgressKey,
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
@@ -523,6 +528,186 @@ export function CurrentlyWorkingOnView({
     collectorItems.length +
     activeHideoutStations.length;
 
+  const renderCompactTaskObjectivesPopup = (
+    task: Task,
+    objectiveKeys: string[],
+    objectiveProgress: { completed: number; total: number } | undefined,
+  ) => {
+    if (!task.objectives?.length) return null;
+
+    return (
+      <HoverCardContent
+        align="start"
+        side="top"
+        sideOffset={10}
+        className="w-[22rem] max-w-[calc(100vw-2rem)] border-border bg-popover p-0 text-popover-foreground shadow-xl"
+      >
+        <div className="space-y-3 p-4">
+          <div className="space-y-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold leading-tight text-foreground">
+                  {task.name}
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] font-medium uppercase text-muted-foreground">
+                  <span className="rounded-full border border-border bg-muted px-2 py-0.5">
+                    {task.trader.name}
+                  </span>
+                  <span className="rounded-full border border-border bg-muted px-2 py-0.5">
+                    Lvl {task.minPlayerLevel}
+                  </span>
+                </div>
+              </div>
+              {objectiveProgress && (
+                <div className="rounded-lg border border-border bg-card px-2 py-1 text-right">
+                  <div className="text-[10px] uppercase text-muted-foreground">
+                    Objectives
+                  </div>
+                  <div className="text-sm font-semibold tabular-nums text-foreground">
+                    {objectiveProgress.completed}/{objectiveProgress.total}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {task.objectives.map((obj, idx) => {
+              const objectiveKey =
+                objectiveKeys[idx] ?? buildLegacyTaskObjectiveKey(task.id, idx);
+              const legacyObjectiveKey = buildTaskObjectiveFallbackKeys(
+                task,
+                idx,
+                objectiveKey,
+              );
+              const isObjCompleted = isTaskObjectiveCompleted(
+                completedTaskObjectives,
+                objectiveKey,
+                legacyObjectiveKey,
+              );
+              const requiredCount = Math.max(1, obj.count ?? 1);
+              const objectiveProgressKey =
+                buildTaskObjectiveProgressKey(objectiveKey);
+              const legacyObjectiveProgressKey = [
+                ...legacyObjectiveKey.map((key) =>
+                  buildTaskObjectiveProgressKey(key),
+                ),
+                buildLegacyTaskObjectiveProgressKey(task.id, idx),
+              ];
+              const countOnlyProgress = Math.min(
+                requiredCount,
+                getTaskObjectiveProgress(
+                  taskObjectiveItemProgress,
+                  objectiveProgressKey,
+                  legacyObjectiveProgressKey,
+                ),
+              );
+              const itemProgress = (obj.items ?? []).map((item) => {
+                const itemKey = buildTaskObjectiveItemProgressKey(
+                  objectiveKey,
+                  item.id || item.name,
+                );
+                const legacyItemKey = [
+                  ...legacyObjectiveKey.map((key) =>
+                    buildTaskObjectiveItemProgressKey(key, item.id || item.name),
+                  ),
+                  buildLegacyTaskObjectiveItemProgressKey(
+                    task.id,
+                    idx,
+                    item.id || item.name,
+                  ),
+                ];
+                return Math.min(
+                  requiredCount,
+                  getTaskObjectiveItemProgress(
+                    taskObjectiveItemProgress,
+                    itemKey,
+                    legacyItemKey,
+                  ),
+                );
+              });
+              const usesSharedPool =
+                (obj.items?.length ?? 0) > 1 && requiredCount > 1;
+              const itemProgressTotal = usesSharedPool
+                ? Math.min(
+                    requiredCount,
+                    itemProgress.reduce((sum, count) => sum + count, 0),
+                  )
+                : itemProgress[0] ?? 0;
+              const progressText = isObjCompleted
+                ? "Complete"
+                : !obj.items?.length && typeof obj.count === "number" && obj.count > 1
+                  ? `${countOnlyProgress}/${requiredCount}`
+                  : obj.items?.length
+                    ? `${itemProgressTotal}/${requiredCount}`
+                    : "Not complete";
+
+              return (
+                <div
+                  key={`${task.id}-compact-popup-objective-${idx}`}
+                  className={cn(
+                    "rounded-lg border border-border bg-card px-3 py-2",
+                    isObjCompleted && "opacity-60",
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    <div
+                      className={cn(
+                        "mt-1 h-2 w-2 rounded-full border",
+                        isObjCompleted
+                          ? "border-green-500 bg-green-500"
+                          : "border-muted-foreground/50",
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className={cn(
+                          "text-xs leading-snug text-foreground",
+                          isObjCompleted && "line-through",
+                        )}
+                      >
+                        {formatTaskObjectiveLabel(obj)}
+                      </div>
+                      {obj.items && obj.items.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {obj.items.slice(0, 4).map((item, itemIndex) => (
+                            <span
+                              key={`${task.id}-compact-popup-objective-${idx}-${item.id || item.name}`}
+                              className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            >
+                              {usesSharedPool
+                                ? item.name
+                                : `${itemProgress[itemIndex] ?? 0}/${requiredCount} ${item.name}`}
+                            </span>
+                          ))}
+                          {obj.items.length > 4 && (
+                            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              +{obj.items.length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tabular-nums",
+                        isObjCompleted
+                          ? "border-green-500/30 bg-green-500/10 text-green-500"
+                          : "border-border bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {progressText}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </HoverCardContent>
+    );
+  };
+
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6">
       {/* Header */}
@@ -932,16 +1117,21 @@ export function CurrentlyWorkingOnView({
                           const objectiveProgress =
                             objectiveProgressByTaskId.get(task.id);
                           return (
-                            <div
+                            <HoverCard
                               key={task.id}
-                              className={cn(
-                                "rounded-xl border bg-card transition-all duration-300",
-                                isTaskCompleted && "opacity-60",
-                                layoutMode === "compact"
-                                  ? "group relative overflow-hidden border-border/40 bg-gradient-to-br from-card to-card/60 backdrop-blur-sm hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
-                                  : "rounded-lg hover:shadow-md",
-                              )}
+                              openDelay={180}
+                              closeDelay={80}
                             >
+                              <HoverCardTrigger asChild>
+                                <div
+                                  className={cn(
+                                    "rounded-xl border bg-card transition-all duration-300",
+                                    isTaskCompleted && "opacity-60",
+                                    layoutMode === "compact"
+                                      ? "group relative overflow-hidden border-border/40 bg-gradient-to-br from-card to-card/60 backdrop-blur-sm hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+                                      : "rounded-lg hover:shadow-md",
+                                  )}
+                                >
                               {layoutMode === "compact" &&
                                 task.trader?.name && (
                                   <div
@@ -1709,7 +1899,15 @@ export function CurrentlyWorkingOnView({
                                     })}
                                   </div>
                                 )}
-                            </div>
+                                </div>
+                              </HoverCardTrigger>
+                              {layoutMode === "compact" &&
+                                renderCompactTaskObjectivesPopup(
+                                  task,
+                                  objectiveKeys,
+                                  objectiveProgress,
+                                )}
+                            </HoverCard>
                           );
                         })}
                       </div>
