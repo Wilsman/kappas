@@ -286,6 +286,17 @@ export function CurrentlyWorkingOnView({
     }
   };
 
+  const isHideoutRequirementFoundInRaid = (
+    req: HideoutStation["levels"][number]["itemRequirements"][number],
+  ) =>
+    Boolean(
+      req.attributes?.some(
+        (attr) =>
+          (attr.type === "foundInRaid" || attr.name === "foundInRaid") &&
+          attr.value === "true",
+      ),
+    );
+
   // Filter tasks that are marked as working on
   const activeTasks = useMemo(() => {
     const preferredTaskByLogicalKey = new Map<string, Task>();
@@ -708,6 +719,41 @@ export function CurrentlyWorkingOnView({
     );
   };
 
+  const renderLayoutToggle = () => (
+    <>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={layoutMode === "standard" ? "default" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setLayoutMode("standard")}
+            >
+              <LayoutList className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Standard view</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={layoutMode === "compact" ? "default" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setLayoutMode("compact")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Compact view</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </>
+  );
+
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-7xl space-y-6">
       {/* Header */}
@@ -945,38 +991,7 @@ export function CurrentlyWorkingOnView({
                 className="flex items-center gap-1 ml-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={
-                          layoutMode === "standard" ? "default" : "ghost"
-                        }
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setLayoutMode("standard")}
-                      >
-                        <LayoutList className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Standard view</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={layoutMode === "compact" ? "default" : "ghost"}
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setLayoutMode("compact")}
-                      >
-                        <LayoutGrid className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Compact view</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                {renderLayoutToggle()}
                 {isQuestsCollapsed ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (
@@ -2074,11 +2089,17 @@ export function CurrentlyWorkingOnView({
               <CardTitle>
                 Hideout Stations ({activeHideoutStations.length})
               </CardTitle>
-              {isHideoutCollapsed ? (
-                <ChevronDown className="h-4 w-4 ml-auto" />
-              ) : (
-                <ChevronUp className="h-4 w-4 ml-auto" />
-              )}
+              <div
+                className="ml-auto flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {renderLayoutToggle()}
+                {isHideoutCollapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </div>
             </div>
             <CardDescription>Stations you're upgrading</CardDescription>
           </CardHeader>
@@ -2091,8 +2112,178 @@ export function CurrentlyWorkingOnView({
                   return completedHideoutItems.has(itemKey);
                 }).length;
                 const totalCount = level.itemRequirements.length;
+                const remainingCount = Math.max(
+                  0,
+                  totalCount - completedCount,
+                );
                 const progressPercent =
                   totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+                if (layoutMode === "compact") {
+                  return (
+                    <div
+                      key={key}
+                      className="rounded-lg border bg-card p-3 transition-colors"
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="truncate text-sm font-semibold">
+                              {station.name}
+                            </h4>
+                            <Badge variant="secondary" className="h-5 text-[11px]">
+                              Level {level.level}
+                            </Badge>
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {remainingCount === 0
+                              ? "All items found"
+                              : `${remainingCount} item${remainingCount === 1 ? "" : "s"} left`}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onToggleWorkingOnHideoutStation(key)}
+                          className="h-7 w-7 flex-shrink-0"
+                          title="Remove from working on"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      {totalCount > 0 ? (
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                          {level.itemRequirements.map((req, idx) => {
+                            const itemKey = `${station.name}-${level.level}-${req.item.name}`;
+                            const isItemCompleted =
+                              completedHideoutItems.has(itemKey);
+                            const currentCount =
+                              hideoutItemQuantities[itemKey] || 0;
+                            const isFirRequired =
+                              isHideoutRequirementFoundInRaid(req);
+
+                            return (
+                              <div
+                                key={`${itemKey}-${idx}`}
+                                className={cn(
+                                  "group flex min-w-0 items-center gap-2 rounded-md border bg-background/40 p-2 transition-colors hover:bg-muted/50",
+                                  isFirRequired &&
+                                    "border-amber-500/50 bg-amber-500/10",
+                                  isItemCompleted &&
+                                    "border-border bg-muted/30 opacity-55",
+                                )}
+                              >
+                                <Checkbox
+                                  checked={isItemCompleted}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      onUpdateHideoutItemQuantity(
+                                        itemKey,
+                                        req.count,
+                                      );
+                                      if (!isItemCompleted) {
+                                        onToggleHideoutItem(itemKey);
+                                      }
+                                    } else {
+                                      onUpdateHideoutItemQuantity(itemKey, 0);
+                                      if (isItemCompleted) {
+                                        onToggleHideoutItem(itemKey);
+                                      }
+                                    }
+                                  }}
+                                  className="h-4 w-4 flex-shrink-0"
+                                  aria-label={`Toggle ${req.item.name} found`}
+                                />
+                                {req.item.iconLink && (
+                                  <img
+                                    src={req.item.iconLink}
+                                    alt={req.item.name}
+                                    className="h-8 w-8 flex-shrink-0 object-contain"
+                                    loading="lazy"
+                                  />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex min-w-0 items-center gap-1.5">
+                                    <span
+                                      className={cn(
+                                        "truncate text-xs font-medium text-foreground",
+                                        isItemCompleted &&
+                                          "line-through text-muted-foreground",
+                                      )}
+                                    >
+                                      {req.item.name}
+                                    </span>
+                                    {isFirRequired && (
+                                      <Badge
+                                        variant="outline"
+                                        className="h-4 border-amber-500/70 bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200"
+                                      >
+                                        FIR
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <span>
+                                      {currentCount}/{req.count} found
+                                    </span>
+                                    {isItemCompleted && (
+                                      <span className="font-medium text-green-400">
+                                        Done
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleHideoutItemDelta(
+                                        itemKey,
+                                        -1,
+                                        req.count,
+                                        isItemCompleted,
+                                      );
+                                    }}
+                                    disabled={currentCount <= 0}
+                                    aria-label={`Decrease ${req.item.name}`}
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleHideoutItemDelta(
+                                        itemKey,
+                                        1,
+                                        req.count,
+                                        isItemCompleted,
+                                      );
+                                    }}
+                                    disabled={currentCount >= req.count}
+                                    aria-label={`Increase ${req.item.name}`}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-300">
+                          Ready to upgrade.
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
 
                 return (
                   <div
