@@ -34,55 +34,69 @@ export function AnnouncementBanner({
       className="border-b bg-background/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80"
     >
       <div className="space-y-2">
-        {announcements.map((announcement) => (
-          <article
-            key={announcement.id}
-            className={cn(
-              "flex items-start gap-3 rounded-md border px-3 py-2 shadow-sm",
-              toneClasses[announcement.tone],
-            )}
-          >
-            <Megaphone
-              aria-hidden="true"
-              className={cn("mt-0.5 h-4 w-4 shrink-0", iconClasses[announcement.tone])}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-5">
-                {announcement.title}
-              </p>
-              <p className="text-sm leading-5 text-foreground/75">
-                {announcement.body}
-              </p>
-              {announcement.href && announcement.actionLabel ? (
-                <Button
-                  asChild
-                  variant="link"
-                  size="sm"
-                  className="mt-1 h-auto p-0 text-xs"
-                >
-                  <a
-                    href={announcement.href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {announcement.actionLabel}
-                    <ExternalLink className="ml-1 h-3 w-3" />
-                  </a>
-                </Button>
-              ) : null}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 text-foreground/70 hover:text-foreground"
-              onClick={() => onDismiss(announcement.id)}
-              aria-label={`Dismiss announcement: ${announcement.title}`}
+        {announcements.map((announcement) => {
+          const isExternalLink = announcement.href?.startsWith("http");
+
+          return (
+            <article
+              key={announcement.id}
+              className={cn(
+                "flex items-start gap-3 rounded-md border px-3 py-2 shadow-sm",
+                toneClasses[announcement.tone],
+              )}
             >
-              <X className="h-4 w-4" />
-            </Button>
-          </article>
-        ))}
+              <Megaphone
+                aria-hidden="true"
+                className={cn(
+                  "mt-0.5 h-4 w-4 shrink-0",
+                  iconClasses[announcement.tone],
+                )}
+              />
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    "text-sm font-semibold leading-5",
+                    announcement.titleClassName,
+                  )}
+                >
+                  {announcement.title}
+                </p>
+                <p className="text-sm leading-5 text-foreground/75">
+                  {announcement.body}
+                </p>
+                {announcement.href && announcement.actionLabel ? (
+                  <Button
+                    asChild
+                    variant="link"
+                    size="sm"
+                    className="mt-1 h-auto p-0 text-xs"
+                  >
+                    <a
+                      href={announcement.href}
+                      target={isExternalLink ? "_blank" : undefined}
+                      rel={isExternalLink ? "noreferrer" : undefined}
+                    >
+                      {announcement.actionLabel}
+                      {isExternalLink ? (
+                        <ExternalLink className="ml-1 h-3 w-3" />
+                      ) : null}
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-foreground/70 hover:text-foreground"
+                onClick={() => onDismiss(announcement.id)}
+                aria-label={`Dismiss announcement: ${announcement.title}`}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </article>
+          );
+        })}
       </div>
     </section>
   );

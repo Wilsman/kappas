@@ -6,11 +6,22 @@ export interface AppAnnouncement {
   body: string;
   tone: AnnouncementTone;
   active: boolean;
+  titleClassName?: string;
   href?: string;
   actionLabel?: string;
 }
 
 export const APP_ANNOUNCEMENTS: AppAnnouncement[] = [
+  {
+    id: "collector-items-live-game-removals-2026-05-26",
+    title: "Collector items updated",
+    body: "The live game removed Golden rooster, DevilDog mayo, Kotton beanie, Old firesteel, and Can of sprats from Collector. The tracker has been updated ahead of the tarkov.dev API.",
+    tone: "warning",
+    titleClassName: "text-sky-700 dark:text-sky-300",
+    active: true,
+    href: "/Items/CollectorItems",
+    actionLabel: "View Collector items",
+  },
   {
     id: "prestige-requirements-easier-v2",
     title: "Prestige requirements updated",

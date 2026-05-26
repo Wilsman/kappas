@@ -28,6 +28,13 @@ const TARKOV_API_URL = "https://api.tarkov.dev/graphql";
 export const OVERLAY_URL =
   "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
 const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
+const REMOVED_COLLECTOR_ITEM_IDS = new Set([
+  "5bc9bc53d4351e00367fbcee", // Golden rooster figurine
+  "5bc9b156d4351e00367fbce9", // Jar of DevilDog mayo
+  "5bd073c986f7747f627e796c", // Kotton beanie
+  "5bc9c377d4351e3bac12251b", // Old firesteel
+  "5bc9c29cd4351e003562b8a3", // Can of sprats
+]);
 
 // Cool down localStorage writes after quota failures without disabling them forever.
 const LOCAL_STORAGE_QUOTA_COOLDOWN_MS = 60_000;
@@ -459,6 +466,22 @@ export function sanitizeTaskRewardData(task: Task): Task {
           offerUnlock: offerUnlocks,
         }
       : undefined,
+  };
+}
+
+export function removeDeprecatedCollectorItems<
+  T extends CollectorItemsData["data"]["task"],
+>(task: T): T {
+  return {
+    ...task,
+    objectives: task.objectives
+      .map((objective) => ({
+        ...objective,
+        items: objective.items.filter(
+          (item) => !item.id || !REMOVED_COLLECTOR_ITEM_IDS.has(item.id),
+        ),
+      }))
+      .filter((objective) => objective.items.length > 0),
   };
 }
 
@@ -1132,10 +1155,12 @@ export async function fetchCombinedData(
   const collectorItems: CollectorItemsData = {
     data: {
       task: result.data.task
-        ? (applyTaskOverlay(
-            result.data.task,
-            overlay,
-          ) as CollectorItemsData["data"]["task"])
+        ? removeDeprecatedCollectorItems(
+            applyTaskOverlay(
+              result.data.task,
+              overlay,
+            ) as CollectorItemsData["data"]["task"],
+          )
         : {
             id: COLLECTOR_TASK_ID,
             objectives: [],

@@ -10,6 +10,7 @@ import {
   API_CACHE_TTL_MS,
   SHARED_CACHE_KEY,
   sanitizeTaskRewardData,
+  removeDeprecatedCollectorItems,
 } from "../tarkovApi";
 
 interface MockResponse<T> {
@@ -63,7 +64,7 @@ describe("fetchCombinedData", () => {
         task: {
           objectives: [
             {
-              items: [{ id: "i1", name: "Old firesteel", iconLink: "icon" }],
+              items: [{ id: "i1", name: "Kept item", iconLink: "icon" }],
             },
           ],
         },
@@ -136,6 +137,28 @@ describe("fetchCombinedData", () => {
     expect(body.query).toContain("craftUnlock");
     expect(body.query).toContain("customization");
     expect(body.query).toContain("achievement");
+  });
+
+  it("removes Collector items that were removed from the live game before the API updates", () => {
+    const result = removeDeprecatedCollectorItems({
+      id: "5c51aac186f77432ea65c552",
+      objectives: [
+        {
+          items: [
+            { id: "5bc9bc53d4351e00367fbcee", name: "Golden rooster figurine" },
+            { id: "5bc9b156d4351e00367fbce9", name: "Jar of DevilDog mayo" },
+            { id: "5bd073c986f7747f627e796c", name: "Kotton beanie" },
+            { id: "5bc9c377d4351e3bac12251b", name: "Old firesteel" },
+            { id: "5bc9c29cd4351e003562b8a3", name: "Can of sprats" },
+            { id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" },
+          ],
+        },
+      ],
+    });
+
+    expect(result.objectives.flatMap((objective) => objective.items)).toEqual([
+      { id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" },
+    ]);
   });
 
   it("throws on HTTP error", async () => {
