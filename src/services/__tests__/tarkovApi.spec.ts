@@ -11,6 +11,7 @@ import {
   SHARED_CACHE_KEY,
   sanitizeTaskRewardData,
   removeDeprecatedCollectorItems,
+  normalizeCollectorItems,
 } from "../tarkovApi";
 
 interface MockResponse<T> {
@@ -159,6 +160,80 @@ describe("fetchCombinedData", () => {
     expect(result.objectives.flatMap((objective) => objective.items)).toEqual([
       { id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" },
     ]);
+  });
+
+  it("normalizes Collector items to the current live-game total while the API lags", () => {
+    const apiCollectorItems = [
+      { id: "5bc9c377d4351e3bac12251b", name: "Old firesteel" },
+      { id: "5bc9bc53d4351e00367fbcee", name: "Golden rooster figurine" },
+      { id: "5bc9b156d4351e00367fbce9", name: "Jar of DevilDog mayo" },
+      { id: "5bc9c29cd4351e003562b8a3", name: "Can of sprats" },
+      { id: "5bd073c986f7747f627e796c", name: "Kotton beanie" },
+      { id: "5bc9a18fd4351e003562b68e", name: "Antique axe" },
+      { id: "5bc9c049d4351e44f824d360", name: "Battered antique book" },
+      { id: "5bc9b720d4351e450201234b", name: "#FireKlean gun lube" },
+      { id: "5bc9b355d4351e6d1509862a", name: "Silver Badge" },
+      { id: "5bc9b9ecd4351e3bac122519", name: "Deadlyslob's beard oil" },
+      { id: "5bc9bdb8d4351e003562b8a1", name: "Golden 1GPhone smartphone" },
+      { id: "5bc9c1e2d4351e00367fbcf0", name: "Fake mustache" },
+      { id: "5bc9c049d4351e44f824d360-raven", name: "Raven figurine" },
+      { id: "5bc9c049d4351e44f824d360-plague", name: "Pestily plague mask" },
+      { id: "5bc9c049d4351e44f824d360-shroud", name: "Shroud half-mask" },
+      { id: "5bc9c049d4351e44f824d360-lupo", name: "Can of Dr. Lupo's coffee beans" },
+      { id: "5bc9c049d4351e44f824d360-tea", name: "42 Signature Blend English Tea" },
+      { id: "5bc9c049d4351e44f824d360-veritas", name: "Veritas guitar pick" },
+      { id: "5bc9c049d4351e44f824d360-evasion", name: "Armband (Evasion)" },
+      { id: "5bc9c049d4351e44f824d360-ratcola", name: "Can of RatCola soda" },
+      { id: "5bc9c049d4351e44f824d360-lootlord", name: "Loot Lord plushie" },
+      { id: "5bc9c049d4351e44f824d360-smoke", name: "Smoke balaclava" },
+      { id: "5bc9c049d4351e44f824d360-wallet", name: "WZ Wallet" },
+      { id: "5bc9c049d4351e44f824d360-ratpoison", name: "LVNDMARK's rat poison" },
+      { id: "5bc9c049d4351e44f824d360-missam", name: "Missam forklift key" },
+      { id: "5bc9c049d4351e44f824d360-cyborg", name: "Video cassette with the Cyborg Killer movie" },
+      { id: "5bc9c049d4351e44f824d360-bakeezy", name: "BakeEzy cook book" },
+      { id: "5bc9c049d4351e44f824d360-johnb", name: "JohnB Liquid DNB glasses" },
+      { id: "5bc9c049d4351e44f824d360-baddie", name: "Baddie's red beard" },
+      { id: "5bc9c049d4351e44f824d360-drd", name: "DRD body armor" },
+      { id: "5bc9c049d4351e44f824d360-gingy", name: "Gingy keychain" },
+      { id: "5bc9c049d4351e44f824d360-egg", name: "Golden egg" },
+      { id: "5bc9c049d4351e44f824d360-noice", name: "Press pass (issued for NoiceGuy)" },
+      { id: "5bc9c049d4351e44f824d360-axel", name: "Axel parrot figurine" },
+      { id: "5bc9c049d4351e44f824d360-buddy", name: "BEAR Buddy plush toy" },
+      { id: "5bc9c049d4351e44f824d360-glorious", name: "Glorious E lightweight armored mask" },
+      { id: "5bc9c049d4351e44f824d360-inseq", name: "Inseq gas pipe wrench" },
+      { id: "5bc9c049d4351e44f824d360-viibiin", name: "Viibiin sneaker" },
+      { id: "5bc9c049d4351e44f824d360-kunai", name: "Tamatthi kunai knife replica" },
+      { id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" },
+      { id: "5bc9c049d4351e44f824d360-mazoni", name: "Mazoni golden dumbbell" },
+      { id: "5bc9c049d4351e44f824d360-tigz", name: "Tigzresq splint" },
+      { id: "5bc9c049d4351e44f824d360-domontovich", name: "Domontovich ushanka hat" },
+    ];
+
+    const result = normalizeCollectorItems({
+      id: "5c51aac186f77432ea65c552",
+      objectives: apiCollectorItems.map((item) => ({ items: [item] })),
+    });
+    const itemNames = result.objectives.flatMap((objective) =>
+      objective.items.map((item) => item.name),
+    );
+
+    expect(itemNames).toHaveLength(41);
+    expect(itemNames).toEqual(
+      expect.arrayContaining([
+        "DesmondPilak CD",
+        "Dunduk floppy disk",
+        "SheefGG piggy bank",
+      ]),
+    );
+    expect(itemNames).not.toEqual(
+      expect.arrayContaining([
+        "Golden rooster figurine",
+        "Jar of DevilDog mayo",
+        "Kotton beanie",
+        "Old firesteel",
+        "Can of sprats",
+      ]),
+    );
   });
 
   it("throws on HTTP error", async () => {

@@ -3454,6 +3454,11 @@ function App() {
                         <HideoutRequirementsView
                           hideoutStations={hideoutStations}
                           completedHideoutItems={completedHideoutItems}
+                          hideoutItemQuantities={hideoutItemQuantities}
+                          onSetHideoutItems={handleSetHideoutItems}
+                          onUpdateHideoutItemQuantity={
+                            handleUpdateHideoutItemQuantity
+                          }
                           onNavigateToStation={(stationName) => {
                             setCollectorGroupBy("hideout-stations");
                             setViewMode("collector");

@@ -13,9 +13,9 @@ export interface AppAnnouncement {
 
 export const APP_ANNOUNCEMENTS: AppAnnouncement[] = [
   {
-    id: "collector-items-live-game-removals-2026-05-26",
+    id: "collector-items-updated-2026-06-08",
     title: "Collector items updated",
-    body: "The live game removed Golden rooster, DevilDog mayo, Kotton beanie, Old firesteel, and Can of sprats from Collector. The tracker has been updated ahead of the tarkov.dev API.",
+    body: "Collector now requires 41 items. DesmondPilak CD, Dunduk floppy disk, and SheefGG piggy bank have been added; Golden rooster, DevilDog mayo, Kotton beanie, Old firesteel, and Can of sprats remain removed while tarkov.dev catches up.",
     tone: "warning",
     titleClassName: "text-sky-700 dark:text-sky-300",
     active: true,

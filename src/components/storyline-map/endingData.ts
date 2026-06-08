@@ -57,8 +57,41 @@ const ENDING_NODE_IDS = {
   debtor: ["debtor-ending"],
 };
 
-const ENDING_LAYOUT_X_GAP = 220;
-const ENDING_LAYOUT_Y_GAP = 112;
+const ENDING_LAYOUT_X_GAP = 360;
+const ENDING_LAYOUT_Y_GAP = 128;
+
+const ENDING_ROUTE_BRANCH_TARGETS: Record<string, string[]> = {
+  survivor: ["survivor-ending", "lk-case", "sl-300", "sl-48"],
+  savior: ["savior-ending", "lk-case", "coop", "kill-5-no-scav"],
+  fallen: ["fallen-ending", "lk-case", "military-50"],
+  debtor: ["debtor-ending", "lk-case"],
+};
+
+function getUniqueNodesById(nodeLists: Node[][]): Node[] {
+  const nodeIds = new Set<string>();
+  const nodes: Node[] = [];
+
+  for (const nodeList of nodeLists) {
+    for (const node of nodeList) {
+      if (nodeIds.has(node.id)) continue;
+
+      nodeIds.add(node.id);
+      nodes.push(node);
+    }
+  }
+
+  return nodes;
+}
+
+function getEndingRoutePathNodes(endingId: string, endingNodeId: string) {
+  const targetIds = ENDING_ROUTE_BRANCH_TARGETS[endingId] ?? [endingNodeId];
+
+  return getUniqueNodesById(
+    targetIds.map((targetId) =>
+      findPathToNode(targetId, initialNodes, initialEdges),
+    ),
+  );
+}
 
 function calculateEndingNodeDepths(pathNodes: Node[], pathEdges: Edge[]) {
   const incomingCount = new Map<string, number>();
@@ -189,9 +222,22 @@ function compactEndingPathNodes(pathNodes: Node[], pathEdges: Edge[]): Node[] {
       return leftPosition.x - rightPosition.x;
     });
 
-    const xCenterOffset = ((nodesAtDepth.length - 1) * ENDING_LAYOUT_X_GAP) / 2;
-
     nodesAtDepth.forEach((node, index) => {
+      const parents = parentIds.get(node.id) ?? [];
+      const parentXs = parents
+        .map((parentId) => assignedX.get(parentId))
+        .filter((value): value is number => value !== undefined);
+
+      if (nodesAtDepth.length === 1 && parentXs.length > 0) {
+        assignedX.set(
+          node.id,
+          parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length,
+        );
+        return;
+      }
+
+      const xCenterOffset =
+        ((nodesAtDepth.length - 1) * ENDING_LAYOUT_X_GAP) / 2;
       assignedX.set(node.id, index * ENDING_LAYOUT_X_GAP - xCenterOffset);
     });
   }
@@ -512,38 +558,8 @@ export function getEndingPathData(endingId: string): {
 
   let pathNodes: Node[] = [];
 
-  // Special handling for Savior ending to show both PVP and PVE paths
-  if (endingId === "savior") {
-    // Include both branch-specific objectives before the shared BTR convergence.
-    const pvpPathNodes = findPathToNode("coop", initialNodes, initialEdges);
-    const pvePathNodes = findPathToNode(
-      "kill-5-no-scav",
-      initialNodes,
-      initialEdges,
-    );
-
-    // Find the path from the convergence point (btr-04) to the ending
-    const convergencePathNodes = findPathToNode(
-      "savior-ending",
-      initialNodes,
-      initialEdges,
-    );
-
-    // Combine all unique nodes
-    const allNodeIds = new Set([
-      ...pvpPathNodes.map((n) => n.id),
-      ...pvePathNodes.map((n) => n.id),
-      ...convergencePathNodes.map((n) => n.id),
-    ]);
-
-    pathNodes = Array.from(allNodeIds)
-      .map((id) => initialNodes.find((n) => n.id === id)!)
-      .filter(Boolean);
-  } else {
-    // For other endings, use the shortest path as before
-    const endingNodeId = endingInfo.endingNodeIds[0];
-    pathNodes = findPathToNode(endingNodeId, initialNodes, initialEdges);
-  }
+  const endingNodeId = endingInfo.endingNodeIds[0];
+  pathNodes = getEndingRoutePathNodes(endingId, endingNodeId);
 
   const pathNodeIds = new Set(pathNodes.map((n) => n.id));
 

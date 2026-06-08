@@ -35,6 +35,24 @@ const REMOVED_COLLECTOR_ITEM_IDS = new Set([
   "5bc9c377d4351e3bac12251b", // Old firesteel
   "5bc9c29cd4351e003562b8a3", // Can of sprats
 ]);
+const MISSING_COLLECTOR_ITEMS: CollectorItemsData["data"]["task"]["objectives"][number]["items"] =
+  [
+    {
+      id: "69f9d547b98cc4120608692a",
+      name: "DesmondPilak CD",
+      iconLink: "https://assets.tarkov.dev/69f9d547b98cc4120608692a-icon.webp",
+    },
+    {
+      id: "69f9d60b5de6674f08060f2a",
+      name: "Dunduk floppy disk",
+      iconLink: "https://assets.tarkov.dev/69f9d60b5de6674f08060f2a-icon.webp",
+    },
+    {
+      id: "69f9d319c906cd16da03b374",
+      name: "SheefGG piggy bank",
+      iconLink: "https://assets.tarkov.dev/69f9d319c906cd16da03b374-icon.webp",
+    },
+  ];
 
 // Cool down localStorage writes after quota failures without disabling them forever.
 const LOCAL_STORAGE_QUOTA_COOLDOWN_MS = 60_000;
@@ -485,6 +503,35 @@ export function removeDeprecatedCollectorItems<
   };
 }
 
+export function addMissingCollectorItems<
+  T extends CollectorItemsData["data"]["task"],
+>(task: T): T {
+  const existingItemKeys = collectObjectiveItemKeys(task.objectives);
+  const objectivesToAdd = MISSING_COLLECTOR_ITEMS.filter((item) => {
+    const itemKey = normalizeItemKey(item);
+    return itemKey && !existingItemKeys.has(itemKey);
+  }).map((item) => ({
+    items: [item],
+  }));
+
+  if (objectivesToAdd.length === 0) return task;
+
+  return {
+    ...task,
+    objectives: [...task.objectives, ...objectivesToAdd],
+  };
+}
+
+export function normalizeCollectorItems<
+  T extends CollectorItemsData["data"]["task"],
+>(task: T): T {
+  const taskWithoutDeprecatedItems = removeDeprecatedCollectorItems(task);
+  if (taskWithoutDeprecatedItems.objectives.length === 0) {
+    return taskWithoutDeprecatedItems;
+  }
+  return addMissingCollectorItems(taskWithoutDeprecatedItems);
+}
+
 export async function fetchOverlay(): Promise<Overlay> {
   try {
     const response = await fetch(OVERLAY_URL);
@@ -568,7 +615,7 @@ function hasUsableCombinedTaskData(
 export const API_CACHE_KEY = "taskTracker_api_cache_v2";
 export const API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v4";
 const LEGACY_API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v3";
-export const SHARED_CACHE_KEY = "taskTracker_shared_cache_v3";
+export const SHARED_CACHE_KEY = "taskTracker_shared_cache_v4";
 export const API_CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
 
 export interface CombinedCachePayload {
@@ -1155,7 +1202,7 @@ export async function fetchCombinedData(
   const collectorItems: CollectorItemsData = {
     data: {
       task: result.data.task
-        ? removeDeprecatedCollectorItems(
+        ? normalizeCollectorItems(
             applyTaskOverlay(
               result.data.task,
               overlay,

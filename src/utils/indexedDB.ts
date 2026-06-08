@@ -81,6 +81,8 @@ export interface UserPreferences {
   enableLevelFilter: boolean;
   showCompleted: boolean;
   showEvents: boolean;
+  hideoutRequirementsHideFound: boolean;
+  hideoutRequirementsLevelFilter: number | "all";
   dismissedAnnouncementIds: string[];
 }
 
@@ -626,6 +628,11 @@ export class TaskStorage {
             prefs.showCompleted = item.value as boolean;
           else if (item.id === "showEvents")
             prefs.showEvents = item.value as boolean;
+          else if (item.id === "hideoutRequirementsHideFound")
+            prefs.hideoutRequirementsHideFound = item.value as boolean;
+          else if (item.id === "hideoutRequirementsLevelFilter")
+            prefs.hideoutRequirementsLevelFilter =
+              typeof item.value === "number" ? item.value : "all";
           else if (item.id === "dismissedAnnouncementIds")
             prefs.dismissedAnnouncementIds = Array.isArray(item.value)
               ? item.value.filter(

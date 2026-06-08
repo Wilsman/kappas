@@ -86,7 +86,7 @@ export function EndingFlowView({
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.18 }}
+        fitViewOptions={{ padding: 0.08 }}
         panOnScroll
         panOnDrag
         zoomOnScroll

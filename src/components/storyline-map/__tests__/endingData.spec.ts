@@ -38,12 +38,31 @@ describe("ending path layout", () => {
     expect(edgeIds.has("kill-5-no-scav->btr-04")).toBe(true);
   });
 
-  it("keeps the Survivor path on a centered single spine", () => {
-    const { nodes } = getEndingPathData("survivor");
-    const uniqueX = new Set(nodes.map((node) => node.position.x));
+  it("shows Survivor's case choice and payment branches", () => {
+    const { nodes, edges } = getEndingPathData("survivor");
+    const positions = new Map(
+      nodes.map((node) => [node.id, node.position] as const)
+    );
+    const edgeIds = new Set(edges.map((edge) => `${edge.source}->${edge.target}`));
 
-    expect(uniqueX.size).toBe(1);
-    expect([...uniqueX][0]).toBe(0);
+    expect(positions.get("keep-self")?.x).toBeLessThan(
+      positions.get("give-prapor-0")?.x ?? 0
+    );
+    expect(positions.get("prapor-comp")?.x).toBe(
+      positions.get("give-prapor-0")?.x
+    );
+    expect(positions.get("armored-hands")?.x).toBe(0);
+    expect(positions.has("prapor-comp")).toBe(true);
+    expect(positions.has("lk-case")).toBe(true);
+    expect(positions.has("sl-300")).toBe(true);
+    expect(positions.has("sl-500")).toBe(true);
+    expect(positions.has("sl-48")).toBe(true);
+    expect(edgeIds.has("recover->keep-self")).toBe(true);
+    expect(edgeIds.has("recover->give-prapor-0")).toBe(true);
+    expect(edgeIds.has("sl-key-fail->sl-300")).toBe(true);
+    expect(edgeIds.has("sl-key-fail->sl-500")).toBe(true);
+    expect(edgeIds.has("sl-500->sl-tg")).toBe(true);
+    expect(edgeIds.has("sl-48->sl-note")).toBe(true);
   });
 
   it("keeps wait steps below their preceding action nodes in filtered routes", () => {
@@ -55,6 +74,75 @@ describe("ending path layout", () => {
     expect(positions.get("tg-24")?.y).toBeGreaterThan(
       positions.get("wt-keycard")?.y ?? 0
     );
+  });
+
+  it("shows Debtor's initial case choice as a split that converges again", () => {
+    const { nodes, edges } = getEndingPathData("debtor");
+    const positions = new Map(
+      nodes.map((node) => [node.id, node.position] as const)
+    );
+    const edgeIds = new Set(edges.map((edge) => `${edge.source}->${edge.target}`));
+
+    expect(positions.get("keep-self")?.x).toBeLessThan(
+      positions.get("give-prapor-0")?.x ?? 0
+    );
+    expect(positions.get("prapor-comp")?.x).toBe(
+      positions.get("give-prapor-0")?.x
+    );
+    expect(positions.get("armored-hands")?.x).toBe(0);
+    expect(positions.has("prapor-comp")).toBe(true);
+    expect(positions.has("lk-case")).toBe(true);
+    expect(edgeIds.has("recover->keep-self")).toBe(true);
+    expect(edgeIds.has("recover->give-prapor-0")).toBe(true);
+    expect(edgeIds.has("keep-self->armored-hands")).toBe(true);
+    expect(edgeIds.has("lk-case->armored-hands")).toBe(true);
+  });
+
+  it("shows Savior's case choice and pvp/pve branches", () => {
+    const { nodes, edges } = getEndingPathData("savior");
+    const positions = new Map(
+      nodes.map((node) => [node.id, node.position] as const)
+    );
+    const edgeIds = new Set(edges.map((edge) => `${edge.source}->${edge.target}`));
+
+    expect(positions.get("keep-self")?.x).toBeLessThan(
+      positions.get("give-prapor-0")?.x ?? 0
+    );
+    expect(positions.get("prapor-comp")?.x).toBe(
+      positions.get("give-prapor-0")?.x
+    );
+    expect(positions.get("armored-hands")?.x).toBe(0);
+    expect(positions.has("prapor-comp")).toBe(true);
+    expect(positions.has("lk-case")).toBe(true);
+    expect(positions.get("pvp")?.x).toBeLessThan(positions.get("pve")?.x ?? 0);
+    expect(edgeIds.has("recover->keep-self")).toBe(true);
+    expect(edgeIds.has("recover->give-prapor-0")).toBe(true);
+    expect(edgeIds.has("pvp->coop")).toBe(true);
+    expect(edgeIds.has("pve->kill-5-no-scav")).toBe(true);
+  });
+
+  it("shows Fallen's case choice and case-back branches", () => {
+    const { nodes, edges } = getEndingPathData("fallen");
+    const positions = new Map(
+      nodes.map((node) => [node.id, node.position] as const)
+    );
+    const edgeIds = new Set(edges.map((edge) => `${edge.source}->${edge.target}`));
+
+    expect(positions.get("keep-self")?.x).toBeLessThan(
+      positions.get("give-prapor-0")?.x ?? 0
+    );
+    expect(positions.get("prapor-comp")?.x).toBe(
+      positions.get("give-prapor-0")?.x
+    );
+    expect(positions.get("armored-hands")?.x).toBe(0);
+    expect(positions.has("prapor-comp")).toBe(true);
+    expect(positions.has("lk-case")).toBe(true);
+    expect(positions.has("case-back")).toBe(true);
+    expect(positions.has("no-case-back")).toBe(true);
+    expect(edgeIds.has("talk-prapor->case-back")).toBe(true);
+    expect(edgeIds.has("talk-prapor->no-case-back")).toBe(true);
+    expect(edgeIds.has("case-back->bio-case")).toBe(true);
+    expect(edgeIds.has("military-50->bio-case")).toBe(true);
   });
 
   it("keeps practical ending guidance aligned with the known route costs", () => {
