@@ -11,6 +11,13 @@ import {
 } from "./ui/accordion";
 import { Button } from "./ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -19,6 +26,8 @@ import {
 import {
   ChevronDown,
   ChevronUp,
+  Eye,
+  EyeOff,
   Minus,
   Plus,
   CheckCheck,
@@ -49,6 +58,21 @@ interface CollectorViewProps {
 }
 
 type GroupBy = "collector" | "hideout-stations";
+type CollectorSortMode =
+  | "name-asc"
+  | "name-desc"
+  | "incomplete-first"
+  | "complete-first";
+
+const COLLECTOR_SORT_STORAGE_KEY = "taskTracker_collectorSort_v1";
+const COLLECTOR_HIDE_COMPLETED_STORAGE_KEY =
+  "taskTracker_collectorHideCompleted_v1";
+const COLLECTOR_SORT_MODES: CollectorSortMode[] = [
+  "name-asc",
+  "name-desc",
+  "incomplete-first",
+  "complete-first",
+];
 
 const hasNamedRequirementItem = (
   item: { name?: unknown } | null | undefined,
@@ -71,7 +95,46 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   const [searchTerm, setSearchTerm] = useQueryState("itemsSearch", {
     defaultValue: "",
   });
+  const [collectorSort, setCollectorSort] =
+    useState<CollectorSortMode>("name-asc");
+  const [hasLoadedCollectorSortPreference, setHasLoadedCollectorSortPreference] =
+    useState(false);
+  const [hideCompletedCollectorItems, setHideCompletedCollectorItems] =
+    useState(false);
+  const [
+    hasLoadedHideCompletedPreference,
+    setHasLoadedHideCompletedPreference,
+  ] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+
+  useEffect(() => {
+    const savedSort = localStorage.getItem(COLLECTOR_SORT_STORAGE_KEY);
+    if (COLLECTOR_SORT_MODES.includes(savedSort as CollectorSortMode)) {
+      setCollectorSort(savedSort as CollectorSortMode);
+    }
+    setHasLoadedCollectorSortPreference(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedCollectorSortPreference) return;
+    localStorage.setItem(COLLECTOR_SORT_STORAGE_KEY, collectorSort);
+  }, [collectorSort, hasLoadedCollectorSortPreference]);
+
+  useEffect(() => {
+    const savedHideCompleted = localStorage.getItem(
+      COLLECTOR_HIDE_COMPLETED_STORAGE_KEY,
+    );
+    setHideCompletedCollectorItems(savedHideCompleted === "true");
+    setHasLoadedHideCompletedPreference(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedHideCompletedPreference) return;
+    localStorage.setItem(
+      COLLECTOR_HIDE_COMPLETED_STORAGE_KEY,
+      String(hideCompletedCollectorItems),
+    );
+  }, [hideCompletedCollectorItems, hasLoadedHideCompletedPreference]);
 
   // Filter items based on search
   const filteredItems = useMemo(() => {
@@ -81,6 +144,51 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       item.name.toLowerCase().includes(term),
     );
   }, [collectorItems, searchTerm]);
+
+  const sortedCollectorItems = useMemo(() => {
+    const compareByOriginalOrder = (left: CollectorItem, right: CollectorItem) =>
+      left.order - right.order || left.name.localeCompare(right.name);
+    const compareByName = (left: CollectorItem, right: CollectorItem) =>
+      left.name.localeCompare(right.name) || compareByOriginalOrder(left, right);
+    const compareByCompletedStatus = (
+      left: CollectorItem,
+      right: CollectorItem,
+      completedFirst: boolean,
+    ) => {
+      const leftCompleted = completedCollectorItems.has(left.name);
+      const rightCompleted = completedCollectorItems.has(right.name);
+      if (leftCompleted === rightCompleted) {
+        return compareByName(left, right);
+      }
+      return leftCompleted === completedFirst ? -1 : 1;
+    };
+
+    return [...filteredItems].sort((left, right) => {
+      switch (collectorSort) {
+        case "name-asc":
+          return compareByName(left, right);
+        case "name-desc":
+          return compareByName(right, left);
+        case "incomplete-first":
+          return compareByCompletedStatus(left, right, false);
+        case "complete-first":
+          return compareByCompletedStatus(left, right, true);
+        default:
+          return compareByName(left, right);
+      }
+    });
+  }, [collectorSort, completedCollectorItems, filteredItems]);
+
+  const visibleCollectorItems = useMemo(() => {
+    if (!hideCompletedCollectorItems) return sortedCollectorItems;
+    return sortedCollectorItems.filter(
+      (item) => !completedCollectorItems.has(item.name),
+    );
+  }, [
+    completedCollectorItems,
+    hideCompletedCollectorItems,
+    sortedCollectorItems,
+  ]);
 
   // Filter hideout stations based on search
   const filteredHideoutStations = useMemo(() => {
@@ -184,7 +292,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   // Group items based on the current view mode
   const itemsByGroup = useMemo(() => {
     if (groupBy === "collector") {
-      return { "Collector Items": filteredItems };
+      return { "Collector Items": visibleCollectorItems };
     } else if (groupBy === "hideout-stations") {
       const stationsMap: Record<string, HideoutStation> = {};
       hideoutStations.forEach((station) => {
@@ -193,8 +301,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       return stationsMap;
     }
     // Default to collector items if no group matches
-    return { "Collector Items": filteredItems };
-  }, [filteredItems, groupBy, hideoutStations]);
+    return { "Collector Items": visibleCollectorItems };
+  }, [visibleCollectorItems, groupBy, hideoutStations]);
 
   const sortedGroups = useMemo(
     () => Object.entries(itemsByGroup).sort(([a], [b]) => a.localeCompare(b)),
@@ -268,8 +376,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
         {/* Grouping toggles moved to sidebar */}
 
         {/* Search and Controls */}
-        <div className="mb-4 flex items-center gap-4">
-          <div className="flex-1 max-w-md">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex-1 lg:max-w-md">
             <Input
               placeholder={
                 groupBy === "hideout-stations"
@@ -281,24 +389,63 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
               className="w-full"
             />
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleToggleAll}
-            className="flex items-center gap-2"
-          >
-            {areAllExpanded ? (
-              <>
-                <ChevronUp className="h-4 w-4" />
-                Collapse All
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4" />
-                Expand All
-              </>
+          <div className="flex flex-wrap items-center gap-3">
+            {groupBy === "collector" && (
+              <Select
+                value={collectorSort}
+                onValueChange={(value) =>
+                  setCollectorSort(value as CollectorSortMode)
+                }
+              >
+                <SelectTrigger className="h-9 w-[190px]">
+                  <SelectValue placeholder="Sort items" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                  <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                  <SelectItem value="incomplete-first">
+                    Incomplete first
+                  </SelectItem>
+                  <SelectItem value="complete-first">Completed first</SelectItem>
+                </SelectContent>
+              </Select>
             )}
-          </Button>
+            {groupBy === "collector" && (
+              <Button
+                variant={hideCompletedCollectorItems ? "secondary" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setHideCompletedCollectorItems((current) => !current)
+                }
+                className="flex h-9 items-center gap-2"
+              >
+                {hideCompletedCollectorItems ? (
+                  <Eye className="h-4 w-4" />
+                ) : (
+                  <EyeOff className="h-4 w-4" />
+                )}
+                {hideCompletedCollectorItems ? "Show complete" : "Hide complete"}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggleAll}
+              className="flex h-9 items-center gap-2"
+            >
+              {areAllExpanded ? (
+                <>
+                  <ChevronUp className="h-4 w-4" />
+                  Collapse All
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Expand All
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Loading and Error States */}
