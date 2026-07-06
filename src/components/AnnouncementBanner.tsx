@@ -22,6 +22,15 @@ const iconClasses: Record<AnnouncementTone, string> = {
   warning: "text-amber-600 dark:text-amber-300",
 };
 
+const specialAnnouncementClasses: Record<string, string> = {
+  "tarkov-dev-api-outage-2026-06-28":
+    "border-red-500/60 bg-red-950/35 text-red-50 shadow-red-950/20 animate-[api-outage-pulse_6s_ease-in-out_infinite]",
+};
+
+const specialIconClasses: Record<string, string> = {
+  "tarkov-dev-api-outage-2026-06-28": "text-red-300",
+};
+
 export function AnnouncementBanner({
   announcements,
   onDismiss,
@@ -43,6 +52,7 @@ export function AnnouncementBanner({
               className={cn(
                 "flex items-start gap-3 rounded-md border px-3 py-2 shadow-sm",
                 toneClasses[announcement.tone],
+                specialAnnouncementClasses[announcement.id],
               )}
             >
               <Megaphone
@@ -50,6 +60,7 @@ export function AnnouncementBanner({
                 className={cn(
                   "mt-0.5 h-4 w-4 shrink-0",
                   iconClasses[announcement.tone],
+                  specialIconClasses[announcement.id],
                 )}
               />
               <div className="min-w-0 flex-1">
@@ -84,16 +95,18 @@ export function AnnouncementBanner({
                   </Button>
                 ) : null}
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-foreground/70 hover:text-foreground"
-                onClick={() => onDismiss(announcement.id)}
-                aria-label={`Dismiss announcement: ${announcement.title}`}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              {announcement.dismissible === false ? null : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-foreground/70 hover:text-foreground"
+                  onClick={() => onDismiss(announcement.id)}
+                  aria-label={`Dismiss announcement: ${announcement.title}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </article>
           );
         })}

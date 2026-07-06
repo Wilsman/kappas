@@ -6,6 +6,7 @@ export interface AppAnnouncement {
   body: string;
   tone: AnnouncementTone;
   active: boolean;
+  dismissible?: boolean;
   titleClassName?: string;
   href?: string;
   actionLabel?: string;
@@ -13,21 +14,12 @@ export interface AppAnnouncement {
 
 export const APP_ANNOUNCEMENTS: AppAnnouncement[] = [
   {
-    id: "collector-items-updated-2026-06-08",
-    title: "Collector items updated",
-    body: "Collector now requires 41 items. DesmondPilak CD, Dunduk floppy disk, and SheefGG piggy bank have been added; Golden rooster, DevilDog mayo, Kotton beanie, Old firesteel, and Can of sprats remain removed while tarkov.dev catches up.",
+    id: "tarkov-dev-api-outage-2026-06-28",
+    title: "Tarkov.dev API outage",
+    body: "tarkov.dev's API is currently returning Cloudflare 1102/503 errors. Some quest, achievement, and hideout data may be empty until their API recovers. If we have a cached copy, the app will keep using it.",
     tone: "warning",
-    titleClassName: "text-sky-700 dark:text-sky-300",
-    active: true,
-    href: "/Items/CollectorItems",
-    actionLabel: "View Collector items",
-  },
-  {
-    id: "prestige-requirements-easier-v2",
-    title: "Prestige requirements updated",
-    body: "Prestige requirements have been refreshed and are now much easier across the board. Previously completed prestige progress has been preserved where possible.",
-    tone: "success",
-    active: true,
+    titleClassName: "text-red-200 dark:text-red-100",
+    active: false,
   },
 ];
 

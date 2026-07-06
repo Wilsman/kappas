@@ -172,5 +172,11 @@ describe('task objective key utilities', () => {
         items: [{ id: 'salewa', name: 'Salewa' }],
       }),
     ).toBe('Hand over Salewas');
+    expect(
+      formatTaskObjectiveLabel({
+        description: 'Sell any 50 items to Ragman',
+        count: 50,
+      }),
+    ).toBe('Sell any 50 items to Ragman');
   });
 });

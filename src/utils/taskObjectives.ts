@@ -188,7 +188,11 @@ export function formatTaskObjectiveLabel(
     typeof objective.playerLevel === "number"
       ? `Reach level ${objective.playerLevel}`
       : (objective.description ?? "").trim();
+  const hasInlineSellAnyCount =
+    typeof objective.count === "number" &&
+    /\bsell any \d+ items? to\b/i.test(baseLabel);
   const shouldAppendCount =
+    !hasInlineSellAnyCount &&
     !objective.items?.length &&
     typeof objective.count === "number" &&
     objective.count > 1;

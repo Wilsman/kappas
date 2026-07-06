@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes api-outage-pulse {
+  0%,
+  100% {
+    background-color: rgb(69 10 10 / 0.35);
+    box-shadow: 0 0 0 rgb(239 68 68 / 0);
+  }
+  50% {
+    background-color: rgb(127 29 29 / 0.55);
+    box-shadow: 0 0 18px rgb(239 68 68 / 0.18);
+  }
+}
+
 @font-face {
   font-family: "Bender";
   src: url("/fonts/Jovanny Lemonad - Bender.woff") format("woff");

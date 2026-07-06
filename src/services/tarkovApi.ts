@@ -24,7 +24,23 @@ import {
   type LanguageCode,
 } from "@/utils/language";
 import { taskStorage } from "@/utils/indexedDB";
-const TARKOV_API_URL = "https://api.tarkov.dev/graphql";
+const DIRECT_TARKOV_API_URL = "https://api.tarkov.dev/graphql";
+const PROXIED_TARKOV_API_URL = "/api/tarkov/graphql";
+
+type TarkovApiEnv = {
+  DEV?: boolean;
+  PROD?: boolean;
+  VITE_TARKOV_API_URL?: string;
+};
+
+export const getTarkovApiUrl = (
+  env: TarkovApiEnv = import.meta.env,
+): string => {
+  const configuredUrl = env.VITE_TARKOV_API_URL?.trim();
+  if (configuredUrl) return configuredUrl;
+  return env.PROD ? PROXIED_TARKOV_API_URL : DIRECT_TARKOV_API_URL;
+};
+
 export const OVERLAY_URL =
   "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
 const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
@@ -60,6 +76,9 @@ let localStorageQuotaExceededUntil = 0;
 
 type TaskOverlayTarget = Task | CollectorItemsData["data"]["task"];
 type TaskRequirement = Task["taskRequirements"][number];
+type NullableTaskRequirement = {
+  task?: { id?: string; name?: string } | null;
+};
 type RewardContainer = { items?: Array<{ item?: { id?: string } }> } & Record<
   string,
   unknown
@@ -93,6 +112,11 @@ const buildIconLink = (id?: string) =>
 
 const toTraderName = (name?: string): TraderName =>
   (name as TraderName) ?? "Prapor";
+
+const getMapName = (map?: { name?: string } | null): string | null => {
+  const name = map?.name?.trim();
+  return name ? name : null;
+};
 
 const isDevOverlayWarningEnabled =
   import.meta.env.DEV && import.meta.env.MODE !== "test";
@@ -338,7 +362,10 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
       return {
         id: objective.id,
         description: objective.description,
-        maps: objective.maps?.map((map) => ({ name: map.name })),
+        maps: objective.maps
+          ?.map((map) => getMapName(map))
+          .filter((name): name is string => !!name)
+          .map((name) => ({ name })),
         items: items.length > 0 ? items : undefined,
         count: objective.count,
         foundInRaid: objective.foundInRaid,
@@ -346,12 +373,19 @@ export function buildEventTasksFromOverlay(overlay: Overlay): Task[] {
     });
 
     const mapNames = new Set<string>();
-    if (task.map?.name) {
-      mapNames.add(task.map.name);
+    const taskMapName = getMapName(task.map);
+    if (taskMapName) {
+      mapNames.add(taskMapName);
     }
-    task.maps?.forEach((map) => mapNames.add(map.name));
+    task.maps?.forEach((map) => {
+      const name = getMapName(map);
+      if (name) mapNames.add(name);
+    });
     task.objectives?.forEach((objective) => {
-      objective.maps?.forEach((map) => mapNames.add(map.name));
+      objective.maps?.forEach((map) => {
+        const name = getMapName(map);
+        if (name) mapNames.add(name);
+      });
     });
 
     const rewardItems = (task.finishRewards?.items || [])
@@ -487,6 +521,41 @@ export function sanitizeTaskRewardData(task: Task): Task {
   };
 }
 
+const BUILDING_FOUNDATIONS_TASK_ID = "673f629c5b555b53460cf827";
+const BUILDING_FOUNDATIONS_TASK_NAME = "Building Foundations";
+const BUILDING_FOUNDATIONS_SELL_TRADERS = ["Ragman", "Prapor", "Peacekeeper"];
+
+function normalizeBuildingFoundationsObjectives(task: Task): Task {
+  if (
+    task.id !== BUILDING_FOUNDATIONS_TASK_ID &&
+    task.name !== BUILDING_FOUNDATIONS_TASK_NAME
+  ) {
+    return task;
+  }
+
+  return {
+    ...task,
+    objectives: task.objectives?.map((objective) => {
+      const description = objective.description?.toLowerCase() ?? "";
+      const traderName = BUILDING_FOUNDATIONS_SELL_TRADERS.find(
+        (trader) =>
+          /\bsell any items?\b/.test(description) &&
+          description.includes(trader.toLowerCase()),
+      );
+
+      if (!traderName) return objective;
+
+      const objectiveWithoutItems = { ...objective };
+      delete objectiveWithoutItems.items;
+      return {
+        ...objectiveWithoutItems,
+        description: `Sell any 50 items to ${traderName}`,
+        count: 50,
+      };
+    }),
+  };
+}
+
 export function removeDeprecatedCollectorItems<
   T extends CollectorItemsData["data"]["task"],
 >(task: T): T {
@@ -570,19 +639,32 @@ const TASK_REQUIREMENT_OVERRIDES: Record<string, string[]> = {
 
 function applyTaskRequirementOverrides<
   T extends {
-    id: string;
-    taskRequirements: { task: { id: string; name: string } }[];
+    id?: string;
+    taskRequirements?: NullableTaskRequirement[] | null;
   },
->(tasks: T[]): T[] {
+>(tasks: Array<T | null | undefined>): T[] {
   if (!ENABLE_TASK_REQUIREMENT_OVERRIDES) return tasks;
 
-  return tasks.map((task) => {
+  return tasks.flatMap((task) => {
+    if (!task?.id) return [];
+
     const overrides = TASK_REQUIREMENT_OVERRIDES[task.id];
-    if (!overrides || overrides.length === 0) return task;
+    const taskRequirements = Array.isArray(task.taskRequirements)
+      ? task.taskRequirements
+      : [];
+    const validRequirements = taskRequirements.filter(
+      (req): req is NullableTaskRequirement & { task: { id: string } } =>
+        !!req?.task?.id,
+    );
+    if (!overrides || overrides.length === 0) {
+      return validRequirements.length === taskRequirements.length
+        ? task
+        : { ...task, taskRequirements: validRequirements };
+    }
 
     return {
       ...task,
-      taskRequirements: task.taskRequirements.filter(
+      taskRequirements: validRequirements.filter(
         (req) => !overrides.includes(req.task.id),
       ),
     };
@@ -617,6 +699,20 @@ export const API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v4";
 const LEGACY_API_CACHE_KEY_PREFIX = "taskTracker_api_cache_v3";
 export const SHARED_CACHE_KEY = "taskTracker_shared_cache_v4";
 export const API_CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
+
+export interface CombinedCacheDebugInfo {
+  available: boolean;
+  fresh: boolean;
+  format: "split" | "legacy-split" | "legacy-mode" | "legacy-default" | null;
+  checkedGameMode: GameMode;
+  checkedLanguage: LanguageCode;
+  ttlMs: number;
+  newestUpdatedAt: string | null;
+  oldestUpdatedAt: string | null;
+  newestAgeMs: number | null;
+  oldestAgeMs: number | null;
+  keys: string[];
+}
 
 export interface CombinedCachePayload {
   tasks: TaskData;
@@ -806,6 +902,116 @@ function readStoredCache(key: string): StoredCache | null {
   }
 }
 
+function readCacheUpdatedAt(key: string): number | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { updatedAt?: unknown };
+    return typeof parsed?.updatedAt === "number" ? parsed.updatedAt : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildCacheDebugInfo(
+  format: CombinedCacheDebugInfo["format"],
+  keys: string[],
+  gameMode: GameMode,
+  language: LanguageCode,
+  ttlMs: number,
+): CombinedCacheDebugInfo | null {
+  const updatedAtValues = keys
+    .map((key) => readCacheUpdatedAt(key))
+    .filter((value): value is number => typeof value === "number");
+
+  if (updatedAtValues.length !== keys.length) return null;
+
+  const now = Date.now();
+  const newestUpdatedAt = Math.max(...updatedAtValues);
+  const oldestUpdatedAt = Math.min(...updatedAtValues);
+  const oldestAgeMs = now - oldestUpdatedAt;
+
+  return {
+    available: true,
+    fresh: updatedAtValues.every((updatedAt) => now - updatedAt < ttlMs),
+    format,
+    checkedGameMode: normalizeGameMode(gameMode),
+    checkedLanguage: normalizeLanguage(language),
+    ttlMs,
+    newestUpdatedAt: new Date(newestUpdatedAt).toISOString(),
+    oldestUpdatedAt: new Date(oldestUpdatedAt).toISOString(),
+    newestAgeMs: now - newestUpdatedAt,
+    oldestAgeMs,
+    keys,
+  };
+}
+
+export function getCombinedCacheDebugInfo(
+  gameMode: GameMode = DEFAULT_GAME_MODE,
+  language: LanguageCode = DEFAULT_LANGUAGE,
+  ttlMs: number = API_CACHE_TTL_MS,
+): CombinedCacheDebugInfo {
+  const normalizedGameMode = normalizeGameMode(gameMode);
+  const normalizedLanguage = normalizeLanguage(language);
+  const emptyInfo: CombinedCacheDebugInfo = {
+    available: false,
+    fresh: false,
+    format: null,
+    checkedGameMode: normalizedGameMode,
+    checkedLanguage: normalizedLanguage,
+    ttlMs,
+    newestUpdatedAt: null,
+    oldestUpdatedAt: null,
+    newestAgeMs: null,
+    oldestAgeMs: null,
+    keys: [],
+  };
+
+  const splitInfo = buildCacheDebugInfo(
+    "split",
+    [
+      buildSharedCacheKey(normalizedLanguage),
+      buildCombinedCacheKey(normalizedGameMode, normalizedLanguage),
+    ],
+    normalizedGameMode,
+    normalizedLanguage,
+    ttlMs,
+  );
+  if (splitInfo) return splitInfo;
+
+  if (normalizedLanguage !== DEFAULT_LANGUAGE) return emptyInfo;
+
+  const legacySplitInfo = buildCacheDebugInfo(
+    "legacy-split",
+    [SHARED_CACHE_KEY, buildLegacyCombinedCacheKey(normalizedGameMode)],
+    normalizedGameMode,
+    normalizedLanguage,
+    ttlMs,
+  );
+  if (legacySplitInfo) return legacySplitInfo;
+
+  const legacyModeInfo = buildCacheDebugInfo(
+    "legacy-mode",
+    [buildLegacyCombinedCacheKey(normalizedGameMode)],
+    normalizedGameMode,
+    normalizedLanguage,
+    ttlMs,
+  );
+  if (legacyModeInfo) return legacyModeInfo;
+
+  if (normalizedGameMode !== DEFAULT_GAME_MODE) return emptyInfo;
+
+  const legacyDefaultInfo = buildCacheDebugInfo(
+    "legacy-default",
+    [API_CACHE_KEY],
+    normalizedGameMode,
+    normalizedLanguage,
+    ttlMs,
+  );
+
+  return legacyDefaultInfo ?? emptyInfo;
+}
+
 function isCombinedCachePayload(payload: unknown): payload is CombinedCachePayload {
   if (!payload || typeof payload !== "object") return false;
   const candidate = payload as Partial<CombinedCachePayload>;
@@ -952,13 +1158,47 @@ export async function saveCombinedCache(
   }
 }
 
+async function fetchTarkovApi(init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(getTarkovApiUrl(), init);
+  } catch (err) {
+    throw new TypeError("Tarkov API request failed", { cause: err });
+  }
+}
+
+async function throwTarkovHttpError(response: Response): Promise<never> {
+  let bodyPreview: string | null = null;
+
+  try {
+    const body = await response.text();
+    const trimmed = body.trim();
+    bodyPreview = trimmed
+      ? trimmed.length > 1000
+        ? `${trimmed.slice(0, 1000)}...`
+        : trimmed
+      : null;
+  } catch {
+    bodyPreview = null;
+  }
+
+  const contentType = response.headers?.get?.("Content-Type");
+  const detailParts = [
+    `status: ${response.status}`,
+    response.statusText ? `statusText: ${response.statusText}` : null,
+    contentType ? `contentType: ${contentType}` : null,
+    bodyPreview ? `body: ${bodyPreview}` : null,
+  ].filter(Boolean);
+
+  throw new Error(`HTTP error! ${detailParts.join("; ")}`);
+}
+
 export async function fetchAchievements(): Promise<AchievementsData> {
-  const response = await fetch(TARKOV_API_URL, {
+  const response = await fetchTarkovApi({
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query: ACHIEVEMENTS_QUERY }),
   });
-  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  if (!response.ok) await throwTarkovHttpError(response);
   const result = await response.json();
   if (result.errors) {
     throw new Error(`GraphQL error: ${formatGraphQLErrors(result.errors)}`);
@@ -1132,7 +1372,7 @@ export async function fetchCombinedData(
   const normalizedGameMode = normalizeGameMode(gameMode);
   const normalizedLanguage = normalizeLanguage(language);
   onStage?.("request");
-  const response = await fetch(TARKOV_API_URL, {
+  const response = await fetchTarkovApi({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1143,7 +1383,7 @@ export async function fetchCombinedData(
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    await throwTarkovHttpError(response);
   }
 
   onStage?.("parse");
@@ -1179,18 +1419,19 @@ export async function fetchCombinedData(
     // Collect unique map names from all objectives
     task.objectives?.forEach((objective) => {
       objective.maps?.forEach((map) => {
-        if (map.name) mapsSet.add(map.name);
+        const name = getMapName(map);
+        if (name) mapsSet.add(name);
       });
     });
 
     // Convert Set to array of map objects
     const maps = Array.from(mapsSet).map((name) => ({ name }));
 
-    return sanitizeTaskRewardData({
+    return normalizeBuildingFoundationsObjectives(sanitizeTaskRewardData({
       ...task,
       wikiLink: task.wikiLink ?? "",
       maps,
-    });
+    }));
   });
 
   const tasks: TaskData = {
@@ -1237,7 +1478,7 @@ export async function fetchCombinedData(
 export async function fetchHideoutStations(): Promise<{
   data: HideoutStationsData;
 }> {
-  const response = await fetch(TARKOV_API_URL, {
+  const response = await fetchTarkovApi({
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1248,7 +1489,7 @@ export async function fetchHideoutStations(): Promise<{
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    await throwTarkovHttpError(response);
   }
 
   const result = await response.json();

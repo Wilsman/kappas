@@ -63,11 +63,14 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
 import {
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
+  buildLegacyTaskObjectiveProgressKey,
   buildTaskObjectiveFallbackKeys,
   buildTaskObjectiveItemProgressKey,
   buildTaskObjectiveKeys,
+  buildTaskObjectiveProgressKey,
   formatTaskObjectiveLabel,
   getTaskObjectiveItemProgress,
+  getTaskObjectiveProgress,
   isTaskObjectiveCompleted,
 } from "@/utils/taskObjectives";
 import {
@@ -417,6 +420,28 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
         objectiveItemKey,
         next,
         legacyObjectiveItemKey,
+      );
+    },
+    [onUpdateTaskObjectiveItemProgress, taskObjectiveItemProgress],
+  );
+
+  const handleObjectiveProgressDelta = useCallback(
+    (
+      objectiveProgressKey: string,
+      delta: number,
+      maxCount: number,
+      legacyObjectiveProgressKey?: string | string[],
+    ) => {
+      const current = getTaskObjectiveProgress(
+        taskObjectiveItemProgress,
+        objectiveProgressKey,
+        legacyObjectiveProgressKey,
+      );
+      const next = Math.max(0, Math.min(maxCount, current + delta));
+      onUpdateTaskObjectiveItemProgress(
+        objectiveProgressKey,
+        next,
+        legacyObjectiveProgressKey,
       );
     },
     [onUpdateTaskObjectiveItemProgress, taskObjectiveItemProgress],
@@ -1984,6 +2009,43 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                       1,
                                                       objective.count ?? 1,
                                                     );
+                                                  const objectiveProgressKey =
+                                                    buildTaskObjectiveProgressKey(
+                                                      objectiveKey,
+                                                    );
+                                                  const legacyObjectiveProgressKey =
+                                                    [
+                                                      ...legacyObjectiveKey.map(
+                                                        (key) =>
+                                                          buildTaskObjectiveProgressKey(
+                                                            key,
+                                                          ),
+                                                      ),
+                                                      buildLegacyTaskObjectiveProgressKey(
+                                                        task.id,
+                                                        index,
+                                                      ),
+                                                    ];
+                                                  const currentObjectiveCount =
+                                                    Math.min(
+                                                      requiredCount,
+                                                      getTaskObjectiveProgress(
+                                                        taskObjectiveItemProgress,
+                                                        objectiveProgressKey,
+                                                        legacyObjectiveProgressKey,
+                                                      ),
+                                                    );
+                                                  const isCountOnlyObjective =
+                                                    !objective.items?.length &&
+                                                    typeof objective.count ===
+                                                      "number" &&
+                                                    objective.count > 1;
+                                                  const objectiveProgressRemaining =
+                                                    Math.max(
+                                                      0,
+                                                      requiredCount -
+                                                        currentObjectiveCount,
+                                                    );
                                                   const usesSharedPool =
                                                     (objective.items?.length ??
                                                       0) > 1 &&
@@ -2140,6 +2202,72 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                           )}
                                                         </span>
                                                       </div>
+                                                      {isCountOnlyObjective && (
+                                                        <div className="mt-2 ml-6 flex items-center gap-2">
+                                                          <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleObjectiveProgressDelta(
+                                                                objectiveProgressKey,
+                                                                -1,
+                                                                requiredCount,
+                                                                legacyObjectiveProgressKey,
+                                                              );
+                                                            }}
+                                                            className={cn(
+                                                              "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                              currentObjectiveCount <=
+                                                                0 &&
+                                                                "opacity-50 cursor-not-allowed",
+                                                            )}
+                                                            disabled={
+                                                              currentObjectiveCount <=
+                                                              0
+                                                            }
+                                                            aria-label={`Decrease progress for ${objectiveLabel}`}
+                                                          >
+                                                            <Minus className="h-3 w-3 mx-auto" />
+                                                          </button>
+                                                          <span className="w-16 text-center text-xs tabular-nums">
+                                                            {
+                                                              currentObjectiveCount
+                                                            }
+                                                            /{requiredCount}
+                                                          </span>
+                                                          <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleObjectiveProgressDelta(
+                                                                objectiveProgressKey,
+                                                                1,
+                                                                requiredCount,
+                                                                legacyObjectiveProgressKey,
+                                                              );
+                                                            }}
+                                                            className={cn(
+                                                              "h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors",
+                                                              currentObjectiveCount >=
+                                                                requiredCount &&
+                                                                "opacity-50 cursor-not-allowed",
+                                                            )}
+                                                            disabled={
+                                                              currentObjectiveCount >=
+                                                              requiredCount
+                                                            }
+                                                            aria-label={`Increase progress for ${objectiveLabel}`}
+                                                          >
+                                                            <Plus className="h-3 w-3 mx-auto" />
+                                                          </button>
+                                                          <span className="text-[11px] text-muted-foreground">
+                                                            {objectiveProgressRemaining ===
+                                                            0
+                                                              ? "Complete"
+                                                              : `${objectiveProgressRemaining} remaining`}
+                                                          </span>
+                                                        </div>
+                                                      )}
                                                       {objective.items &&
                                                         objective.items.length >
                                                           0 && (

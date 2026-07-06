@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Mock } from "vitest";
 import {
   fetchCombinedData,
+  getTarkovApiUrl,
+  getCombinedCacheDebugInfo,
   loadCombinedCache,
   saveCombinedCache,
   isCombinedCacheFresh,
@@ -12,6 +14,7 @@ import {
   sanitizeTaskRewardData,
   removeDeprecatedCollectorItems,
   normalizeCollectorItems,
+  buildEventTasksFromOverlay,
 } from "../tarkovApi";
 
 interface MockResponse<T> {
@@ -140,6 +143,78 @@ describe("fetchCombinedData", () => {
     expect(body.query).toContain("achievement");
   });
 
+  it("rewrites Building Foundations sell-any objectives without item lists", async () => {
+    const manyItems = Array.from({ length: 100 }, (_, index) => ({
+      id: `item-${index}`,
+      name: `Item ${index}`,
+      iconLink: `item-${index}.png`,
+    }));
+    const apiResponse = {
+      data: {
+        tasks: [
+          {
+            id: "673f629c5b555b53460cf827",
+            minPlayerLevel: 1,
+            kappaRequired: false,
+            lightkeeperRequired: false,
+            map: null,
+            taskRequirements: [],
+            trader: { name: "BTR Driver", imageLink: "img" },
+            wikiLink: "link",
+            name: "Building Foundations",
+            startRewards: { items: [] },
+            finishRewards: { items: [] },
+            objectives: [
+              {
+                id: "ragman",
+                description: "Sell any items to Ragman",
+                count: 50,
+                items: manyItems,
+              },
+              {
+                id: "prapor",
+                description: "Sell any items to Prapor",
+                count: 50,
+                items: manyItems,
+              },
+              {
+                id: "peacekeeper",
+                description: "Sell any items to Peacekeeper",
+                count: 50,
+                items: manyItems,
+              },
+            ],
+          },
+        ],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    };
+
+    mockFetchOnce(apiResponse);
+    const result = await fetchCombinedData();
+    const objectives = result.tasks.data.tasks[0].objectives ?? [];
+
+    expect(objectives).toEqual([
+      {
+        id: "ragman",
+        description: "Sell any 50 items to Ragman",
+        count: 50,
+      },
+      {
+        id: "prapor",
+        description: "Sell any 50 items to Prapor",
+        count: 50,
+      },
+      {
+        id: "peacekeeper",
+        description: "Sell any 50 items to Peacekeeper",
+        count: 50,
+      },
+    ]);
+  });
+
   it("removes Collector items that were removed from the live game before the API updates", () => {
     const result = removeDeprecatedCollectorItems({
       id: "5c51aac186f77432ea65c552",
@@ -243,6 +318,27 @@ describe("fetchCombinedData", () => {
     await expect(fetchCombinedData()).rejects.toThrow("HTTP error");
   });
 
+  it("includes HTTP error response body details", async () => {
+    (globalThis as unknown as { fetch: Mock }).fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: "Tarkov API upstream error",
+            upstreamStatus: 503,
+            upstreamBody: "error code: 1102\n",
+          }),
+          {
+            status: 503,
+            statusText: "Service Unavailable",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    await expect(fetchCombinedData()).rejects.toThrow(/error code: 1102/);
+  });
+
   it("throws on GraphQL errors array", async () => {
     const apiResponse: { data: object; errors: { message: string }[] } = {
       data: {},
@@ -341,6 +437,45 @@ describe("fetchCombinedData", () => {
       "[Tarkov API] GraphQL returned partial data; continuing with available task payload.",
       apiResponse.errors,
     );
+  });
+
+  it("drops task requirement rows with missing task data before applying overrides", async () => {
+    const apiResponse = {
+      data: {
+        tasks: [
+          null,
+          {
+            id: "5c0bd94186f7747a727f09b2",
+            minPlayerLevel: 1,
+            kappaRequired: false,
+            lightkeeperRequired: false,
+            map: null,
+            taskRequirements: [
+              null,
+              { task: null },
+              { task: { id: "5c0d190cd09282029f5390d8", name: "Grenadier" } },
+              { task: { id: "kept-task", name: "Kept Task" } },
+            ],
+            trader: { name: "Prapor", imageLink: "img" },
+            wikiLink: "link",
+            name: "Test Drive - Part 1",
+            startRewards: { items: [] },
+            finishRewards: { items: [] },
+            objectives: [],
+          },
+        ],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    };
+
+    mockFetchOnce(apiResponse);
+    const result = await fetchCombinedData();
+
+    expect(result.tasks.data.tasks[0].taskRequirements).toEqual([
+      { task: { id: "kept-task", name: "Kept Task" } },
+    ]);
   });
 
   it("handles missing optional fields with defaults", async () => {
@@ -520,6 +655,70 @@ describe("fetchCombinedData", () => {
     expect(result.tasks.data.tasks[0].wikiLink).toBe(
       "https://escapefromtarkov.fandom.com/wiki/Immunity_(quest)",
     );
+  });
+
+  it("ignores null overlay maps when building overlay-added event tasks", () => {
+    const tasks = buildEventTasksFromOverlay({
+      tasksAdd: {
+        new_beginning_prestige_6: {
+          id: "new_beginning_prestige_6",
+          name: "New Beginning",
+          trader: { name: "Ragman" },
+          map: null,
+          maps: [null, { id: "5714dc692459777137212e12", name: "Streets of Tarkov" }],
+          objectives: [
+            {
+              id: "new_beginning_prestige_6_obj01",
+              description: "Use the transit from Streets of Tarkov to Interchange",
+              maps: [
+                { id: "5714dc692459777137212e12", name: "Streets of Tarkov" },
+                null,
+                { id: "5714dbc024597771384a510d", name: "Interchange" },
+              ],
+            },
+          ],
+        },
+      },
+      $meta: {
+        version: "1.34",
+        generated: "2026-06-08T01:20:45.715Z",
+      },
+    } as never);
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].map).toBeNull();
+    expect(tasks[0].maps.map((map) => map.name)).toEqual([
+      "Streets of Tarkov",
+      "Interchange",
+    ]);
+    expect(tasks[0].objectives?.[0].maps?.map((map) => map.name)).toEqual([
+      "Streets of Tarkov",
+      "Interchange",
+    ]);
+  });
+});
+
+describe("getTarkovApiUrl", () => {
+  it("uses the same-origin proxy in production", () => {
+    expect(getTarkovApiUrl({ PROD: true, DEV: false })).toBe(
+      "/api/tarkov/graphql",
+    );
+  });
+
+  it("uses the direct Tarkov API outside production", () => {
+    expect(getTarkovApiUrl({ PROD: false, DEV: true })).toBe(
+      "https://api.tarkov.dev/graphql",
+    );
+  });
+
+  it("uses VITE_TARKOV_API_URL when configured", () => {
+    expect(
+      getTarkovApiUrl({
+        PROD: true,
+        DEV: false,
+        VITE_TARKOV_API_URL: "https://example.test/graphql",
+      }),
+    ).toBe("https://example.test/graphql");
   });
 });
 
@@ -740,6 +939,38 @@ describe("Cache functionality", () => {
       payload as unknown as Parameters<typeof saveCombinedCache>[0],
     );
     expect(isCombinedCacheFresh()).toBe(true);
+  });
+
+  it("should report cache metadata for support diagnostics", async () => {
+    const payload = {
+      tasks: { data: { tasks: [] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+
+    await saveCombinedCache(
+      payload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "regular",
+      "en",
+    );
+
+    const debugInfo = getCombinedCacheDebugInfo("regular", "en");
+
+    expect(debugInfo).toMatchObject({
+      available: true,
+      fresh: true,
+      format: "split",
+      checkedGameMode: "regular",
+      checkedLanguage: "en",
+      ttlMs: API_CACHE_TTL_MS,
+      keys: [
+        `${SHARED_CACHE_KEY}::en`,
+        "taskTracker_api_cache_v4::regular::en",
+      ],
+    });
+    expect(debugInfo.newestUpdatedAt).toEqual(expect.any(String));
+    expect(debugInfo.oldestAgeMs).toEqual(expect.any(Number));
   });
 
   it("should detect stale cache", () => {
