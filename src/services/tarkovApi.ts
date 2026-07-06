@@ -11,6 +11,7 @@ import {
   ObjectiveOverride,
   TaskAddObjective,
   TaskAddRewardItem,
+  RewardItem,
 } from "../types";
 import { TraderName } from "../data/traders";
 import {
@@ -26,6 +27,7 @@ import {
 import { taskStorage } from "@/utils/indexedDB";
 const DIRECT_TARKOV_API_URL = "https://api.tarkov.dev/graphql";
 const PROXIED_TARKOV_API_URL = "/api/tarkov/graphql";
+const TARKOV_JSON_API_BASE_URL = "https://json.tarkov.dev";
 
 type TarkovApiEnv = {
   DEV?: boolean;
@@ -714,6 +716,120 @@ export interface CombinedCacheDebugInfo {
   keys: string[];
 }
 
+type JsonTranslationMap = Record<string, string>;
+type JsonTasksResponse = {
+  data?: {
+    tasks?: Record<string, JsonTask>;
+    achievements?: Record<string, JsonAchievement>;
+  };
+};
+type JsonHideoutResponse = {
+  data?: Record<string, JsonHideoutStation>;
+};
+
+type JsonTask = {
+  id?: string;
+  name?: string;
+  trader?: string;
+  wikiLink?: string;
+  minPlayerLevel?: number;
+  taskRequirements?: Array<{ task?: string | null } | null> | null;
+  objectives?: Record<string, JsonTaskObjective> | JsonTaskObjective[];
+  startRewards?: JsonTaskRewards;
+  finishRewards?: JsonTaskRewards;
+  experience?: number;
+  factionName?: string | null;
+  kappaRequired?: boolean;
+  lightkeeperRequired?: boolean;
+  map?: string | null;
+};
+
+type JsonTaskObjective = {
+  id?: string;
+  description?: string;
+  count?: number;
+  playerLevel?: number;
+  maps?: string[];
+  items?: string[];
+  foundInRaid?: boolean;
+};
+
+type JsonTaskRewards = {
+  items?: Array<{ item?: string; count?: number }>;
+  offerUnlock?: Array<{
+    item?: string;
+    trader?: string;
+    level?: number;
+  }>;
+  traderStanding?: Array<{
+    standing?: number;
+    trader?: string;
+  }>;
+  customization?: Array<{
+    id?: string;
+    name?: string;
+    customizationType?: string;
+    customizationTypeName?: string;
+    imageLink?: string;
+  }>;
+  achievement?: Array<{
+    id?: string;
+    name?: string;
+    description?: string;
+    imageLink?: string;
+  }>;
+  skillLevelReward?: Array<{
+    name?: string;
+    level?: number;
+    skill?: { id?: string; name?: string } | string;
+  }>;
+  traderUnlock?: Array<{
+    id?: string;
+    name?: string;
+    imageLink?: string;
+  }>;
+  craftUnlock?: Array<{
+    id?: string;
+    level?: number;
+    station?: string | { name?: string; imageLink?: string };
+  }>;
+};
+
+type JsonAchievement = {
+  id?: string;
+  imageLink?: string;
+  name?: string;
+  description?: string;
+  hidden?: boolean;
+  playersCompletedPercent?: number;
+  adjustedPlayersCompletedPercent?: number;
+  side?: string;
+  rarity?: string;
+};
+
+type JsonHideoutStation = {
+  id?: string;
+  name?: string;
+  imageLink?: string;
+  levels?: Array<{
+    level?: number;
+    skillRequirements?: Array<{
+      name?: string;
+      skill?: string | { name?: string };
+      level?: number;
+    }>;
+    stationLevelRequirements?: Array<{
+      station?: string | { name?: string };
+      level?: number;
+    }>;
+    itemRequirements?: Array<{
+      count?: number;
+      item?: string | { name?: string; iconLink?: string };
+      attributes?: Record<string, unknown>;
+    }>;
+  }>;
+};
+
 export interface CombinedCachePayload {
   tasks: TaskData;
   collectorItems: CollectorItemsData;
@@ -1158,6 +1274,485 @@ export async function saveCombinedCache(
   }
 }
 
+const buildTarkovJsonUrl = (
+  gameMode: GameMode,
+  endpoint: string,
+  language?: LanguageCode,
+): string => {
+  const suffix = language ? `_${normalizeLanguage(language)}` : "";
+  return `${TARKOV_JSON_API_BASE_URL}/${normalizeGameMode(gameMode)}/${endpoint}${suffix}`;
+};
+
+async function fetchJsonEndpoint<T>(url: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
+  } catch (err) {
+    throw new TypeError("Tarkov JSON API request failed", { cause: err });
+  }
+
+  if (!response.ok) {
+    await throwTarkovHttpError(response);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+const translate = (
+  translations: JsonTranslationMap,
+  key: string | null | undefined,
+  fallback = "",
+): string => {
+  if (!key) return fallback;
+  return translations[key] ?? key;
+};
+
+const translateIdName = (
+  translations: JsonTranslationMap,
+  id: string | null | undefined,
+  fallback = "",
+): string => {
+  if (!id) return fallback;
+  return translations[`${id} Name`] ?? translations[`${id} name`] ?? id;
+};
+
+const translateTraderName = (
+  translations: JsonTranslationMap,
+  id: string | null | undefined,
+): string => {
+  if (!id) return "Prapor";
+  return (
+    translations[`${id} Nickname`] ??
+    translations[`${id} Name`] ??
+    translations[id] ??
+    id
+  );
+};
+
+const normalizeJsonValueArray = <T>(
+  value: Record<string, T> | T[] | null | undefined,
+): T[] => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.values(value);
+  return [];
+};
+
+const buildJsonItem = (
+  itemId: string | null | undefined,
+  itemTranslations: JsonTranslationMap,
+): { id?: string; name: string; iconLink?: string } | null => {
+  if (!itemId) return null;
+  return {
+    id: itemId,
+    name: translateIdName(itemTranslations, itemId),
+    iconLink: buildIconLink(itemId),
+  };
+};
+
+const normalizeJsonRewardItems = (
+  rewards: JsonTaskRewards | undefined,
+  itemTranslations: JsonTranslationMap,
+): RewardItem[] =>
+  (rewards?.items ?? []).flatMap((reward) => {
+    const item = buildJsonItem(reward.item, itemTranslations);
+    return item ? [{ item, count: reward.count ?? 1 }] : [];
+  });
+
+const normalizeJsonRewards = (
+  rewards: JsonTaskRewards | undefined,
+  translations: {
+    tasks: JsonTranslationMap;
+    items: JsonTranslationMap;
+    traders: JsonTranslationMap;
+    hideout: JsonTranslationMap;
+  },
+): Task["finishRewards"] | undefined => {
+  if (!rewards) return undefined;
+
+  const items = normalizeJsonRewardItems(rewards, translations.items);
+  const offerUnlock = (rewards.offerUnlock ?? []).flatMap((unlock) => {
+    const item = buildJsonItem(unlock.item, translations.items);
+    if (!item || !unlock.trader) return [];
+    return [
+      {
+        item,
+        trader: {
+          id: unlock.trader,
+          name: translateTraderName(translations.traders, unlock.trader),
+        },
+        level: unlock.level ?? 1,
+      },
+    ];
+  });
+  const traderStanding = (rewards.traderStanding ?? []).map((reward) => ({
+    standing: reward.standing,
+    trader: reward.trader
+      ? {
+          id: reward.trader,
+          name: toTraderName(translateTraderName(translations.traders, reward.trader)),
+        }
+      : undefined,
+  }));
+  const customization = (rewards.customization ?? []).flatMap((reward) => {
+    const id = reward.id;
+    const name = translate(translations.tasks, reward.name, id ?? "");
+    return name
+      ? [
+          {
+            id,
+            name,
+            customizationType: reward.customizationType,
+            customizationTypeName: translate(
+              translations.tasks,
+              reward.customizationTypeName,
+              reward.customizationTypeName ?? "",
+            ),
+            imageLink: reward.imageLink,
+          },
+        ]
+      : [];
+  });
+  const achievement = (rewards.achievement ?? []).flatMap((reward) => {
+    const id = reward.id;
+    const name = translate(translations.tasks, reward.name, id ?? "");
+    return name
+      ? [
+          {
+            id,
+            name,
+            description: translate(
+              translations.tasks,
+              reward.description,
+              reward.description ?? "",
+            ),
+            imageLink: reward.imageLink,
+          },
+        ]
+      : [];
+  });
+  const skillLevelReward = (rewards.skillLevelReward ?? []).map((reward) => {
+    const skill =
+      typeof reward.skill === "string"
+        ? { id: reward.skill, name: translate(translations.tasks, reward.skill, reward.skill) }
+        : reward.skill;
+    return {
+      name: translate(translations.tasks, reward.name, reward.name ?? ""),
+      level: reward.level,
+      skill,
+    };
+  });
+  const traderUnlock = (rewards.traderUnlock ?? []).flatMap((reward) => {
+    const id = reward.id;
+    const name = reward.name
+      ? translate(translations.tasks, reward.name, reward.name)
+      : translateTraderName(translations.traders, id);
+    return name ? [{ id, name, imageLink: reward.imageLink }] : [];
+  });
+  const craftUnlock = (rewards.craftUnlock ?? []).map((reward) => {
+    const station =
+      typeof reward.station === "string"
+        ? {
+            name: translateIdName(translations.hideout, reward.station),
+          }
+        : reward.station;
+    return {
+      id: reward.id,
+      level: reward.level,
+      station,
+    };
+  });
+
+  return {
+    ...(items.length > 0 ? { items } : {}),
+    ...(offerUnlock.length > 0 ? { offerUnlock } : {}),
+    ...(traderStanding.length > 0 ? { traderStanding } : {}),
+    ...(customization.length > 0 ? { customization } : {}),
+    ...(achievement.length > 0 ? { achievement } : {}),
+    ...(skillLevelReward.length > 0 ? { skillLevelReward } : {}),
+    ...(traderUnlock.length > 0 ? { traderUnlock } : {}),
+    ...(craftUnlock.length > 0 ? { craftUnlock } : {}),
+  };
+};
+
+const normalizeJsonTasks = (
+  tasksById: Record<string, JsonTask>,
+  translations: {
+    tasks: JsonTranslationMap;
+    items: JsonTranslationMap;
+    traders: JsonTranslationMap;
+    maps: JsonTranslationMap;
+    hideout: JsonTranslationMap;
+  },
+): Task[] => {
+  const getTaskName = (taskId?: string | null) => {
+    if (!taskId) return "";
+    const task = tasksById[taskId];
+    return translate(translations.tasks, task?.name, translateIdName(translations.tasks, taskId));
+  };
+
+  return Object.values(tasksById).flatMap((rawTask): Task[] => {
+    if (!rawTask?.id) return [];
+
+    const objectives = normalizeJsonValueArray(rawTask.objectives).map(
+      (objective): TaskObjective => ({
+        id: objective.id,
+        description: translate(
+          translations.tasks,
+          objective.description,
+          objective.description ?? "",
+        ),
+        count: objective.count,
+        playerLevel: objective.playerLevel,
+        foundInRaid: objective.foundInRaid,
+        maps: (objective.maps ?? []).map((mapId) => ({
+          name: translateIdName(translations.maps, mapId),
+        })),
+        items: (objective.items ?? [])
+          .map((itemId) => buildJsonItem(itemId, translations.items))
+          .filter((item): item is NonNullable<typeof item> => item !== null),
+      }),
+    );
+    const map = rawTask.map
+      ? { name: translateIdName(translations.maps, rawTask.map) }
+      : null;
+    const maps = Array.from(
+      new Set([
+        ...(map?.name ? [map.name] : []),
+        ...objectives.flatMap(
+          (objective) => objective.maps?.map((entry) => entry.name) ?? [],
+        ),
+      ]),
+    ).map((name) => ({ name }));
+
+    return [
+      {
+        id: rawTask.id,
+        name: translate(translations.tasks, rawTask.name, rawTask.id),
+        wikiLink: rawTask.wikiLink ?? "",
+        experience: rawTask.experience,
+        minPlayerLevel: rawTask.minPlayerLevel ?? 1,
+        factionName: rawTask.factionName ?? null,
+        taskRequirements: (rawTask.taskRequirements ?? []).flatMap((req) => {
+          const taskId = req?.task;
+          return taskId
+            ? [{ task: { id: taskId, name: getTaskName(taskId) } }]
+            : [];
+        }),
+        map,
+        maps,
+        trader: {
+          name: toTraderName(translateTraderName(translations.traders, rawTask.trader)),
+        },
+        kappaRequired: rawTask.kappaRequired,
+        lightkeeperRequired: rawTask.lightkeeperRequired ?? false,
+        startRewards: (() => {
+          const items = normalizeJsonRewardItems(
+            rawTask.startRewards,
+            translations.items,
+          );
+          return items.length > 0 ? { items } : undefined;
+        })(),
+        finishRewards: normalizeJsonRewards(rawTask.finishRewards, translations),
+        objectives: objectives.length > 0 ? objectives : undefined,
+      },
+    ];
+  });
+};
+
+const normalizeJsonCollectorItems = (
+  collectorTask: JsonTask | undefined,
+  itemTranslations: JsonTranslationMap,
+): CollectorItemsData["data"]["task"] => ({
+  id: COLLECTOR_TASK_ID,
+  objectives: normalizeJsonValueArray(collectorTask?.objectives).flatMap(
+    (objective) => {
+      const items = (objective.items ?? [])
+        .map((itemId) => buildJsonItem(itemId, itemTranslations))
+        .filter((item): item is NonNullable<typeof item> => item !== null);
+      return items.length > 0 ? [{ items }] : [];
+    },
+  ),
+});
+
+const normalizeJsonAchievements = (
+  achievementsById: Record<string, JsonAchievement> | undefined,
+  taskTranslations: JsonTranslationMap,
+): AchievementsData["data"]["achievements"] =>
+  Object.values(achievementsById ?? {}).flatMap((achievement) => {
+    if (!achievement.id) return [];
+    return [
+      {
+        id: achievement.id,
+        imageLink: achievement.imageLink ?? buildIconLink(`achievement-${achievement.id}`),
+        name: translate(taskTranslations, achievement.name, achievement.id),
+        description: translate(
+          taskTranslations,
+          achievement.description,
+          achievement.description ?? "",
+        ),
+        hidden: achievement.hidden ?? false,
+        playersCompletedPercent: achievement.playersCompletedPercent ?? 0,
+        adjustedPlayersCompletedPercent:
+          achievement.adjustedPlayersCompletedPercent ?? 0,
+        side: translate(taskTranslations, achievement.side, achievement.side ?? ""),
+        rarity: translate(
+          taskTranslations,
+          achievement.rarity,
+          achievement.rarity ?? "",
+        ),
+      },
+    ];
+  });
+
+const normalizeJsonHideoutStations = (
+  stationsById: Record<string, JsonHideoutStation>,
+  hideoutTranslations: JsonTranslationMap,
+  itemTranslations: JsonTranslationMap,
+): HideoutStationsData["hideoutStations"] =>
+  Object.values(stationsById).map((station) => ({
+    name: translate(hideoutTranslations, station.name, station.id ?? ""),
+    imageLink: station.imageLink,
+    levels: (station.levels ?? []).map((level) => ({
+      level: level.level ?? 1,
+      skillRequirements: (level.skillRequirements ?? []).map((requirement) => ({
+        name: translate(
+          hideoutTranslations,
+          requirement.name,
+          requirement.name ?? "",
+        ),
+        skill: {
+          name:
+            typeof requirement.skill === "string"
+              ? translate(
+                  hideoutTranslations,
+                  requirement.skill,
+                  requirement.skill,
+                )
+              : translate(
+                  hideoutTranslations,
+                  requirement.skill?.name,
+                  requirement.skill?.name ?? "",
+                ),
+        },
+        level: requirement.level ?? 1,
+      })),
+      stationLevelRequirements: (level.stationLevelRequirements ?? []).map(
+        (requirement) => ({
+          station: {
+            name:
+              typeof requirement.station === "string"
+                ? translateIdName(hideoutTranslations, requirement.station)
+                : translate(
+                    hideoutTranslations,
+                    requirement.station?.name,
+                    requirement.station?.name ?? "",
+                  ),
+          },
+          level: requirement.level ?? 1,
+        }),
+      ),
+      itemRequirements: (level.itemRequirements ?? []).flatMap((requirement) => {
+        const item =
+          typeof requirement.item === "string"
+            ? buildJsonItem(requirement.item, itemTranslations)
+            : requirement.item
+              ? {
+                  name: translate(
+                    itemTranslations,
+                    requirement.item.name,
+                    requirement.item.name ?? "",
+                  ),
+                  iconLink: requirement.item.iconLink,
+                }
+              : null;
+        return item
+          ? [
+              {
+                count: requirement.count ?? 1,
+                item,
+                attributes: Object.entries(requirement.attributes ?? {}).map(
+                  ([name, value]) => ({
+                    type: typeof value,
+                    name,
+                    value: String(value),
+                  }),
+                ),
+              },
+            ]
+          : [];
+      }),
+    })),
+  }));
+
+async function fetchCombinedJsonApiData(
+  gameMode: GameMode,
+  language: LanguageCode,
+): Promise<CombinedApiData["data"]> {
+  const tasksPayload = await fetchJsonEndpoint<JsonTasksResponse>(
+    buildTarkovJsonUrl(gameMode, "tasks"),
+  );
+  const tasksById = tasksPayload.data?.tasks;
+  if (!tasksById || Array.isArray(tasksById)) {
+    throw new Error("Tarkov JSON API response did not include keyed tasks.");
+  }
+
+  const [
+    taskTranslationsPayload,
+    hideoutPayload,
+    hideoutTranslationsPayload,
+    itemTranslationsPayload,
+    traderTranslationsPayload,
+    mapTranslationsPayload,
+  ] = await Promise.all([
+    fetchJsonEndpoint<{ data?: JsonTranslationMap }>(
+      buildTarkovJsonUrl(gameMode, "tasks", language),
+    ),
+    fetchJsonEndpoint<JsonHideoutResponse>(buildTarkovJsonUrl(gameMode, "hideout")),
+    fetchJsonEndpoint<{ data?: JsonTranslationMap }>(
+      buildTarkovJsonUrl(gameMode, "hideout", language),
+    ),
+    fetchJsonEndpoint<{ data?: JsonTranslationMap }>(
+      buildTarkovJsonUrl(gameMode, "items", language),
+    ),
+    fetchJsonEndpoint<{ data?: JsonTranslationMap }>(
+      buildTarkovJsonUrl(gameMode, "traders", language),
+    ),
+    fetchJsonEndpoint<{ data?: JsonTranslationMap }>(
+      buildTarkovJsonUrl(gameMode, "maps", language),
+    ),
+  ]);
+
+  const taskTranslations = taskTranslationsPayload.data ?? {};
+  const hideoutTranslations = hideoutTranslationsPayload.data ?? {};
+  const itemTranslations = itemTranslationsPayload.data ?? {};
+  const traderTranslations = traderTranslationsPayload.data ?? {};
+  const mapTranslations = mapTranslationsPayload.data ?? {};
+
+  const tasks = normalizeJsonTasks(tasksById, {
+    tasks: taskTranslations,
+    items: itemTranslations,
+    traders: traderTranslations,
+    maps: mapTranslations,
+    hideout: hideoutTranslations,
+  });
+
+  return {
+    tasks,
+    task: normalizeJsonCollectorItems(tasksById[COLLECTOR_TASK_ID], itemTranslations),
+    achievements: normalizeJsonAchievements(
+      tasksPayload.data?.achievements,
+      taskTranslations,
+    ),
+    hideoutStations: normalizeJsonHideoutStations(
+      hideoutPayload.data ?? {},
+      hideoutTranslations,
+      itemTranslations,
+    ),
+  };
+}
+
 async function fetchTarkovApi(init: RequestInit): Promise<Response> {
   try {
     return await fetch(getTarkovApiUrl(), init);
@@ -1371,6 +1966,39 @@ export async function fetchCombinedData(
 }> {
   const normalizedGameMode = normalizeGameMode(gameMode);
   const normalizedLanguage = normalizeLanguage(language);
+
+  try {
+    onStage?.("request");
+    const jsonData = await fetchCombinedJsonApiData(
+      normalizedGameMode,
+      normalizedLanguage,
+    );
+    onStage?.("parse");
+    return await finalizeCombinedData(
+      jsonData,
+      normalizedGameMode,
+      normalizedLanguage,
+      onStage,
+    );
+  } catch (err) {
+    console.warn(
+      "[Tarkov API] JSON data fetch failed; falling back to GraphQL.",
+      err,
+    );
+  }
+
+  return fetchCombinedGraphqlData(
+    normalizedGameMode,
+    normalizedLanguage,
+    onStage,
+  );
+}
+
+async function fetchCombinedGraphqlData(
+  normalizedGameMode: GameMode,
+  normalizedLanguage: LanguageCode,
+  onStage?: (stage: FetchStage) => void,
+): Promise<CombinedCachePayload & { overlay: Overlay }> {
   onStage?.("request");
   const response = await fetchTarkovApi({
     method: "POST",
@@ -1400,9 +2028,23 @@ export async function fetchCombinedData(
     );
   }
 
+  return finalizeCombinedData(
+    result.data,
+    normalizedGameMode,
+    normalizedLanguage,
+    onStage,
+  );
+}
+
+async function finalizeCombinedData(
+  data: CombinedApiData["data"],
+  normalizedGameMode: GameMode,
+  normalizedLanguage: LanguageCode,
+  onStage?: (stage: FetchStage) => void,
+): Promise<CombinedCachePayload & { overlay: Overlay }> {
   // Aggregated maps from objectives into task.maps array
   // Apply task requirement overrides before processing
-  const tasksWithOverrides = applyTaskRequirementOverrides(result.data.tasks);
+  const tasksWithOverrides = applyTaskRequirementOverrides(data.tasks);
 
   // Apply Overlay (Remote with Local Fallback)
   onStage?.("overlay-fetch");
@@ -1442,10 +2084,10 @@ export async function fetchCombinedData(
 
   const collectorItems: CollectorItemsData = {
     data: {
-      task: result.data.task
+      task: data.task
         ? normalizeCollectorItems(
             applyTaskOverlay(
-              result.data.task,
+              data.task,
               overlay,
             ) as CollectorItemsData["data"]["task"],
           )
@@ -1458,13 +2100,13 @@ export async function fetchCombinedData(
 
   const achievements: AchievementsData = {
     data: {
-      achievements: result.data.achievements ?? [],
+      achievements: data.achievements ?? [],
     },
   };
 
   const hideoutStations: { data: HideoutStationsData } = {
     data: {
-      hideoutStations: result.data.hideoutStations || [],
+      hideoutStations: data.hideoutStations || [],
     },
   };
 

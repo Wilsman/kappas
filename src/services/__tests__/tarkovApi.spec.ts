@@ -21,6 +21,7 @@ interface MockResponse<T> {
   ok: boolean;
   status: number;
   json: () => Promise<T>;
+  text?: () => Promise<string>;
 }
 
 function mockFetchOnce<T>(data: T, ok = true, status = 200) {
@@ -35,6 +36,24 @@ function mockFetchOnce<T>(data: T, ok = true, status = 200) {
     .mockResolvedValue(mockResponse);
 }
 
+function mockJsonResponse<T>(data: T, ok = true, status = 200): MockResponse<T> {
+  return {
+    ok,
+    status,
+    json: vi.fn().mockResolvedValue(data),
+    text: vi.fn().mockResolvedValue(JSON.stringify(data)),
+  };
+}
+
+function mockJsonFetchSequence(...responses: MockResponse<unknown>[]) {
+  const fetchMock = vi.fn();
+  responses.forEach((response) => {
+    fetchMock.mockResolvedValueOnce(response);
+  });
+  (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+  return fetchMock;
+}
+
 describe("fetchCombinedData", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -44,6 +63,388 @@ describe("fetchCombinedData", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
+  });
+
+  it("uses JSON endpoints as the primary data source and normalizes app data", async () => {
+    const tasksPayload = {
+      data: {
+        tasks: {
+          req1: {
+            id: "req1",
+            name: "req1 name",
+            trader: "trader1",
+            minPlayerLevel: 1,
+            taskRequirements: [],
+            objectives: {},
+          },
+          t1: {
+            id: "t1",
+            name: "t1 name",
+            trader: "trader1",
+            wikiLink: "wiki",
+            minPlayerLevel: 2,
+            taskRequirements: [{ task: "req1" }],
+            map: "map1",
+            objectives: {
+              obj1: {
+                id: "obj1",
+                description: "obj1 description",
+                count: 2,
+                maps: ["map1"],
+                items: ["item1"],
+                foundInRaid: true,
+              },
+            },
+            startRewards: {
+              items: [{ item: "item2", count: 1 }],
+            },
+            finishRewards: {
+              items: [{ item: "item3", count: 3 }],
+              traderStanding: [{ trader: "trader1", standing: 0.02 }],
+            },
+            experience: 1000,
+            factionName: "Any",
+            kappaRequired: true,
+            lightkeeperRequired: false,
+          },
+          "5c51aac186f77432ea65c552": {
+            id: "5c51aac186f77432ea65c552",
+            name: "collector name",
+            trader: "trader1",
+            minPlayerLevel: 1,
+            taskRequirements: [],
+            objectives: {
+              collector: {
+                id: "collector",
+                description: "collector description",
+                items: ["collector1"],
+              },
+            },
+          },
+        },
+        achievements: {
+          a1: {
+            id: "a1",
+            name: "a1 name",
+            description: "a1 description",
+            imageLink: "achievement.png",
+            hidden: false,
+            playersCompletedPercent: 1,
+            adjustedPlayersCompletedPercent: 2,
+            side: "Pmc",
+            rarity: "Achievements/Tab/CommonRarity",
+          },
+        },
+      },
+    };
+    const taskTranslations = {
+      "t1 name": "Task One",
+      "req1 name": "Required Task",
+      "obj1 description": "Find the thing",
+      "collector description": "Hand over collector item",
+      "a1 name": "Achievement One",
+      "a1 description": "Achievement description",
+      "Achievements/Tab/CommonRarity": "Common",
+    };
+    const hideoutPayload = {
+      data: {
+        station1: {
+          id: "station1",
+          name: "station1 Name",
+          imageLink: "station.png",
+          levels: [
+            {
+              level: 1,
+              skillRequirements: [
+                { name: "hideout_Health", skill: "Health", level: 2 },
+              ],
+              stationLevelRequirements: [],
+              itemRequirements: [
+                {
+                  item: "item4",
+                  count: 4,
+                  attributes: { foundInRaid: true },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+    const hideoutTranslations = {
+      "station1 Name": "Workbench",
+      hideout_Health: "Health",
+      Health: "Health",
+    };
+    const itemTranslations = {
+      "item1 Name": "Quest item",
+      "item2 Name": "Start reward",
+      "item3 Name": "Finish reward",
+      "item4 Name": "Hideout item",
+      "collector1 Name": "Collector item",
+    };
+    const traderTranslations = {
+      "trader1 Nickname": "Therapist",
+    };
+    const mapTranslations = {
+      "map1 Name": "Customs",
+    };
+    const overlayResponse = {
+      tasks: {},
+      $meta: { version: "test", generated: "2026-07-06T00:00:00.000Z" },
+    };
+
+    const fetchMock = mockJsonFetchSequence(
+      mockJsonResponse(tasksPayload),
+      mockJsonResponse({ data: taskTranslations }),
+      mockJsonResponse(hideoutPayload),
+      mockJsonResponse({ data: hideoutTranslations }),
+      mockJsonResponse({ data: itemTranslations }),
+      mockJsonResponse({ data: traderTranslations }),
+      mockJsonResponse({ data: mapTranslations }),
+      mockJsonResponse(overlayResponse),
+    );
+
+    const result = await fetchCombinedData();
+
+    expect(result.tasks.data.tasks).toHaveLength(3);
+    expect(result.tasks.data.tasks.find((task) => task.id === "t1")).toMatchObject({
+      name: "Task One",
+      minPlayerLevel: 2,
+      wikiLink: "wiki",
+      map: { name: "Customs" },
+      maps: [{ name: "Customs" }],
+      trader: { name: "Therapist" },
+      taskRequirements: [{ task: { id: "req1", name: "Required Task" } }],
+      objectives: [
+        {
+          id: "obj1",
+          description: "Find the thing",
+          count: 2,
+          foundInRaid: true,
+          maps: [{ name: "Customs" }],
+          items: [
+            {
+              id: "item1",
+              name: "Quest item",
+              iconLink: "https://assets.tarkov.dev/item1-icon.webp",
+            },
+          ],
+        },
+      ],
+      startRewards: {
+        items: [
+          {
+            item: {
+              id: "item2",
+              name: "Start reward",
+              iconLink: "https://assets.tarkov.dev/item2-icon.webp",
+            },
+            count: 1,
+          },
+        ],
+      },
+      finishRewards: {
+        items: [
+          {
+            item: {
+              id: "item3",
+              name: "Finish reward",
+              iconLink: "https://assets.tarkov.dev/item3-icon.webp",
+            },
+            count: 3,
+          },
+        ],
+        traderStanding: [
+          { standing: 0.02, trader: { id: "trader1", name: "Therapist" } },
+        ],
+      },
+    });
+    expect(result.collectorItems.data.task.objectives[0].items[0]).toMatchObject({
+      id: "collector1",
+      name: "Collector item",
+      iconLink: "https://assets.tarkov.dev/collector1-icon.webp",
+    });
+    expect(result.achievements.data.achievements[0]).toMatchObject({
+      id: "a1",
+      name: "Achievement One",
+      description: "Achievement description",
+      rarity: "Common",
+    });
+    expect(result.hideoutStations.data.hideoutStations[0]).toMatchObject({
+      name: "Workbench",
+      levels: [
+        {
+          level: 1,
+          itemRequirements: [
+            {
+              count: 4,
+              item: {
+                id: "item4",
+                name: "Hideout item",
+                iconLink: "https://assets.tarkov.dev/item4-icon.webp",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://api.tarkov.dev/graphql",
+      expect.anything(),
+    );
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "https://json.tarkov.dev/regular/tasks",
+      "https://json.tarkov.dev/regular/tasks_en",
+      "https://json.tarkov.dev/regular/hideout",
+      "https://json.tarkov.dev/regular/hideout_en",
+      "https://json.tarkov.dev/regular/items_en",
+      "https://json.tarkov.dev/regular/traders_en",
+      "https://json.tarkov.dev/regular/maps_en",
+      "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json",
+    ]);
+  });
+
+  it("requests PvE and localized JSON endpoint suffixes", async () => {
+    const emptyTasksPayload = {
+      data: {
+        tasks: {},
+        achievements: {},
+      },
+    };
+    const overlayResponse = {
+      tasks: {},
+      $meta: { version: "test", generated: "2026-07-06T00:00:00.000Z" },
+    };
+    const fetchMock = mockJsonFetchSequence(
+      mockJsonResponse(emptyTasksPayload),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse(overlayResponse),
+    );
+
+    await fetchCombinedData("pve", "de");
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0])).slice(0, 7)).toEqual([
+      "https://json.tarkov.dev/pve/tasks",
+      "https://json.tarkov.dev/pve/tasks_de",
+      "https://json.tarkov.dev/pve/hideout",
+      "https://json.tarkov.dev/pve/hideout_de",
+      "https://json.tarkov.dev/pve/items_de",
+      "https://json.tarkov.dev/pve/traders_de",
+      "https://json.tarkov.dev/pve/maps_de",
+    ]);
+  });
+
+  it("falls back to IDs and derived icons when JSON translations are missing", async () => {
+    const tasksPayload = {
+      data: {
+        tasks: {
+          t1: {
+            id: "t1",
+            name: "missing task key",
+            trader: "missing-trader",
+            minPlayerLevel: 1,
+            taskRequirements: [],
+            objectives: {
+              obj1: {
+                id: "obj1",
+                description: "missing objective key",
+                items: ["missing-item"],
+              },
+            },
+          },
+        },
+        achievements: {},
+      },
+    };
+    const overlayResponse = {
+      tasks: {},
+      $meta: { version: "test", generated: "2026-07-06T00:00:00.000Z" },
+    };
+    mockJsonFetchSequence(
+      mockJsonResponse(tasksPayload),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse(overlayResponse),
+    );
+
+    const result = await fetchCombinedData();
+    const task = result.tasks.data.tasks[0];
+
+    expect(task.name).toBe("missing task key");
+    expect(task.trader.name).toBe("missing-trader");
+    expect(task.objectives?.[0]).toMatchObject({
+      description: "missing objective key",
+      items: [
+        {
+          id: "missing-item",
+          name: "missing-item",
+          iconLink: "https://assets.tarkov.dev/missing-item-icon.webp",
+        },
+      ],
+    });
+  });
+
+  it("falls back to GraphQL when a JSON endpoint fails after the keyed task payload loads", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const graphResponse = {
+      data: {
+        tasks: [
+          {
+            id: "graph-task",
+            minPlayerLevel: 1,
+            kappaRequired: false,
+            lightkeeperRequired: false,
+            map: null,
+            taskRequirements: [],
+            trader: { name: "Prapor", imageLink: "img" },
+            wikiLink: "link",
+            name: "Graph Task",
+            objectives: [],
+          },
+        ],
+        task: { objectives: [] },
+        achievements: [],
+        hideoutStations: [],
+      },
+    };
+    const overlayResponse = {
+      tasks: {},
+      $meta: { version: "test", generated: "2026-07-06T00:00:00.000Z" },
+    };
+    const fetchMock = mockJsonFetchSequence(
+      mockJsonResponse({ data: { tasks: {}, achievements: {} } }),
+      mockJsonResponse({ error: "failed" }, false, 503),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse(graphResponse),
+      mockJsonResponse(overlayResponse),
+    );
+
+    const result = await fetchCombinedData();
+
+    expect(result.tasks.data.tasks[0].id).toBe("graph-task");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[Tarkov API] JSON data fetch failed; falling back to GraphQL.",
+      expect.any(Error),
+    );
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes("https://api.tarkov.dev/graphql"),
+      ),
+    ).toBe(true);
   });
 
   it("returns tasks, collectorItems, achievements, and hideoutStations on success", async () => {
@@ -118,7 +519,7 @@ describe("fetchCombinedData", () => {
 
     // Ensure correct fetch calls
     const fetchSpy = globalThis.fetch as unknown as Mock;
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
     const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
     const graphCall = calls.find((call) =>
       String(call[0]).includes("https://api.tarkov.dev/graphql"),
@@ -321,7 +722,14 @@ describe("fetchCombinedData", () => {
   it("includes HTTP error response body details", async () => {
     (globalThis as unknown as { fetch: Mock }).fetch = vi
       .fn()
-      .mockResolvedValue(
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "JSON API unavailable" }), {
+          status: 503,
+          statusText: "Service Unavailable",
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             error: "Tarkov API upstream error",
@@ -639,6 +1047,11 @@ describe("fetchCombinedData", () => {
 
     (globalThis as unknown as { fetch: Mock }).fetch = vi
       .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ data: { tasks: [], achievements: [] } }),
+      })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
