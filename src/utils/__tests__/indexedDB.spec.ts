@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   TaskStorage,
   ExportImportService,
+  AutoBackupService,
   taskStorage,
   ExportData,
+  type AllProfilesExportData,
 } from "../indexedDB";
 import "./setup";
 
@@ -711,5 +713,240 @@ describe("ExportImportService - File Operations", () => {
     await expect(ExportImportService.readImportFile(file)).rejects.toThrow(
       "Failed to parse"
     );
+  });
+});
+
+describe("AutoBackupService", () => {
+  const profile = {
+    id: "backup-profile",
+    name: "Backup Profile",
+    createdAt: 1,
+  };
+
+  async function seedProfileData(taskId = "task-backup") {
+    taskStorage.setProfile(profile.id);
+    await taskStorage.init();
+    await taskStorage.saveCompletedTasks(new Set([taskId]));
+  }
+
+  function buildAllProfilesExport(id: string): AllProfilesExportData {
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      activeProfileId: id,
+      profiles: [
+        {
+          id,
+          name: "Legacy Profile",
+          createdAt: 1,
+          data: {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            profileId: id,
+            profileName: "Legacy Profile",
+            completedTasks: ["legacy-task"],
+            completedTaskObjectives: [],
+            completedCollectorItems: [],
+            completedHideoutItems: [],
+            completedAchievements: [],
+            completedStorylineObjectives: [],
+            completedStorylineMapNodes: [],
+            taskObjectiveItemProgress: {},
+            hideoutItemQuantities: {},
+            prestigeProgress: {},
+            userPreferences: {},
+          },
+        },
+      ],
+    };
+  }
+
+  it("should create, list, and read automatic backups from IndexedDB", async () => {
+    await seedProfileData();
+
+    const metadata = await AutoBackupService.createBackup(
+      [profile],
+      profile.id,
+      "test-backup",
+      { force: true },
+    );
+
+    expect(metadata).not.toBeNull();
+    const backups = await AutoBackupService.listBackups();
+    expect(backups).toHaveLength(1);
+    expect(backups[0].reason).toBe("test-backup");
+
+    const data = await AutoBackupService.readBackup(backups[0].id);
+    expect(data?.profiles[0].data.completedTasks).toEqual(["task-backup"]);
+  });
+
+  it("should list newest backups first and prune to five", async () => {
+    await seedProfileData();
+    vi.useFakeTimers();
+
+    try {
+      for (let index = 0; index < 6; index++) {
+        vi.setSystemTime(new Date(`2026-01-0${index + 1}T00:00:00.000Z`));
+        await AutoBackupService.createBackup(
+          [profile],
+          profile.id,
+          `forced-${index}`,
+          { force: true },
+        );
+      }
+
+      const backups = await AutoBackupService.listBackups();
+      expect(backups).toHaveLength(5);
+      expect(backups[0].reason).toBe("forced-5");
+      expect(backups.some((backup) => backup.reason === "forced-0")).toBe(
+        false,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("should throttle repeated backup reasons unless forced", async () => {
+    await seedProfileData();
+
+    const first = await AutoBackupService.createBackup(
+      [profile],
+      profile.id,
+      "startup-safety",
+    );
+    const second = await AutoBackupService.createBackup(
+      [profile],
+      profile.id,
+      "startup-safety",
+    );
+    const forced = await AutoBackupService.createBackup(
+      [profile],
+      profile.id,
+      "startup-safety",
+      { force: true },
+    );
+
+    expect(second?.id).toBe(first?.id);
+    expect(forced?.id).not.toBe(first?.id);
+    expect(await AutoBackupService.listBackups()).toHaveLength(2);
+  });
+
+  it("should migrate valid legacy localStorage backups and remove migrated keys", async () => {
+    const legacy = buildAllProfilesExport("legacy-profile");
+    const manifest = [
+      {
+        id: "legacy-backup",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        reason: "legacy",
+        profileCount: 1,
+        activeProfileId: "legacy-profile",
+      },
+    ];
+    localStorage.setItem("taskTracker_autoBackups_v1", JSON.stringify(manifest));
+    localStorage.setItem(
+      "taskTracker_autoBackup_v1::legacy-backup",
+      JSON.stringify(legacy),
+    );
+
+    const backups = await AutoBackupService.listBackups();
+    const data = await AutoBackupService.readBackup("legacy-backup");
+
+    expect(backups).toHaveLength(1);
+    expect(data?.profiles[0].data.completedTasks).toEqual(["legacy-task"]);
+    expect(localStorage.getItem("taskTracker_autoBackups_v1")).toBeNull();
+    expect(
+      localStorage.getItem("taskTracker_autoBackup_v1::legacy-backup"),
+    ).toBeNull();
+  });
+
+  it("should ignore invalid and missing legacy backup payloads", async () => {
+    const manifest = [
+      {
+        id: "invalid-backup",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        reason: "legacy",
+        profileCount: 1,
+        activeProfileId: "legacy-profile",
+      },
+      {
+        id: "missing-backup",
+        createdAt: "2026-01-02T00:00:00.000Z",
+        reason: "legacy",
+        profileCount: 1,
+        activeProfileId: "legacy-profile",
+      },
+    ];
+    localStorage.setItem("taskTracker_autoBackups_v1", JSON.stringify(manifest));
+    localStorage.setItem(
+      "taskTracker_autoBackup_v1::invalid-backup",
+      JSON.stringify({ version: 1, exportedAt: new Date().toISOString() }),
+    );
+
+    expect(await AutoBackupService.listBackups()).toEqual([]);
+    expect(localStorage.getItem("taskTracker_autoBackups_v1")).toBeNull();
+  });
+
+  it("should survive localStorage quota errors during legacy cleanup", async () => {
+    const legacy = buildAllProfilesExport("quota-profile");
+    const manifest = [
+      {
+        id: "quota-backup",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        reason: "legacy",
+        profileCount: 1,
+        activeProfileId: "quota-profile",
+      },
+    ];
+    localStorage.setItem("taskTracker_autoBackups_v1", JSON.stringify(manifest));
+    localStorage.setItem(
+      "taskTracker_autoBackup_v1::quota-backup",
+      JSON.stringify(legacy),
+    );
+    const removeSpy = vi
+      .spyOn(Storage.prototype, "removeItem")
+      .mockImplementation(() => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError");
+      });
+
+    try {
+      const backups = await AutoBackupService.listBackups();
+      const data = await AutoBackupService.readBackup("quota-backup");
+
+      expect(backups).toHaveLength(1);
+      expect(data?.profiles[0].id).toBe("quota-profile");
+    } finally {
+      removeSpy.mockRestore();
+    }
+  });
+
+  it("should return null without throwing when automatic backup storage fails", async () => {
+    await seedProfileData();
+    const realIndexedDB = indexedDB;
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failingIndexedDB = {
+      ...realIndexedDB,
+      open: () => {
+        const request = {
+          error: new DOMException("IndexedDB failed", "UnknownError"),
+          onsuccess: null,
+          onerror: null as ((event: Event) => void) | null,
+          onupgradeneeded: null,
+        };
+        Promise.resolve().then(() => request.onerror?.(new Event("error")));
+        return request as unknown as IDBOpenDBRequest;
+      },
+    };
+    vi.stubGlobal("indexedDB", failingIndexedDB);
+
+    try {
+      await expect(
+        AutoBackupService.createBackup([profile], profile.id, "failure", {
+          force: true,
+        }),
+      ).resolves.toBeNull();
+    } finally {
+      vi.stubGlobal("indexedDB", realIndexedDB);
+      warnSpy.mockRestore();
+    }
   });
 });

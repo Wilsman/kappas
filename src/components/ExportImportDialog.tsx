@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Download,
   Upload,
@@ -88,6 +88,9 @@ export function ExportImportDialog({
   const [allProfilesImportPreview, setAllProfilesImportPreview] =
     useState<AllProfilesImportPreview | null>(null);
   const [newProfileName, setNewProfileName] = useState("");
+  const [autoBackups, setAutoBackups] = useState<
+    Awaited<ReturnType<typeof AutoBackupService.listBackups>>
+  >([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetState = useCallback(() => {
@@ -104,6 +107,21 @@ export function ExportImportDialog({
     resetState();
     onOpenChange(false);
   }, [onOpenChange, resetState]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    void AutoBackupService.listBackups().then((backups) => {
+      if (!cancelled) {
+        setAutoBackups(backups);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const handleExport = useCallback(async () => {
     setIsProcessing(true);
@@ -244,8 +262,8 @@ export function ExportImportDialog({
     }
   }, [allProfilesImportPreview, onImportAllProfiles, handleClose]);
 
-  const handleDownloadAutoBackup = useCallback((backupId: string) => {
-    const data = AutoBackupService.readBackup(backupId);
+  const handleDownloadAutoBackup = useCallback(async (backupId: string) => {
+    const data = await AutoBackupService.readBackup(backupId);
     if (!data) {
       setError("Automatic backup could not be read");
       return;
@@ -291,8 +309,6 @@ export function ExportImportDialog({
       },
     ];
   };
-
-  const autoBackups = AutoBackupService.listBackups();
 
   const handleOpenGameLogImport = useCallback(() => {
     handleClose();

@@ -21,6 +21,9 @@ const WORKING_ON_STORE = "workingOnItems";
 const TASK_OBJECTIVES_STORE = "completedTaskObjectives";
 const TASK_OBJECTIVE_ITEM_PROGRESS_STORE = "taskObjectiveItemProgress";
 const API_CACHE_STORE = "apiCache";
+const AUTO_BACKUP_DB_NAME = "TaskTrackerAutoBackups";
+const AUTO_BACKUP_DB_VERSION = 1;
+const AUTO_BACKUP_STORE = "autoBackups";
 const TASKS_SNAPSHOT_KEY = "taskTracker_completedTasks_snapshot_v1";
 const AUTO_BACKUP_MANIFEST_KEY = "taskTracker_autoBackups_v1";
 const AUTO_BACKUP_ENTRY_PREFIX = "taskTracker_autoBackup_v1";
@@ -33,6 +36,10 @@ export interface AutoBackupMetadata {
   reason: string;
   profileCount: number;
   activeProfileId: string;
+}
+
+interface AutoBackupRecord extends AutoBackupMetadata {
+  data: AllProfilesExportData;
 }
 
 function getTaskSnapshotStorageKey(profileId: string): string {
@@ -1110,40 +1117,224 @@ function readAutoBackupManifest(): AutoBackupMetadata[] {
   }
 }
 
-function writeAutoBackupManifest(manifest: AutoBackupMetadata[]): void {
-  localStorage.setItem(AUTO_BACKUP_MANIFEST_KEY, JSON.stringify(manifest));
-}
-
 function getAutoBackupEntryKey(id: string): string {
   return `${AUTO_BACKUP_ENTRY_PREFIX}::${id}`;
 }
 
-function pruneAutoBackups(manifest: AutoBackupMetadata[]): AutoBackupMetadata[] {
-  const sorted = [...manifest].sort(
+function sortAutoBackups<T extends AutoBackupMetadata>(backups: T[]): T[] {
+  return [...backups].sort(
     (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
   );
-  const kept = sorted.slice(0, MAX_AUTO_BACKUPS);
-  const keptIds = new Set(kept.map((entry) => entry.id));
-  sorted.forEach((entry) => {
-    if (!keptIds.has(entry.id)) {
-      localStorage.removeItem(getAutoBackupEntryKey(entry.id));
-    }
+}
+
+function openAutoBackupDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(AUTO_BACKUP_DB_NAME, AUTO_BACKUP_DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(AUTO_BACKUP_STORE)) {
+        db.createObjectStore(AUTO_BACKUP_STORE, { keyPath: "id" });
+      }
+    };
   });
+}
+
+async function withAutoBackupStore<T>(
+  mode: IDBTransactionMode,
+  callback: (store: IDBObjectStore) => IDBRequest<T> | void,
+): Promise<T | undefined> {
+  const db = await openAutoBackupDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([AUTO_BACKUP_STORE], mode);
+    const store = transaction.objectStore(AUTO_BACKUP_STORE);
+    const request = callback(store);
+    let requestResult: T | undefined;
+    let requestDone = !request;
+    let transactionDone = false;
+    let settled = false;
+
+    const resolveIfDone = () => {
+      if (!settled && requestDone && transactionDone) {
+        settled = true;
+        db.close();
+        resolve(requestResult);
+      }
+    };
+
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      db.close();
+      reject(error);
+    };
+
+    if (request) {
+      request.onsuccess = () => {
+        requestResult = request.result;
+        requestDone = true;
+        resolveIfDone();
+      };
+      request.onerror = () => rejectOnce(request.error);
+    }
+
+    transaction.oncomplete = () => {
+      transactionDone = true;
+      resolveIfDone();
+    };
+    transaction.onerror = () => {
+      rejectOnce(transaction.error);
+    };
+    transaction.onabort = () => {
+      rejectOnce(transaction.error);
+    };
+  });
+}
+
+async function getAllAutoBackupRecords(): Promise<AutoBackupRecord[]> {
+  const records =
+    (await withAutoBackupStore<AutoBackupRecord[]>("readonly", (store) =>
+      store.getAll(),
+    )) ?? [];
+  return records.filter((record): record is AutoBackupRecord => {
+    const data = record?.data as
+      | ExportData
+      | AllProfilesExportData
+      | undefined;
+    return (
+      typeof record?.id === "string" &&
+      typeof record.createdAt === "string" &&
+      typeof record.reason === "string" &&
+      typeof record.profileCount === "number" &&
+      typeof record.activeProfileId === "string" &&
+      !!data &&
+      ExportImportService.isAllProfilesExport(data)
+    );
+  });
+}
+
+async function putAutoBackupRecord(record: AutoBackupRecord): Promise<void> {
+  await withAutoBackupStore("readwrite", (store) => store.put(record));
+}
+
+async function deleteAutoBackupRecord(id: string): Promise<void> {
+  await withAutoBackupStore("readwrite", (store) => store.delete(id));
+}
+
+async function getAutoBackupRecord(
+  id: string,
+): Promise<AutoBackupRecord | null> {
+  const record = await withAutoBackupStore<AutoBackupRecord>(
+    "readonly",
+    (store) => store.get(id),
+  );
+  if (!record || !ExportImportService.isAllProfilesExport(record.data)) {
+    return null;
+  }
+  return record;
+}
+
+function removeLegacyAutoBackupEntry(id: string): void {
+  try {
+    localStorage.removeItem(getAutoBackupEntryKey(id));
+  } catch {
+    /* ignore localStorage cleanup errors */
+  }
+}
+
+function removeLegacyAutoBackupManifest(): void {
+  try {
+    localStorage.removeItem(AUTO_BACKUP_MANIFEST_KEY);
+  } catch {
+    /* ignore localStorage cleanup errors */
+  }
+}
+
+async function migrateLegacyAutoBackups(): Promise<void> {
+  const manifest = readAutoBackupManifest();
+  if (!manifest.length) return;
+
+  for (const metadata of sortAutoBackups(manifest)) {
+    try {
+      const raw = localStorage.getItem(getAutoBackupEntryKey(metadata.id));
+      if (!raw) {
+        removeLegacyAutoBackupEntry(metadata.id);
+        continue;
+      }
+
+      const parsed = JSON.parse(raw) as ExportData | AllProfilesExportData;
+      if (!ExportImportService.isAllProfilesExport(parsed)) {
+        removeLegacyAutoBackupEntry(metadata.id);
+        continue;
+      }
+
+      await putAutoBackupRecord({ ...metadata, data: parsed });
+      removeLegacyAutoBackupEntry(metadata.id);
+    } catch {
+      // Keep unreadable or unwritable legacy backups in place for a later retry.
+    }
+  }
+
+  try {
+    const remaining = readAutoBackupManifest().some((entry) =>
+      localStorage.getItem(getAutoBackupEntryKey(entry.id)),
+    );
+    if (!remaining) {
+      removeLegacyAutoBackupManifest();
+    }
+  } catch {
+    /* ignore localStorage cleanup errors */
+  }
+}
+
+async function pruneAutoBackups(
+  backups: AutoBackupRecord[],
+): Promise<AutoBackupRecord[]> {
+  const kept = sortAutoBackups(backups).slice(0, MAX_AUTO_BACKUPS);
+  const keptIds = new Set(kept.map((entry) => entry.id));
+  await Promise.all(
+    backups
+      .filter((entry) => !keptIds.has(entry.id))
+      .map((entry) => deleteAutoBackupRecord(entry.id)),
+  );
   return kept;
 }
 
 export class AutoBackupService {
-  static listBackups(): AutoBackupMetadata[] {
-    return pruneAutoBackups(readAutoBackupManifest());
+  private static hasWarnedStorageFailure = false;
+
+  private static warnStorageFailure(message: string, err: unknown): void {
+    if (this.hasWarnedStorageFailure) return;
+    this.hasWarnedStorageFailure = true;
+    console.warn(message, err);
   }
 
-  static readBackup(id: string): AllProfilesExportData | null {
+  static async listBackups(): Promise<AutoBackupMetadata[]> {
     try {
-      const raw = localStorage.getItem(getAutoBackupEntryKey(id));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return ExportImportService.isAllProfilesExport(parsed) ? parsed : null;
-    } catch {
+      await migrateLegacyAutoBackups();
+      const backups = await pruneAutoBackups(await getAllAutoBackupRecords());
+      return backups.map((backup) => ({
+        id: backup.id,
+        createdAt: backup.createdAt,
+        reason: backup.reason,
+        profileCount: backup.profileCount,
+        activeProfileId: backup.activeProfileId,
+      }));
+    } catch (err) {
+      this.warnStorageFailure("[Backup] Failed to list automatic backups", err);
+      return [];
+    }
+  }
+
+  static async readBackup(id: string): Promise<AllProfilesExportData | null> {
+    try {
+      await migrateLegacyAutoBackups();
+      const record = await getAutoBackupRecord(id);
+      return record?.data ?? null;
+    } catch (err) {
+      this.warnStorageFailure("[Backup] Failed to read automatic backup", err);
       return null;
     }
   }
@@ -1156,8 +1347,19 @@ export class AutoBackupService {
   ): Promise<AutoBackupMetadata | null> {
     if (!profiles.length) return null;
 
-    const manifest = readAutoBackupManifest();
-    const mostRecent = manifest
+    let existingBackups: AutoBackupRecord[];
+    try {
+      await migrateLegacyAutoBackups();
+      existingBackups = await getAllAutoBackupRecords();
+    } catch (err) {
+      this.warnStorageFailure(
+        "[Backup] Failed to prepare automatic backup storage",
+        err,
+      );
+      return null;
+    }
+
+    const mostRecent = existingBackups
       .filter((entry) => entry.reason === reason)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
     if (
@@ -1180,26 +1382,13 @@ export class AutoBackupService {
       activeProfileId,
     };
 
-    const writeBackup = (nextManifest: AutoBackupMetadata[]) => {
-      localStorage.setItem(
-        getAutoBackupEntryKey(metadata.id),
-        JSON.stringify(exportData),
-      );
-      writeAutoBackupManifest(nextManifest);
-    };
-
     try {
-      writeBackup(pruneAutoBackups([metadata, ...manifest]));
+      await putAutoBackupRecord({ ...metadata, data: exportData });
+      await pruneAutoBackups([{ ...metadata, data: exportData }, ...existingBackups]);
       return metadata;
     } catch (err) {
-      try {
-        writeBackup(pruneAutoBackups([metadata]));
-        return metadata;
-      } catch (retryErr) {
-        console.warn("[Backup] Failed to create automatic backup", retryErr);
-        console.warn("[Backup] Original backup error", err);
-        return null;
-      }
+      this.warnStorageFailure("[Backup] Failed to create automatic backup", err);
+      return null;
     }
   }
 }
