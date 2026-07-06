@@ -3,8 +3,10 @@ import {
   Download,
   Upload,
   FileJson,
+  FolderInput,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   UserPlus,
   RefreshCw,
   Users,
@@ -17,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +45,7 @@ interface ExportImportDialogProps {
   onImportComplete: () => void;
   onImportAsNewProfile: (name: string, data: ExportData) => Promise<void>;
   onImportAllProfiles: (data: AllProfilesExportData) => Promise<void>;
+  onOpenGameLogImport?: () => void;
 }
 
 type DialogMode =
@@ -72,6 +76,7 @@ export function ExportImportDialog({
   onImportComplete,
   onImportAsNewProfile,
   onImportAllProfiles,
+  onOpenGameLogImport,
 }: ExportImportDialogProps) {
   const [mode, setMode] = useState<DialogMode>("menu");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -289,6 +294,11 @@ export function ExportImportDialog({
 
   const autoBackups = AutoBackupService.listBackups();
 
+  const handleOpenGameLogImport = useCallback(() => {
+    handleClose();
+    onOpenGameLogImport?.();
+  }, [handleClose, onOpenGameLogImport]);
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -352,6 +362,43 @@ export function ExportImportDialog({
                   </div>
                 </div>
               </Button>
+              {onOpenGameLogImport && (
+                <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <FolderInput className="h-4 w-4 text-orange-500" />
+                    <div className="text-sm font-medium">
+                      Import from game files
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="ml-auto bg-orange-500/15 text-[10px] uppercase text-orange-500"
+                    >
+                      Beta WIP
+                    </Badge>
+                  </div>
+                  <div className="mb-3 text-xs text-muted-foreground">
+                    Detect completed quests from local Escape from Tarkov log
+                    files. This feature is still a work in progress and might
+                    not work fully yet.
+                  </div>
+                  <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Use a new test character first and review the preview
+                      before importing logs into a real profile.
+                    </span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleOpenGameLogImport}
+                  >
+                    <FolderInput className="h-4 w-4" />
+                    Import EFT Logs (Beta)
+                  </Button>
+                </div>
+              )}
               {autoBackups.length > 0 && (
                 <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                   <div className="font-medium">Automatic safety backups</div>

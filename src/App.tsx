@@ -13,7 +13,14 @@ import { Toaster } from "@/components/ui/sonner";
 import { BaseToastViewport } from "@/components/ui/base-toast";
 import { taskToastManager } from "@/utils/taskToastManager";
 import { useIsMobile } from "./hooks/use-mobile";
-import { RotateCcw, BarChart3, Search, Copy, ExternalLink } from "lucide-react";
+import {
+  RotateCcw,
+  BarChart3,
+  Search,
+  Copy,
+  ExternalLink,
+  FolderInput,
+} from "lucide-react";
 import {
   Task,
   CollectorItemsData,
@@ -76,6 +83,11 @@ import {
   completeTaskWithDependencies,
   uncompleteTask,
 } from "@/utils/taskCompletion";
+import { buildBackfilledTaskToastItems } from "@/utils/backfilledTasks";
+import {
+  applyEftLogImport,
+  type EftLogImportScanSummary,
+} from "@/utils/eftLogImport";
 import {
   buildLogicalTaskIdGroups,
   createObjectiveEquivalentsMap,
@@ -90,6 +102,9 @@ import {
   fetchOverlay,
   loadCombinedCache,
   isCombinedCacheFresh,
+  getCombinedCacheDebugInfo,
+  getTarkovApiUrl,
+  OVERLAY_URL,
   buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
 import { cn } from "@/lib/utils";
@@ -214,6 +229,10 @@ import { STORYLINE_QUESTS } from "@/data/storylineQuests";
 import { Textarea } from "@/components/ui/textarea";
 
 const SUPPORT_DISCORD_URL = "https://discord.com/invite/3dFmr5qaJK";
+const TARKOV_API_OUTAGE_MESSAGE =
+  "tarkov.dev's API is currently returning Cloudflare 1102/503 errors. Some quest, achievement, and hideout data may be empty until their API recovers. If we have a cached copy, the app will keep using it.";
+const ACTIVE_DATA_RETRY_COOLDOWN_MS = 1000 * 60 * 5;
+const PREFETCH_RETRY_COOLDOWN_MS = 1000 * 60 * 30;
 
 type RefreshErrorSource =
   | "manual-refresh"
@@ -270,6 +289,81 @@ function getErrorStack(error: unknown): string | null {
     return null;
   }
   return error.stack ?? null;
+}
+
+function getErrorName(error: unknown): string | null {
+  return error instanceof Error ? error.name : null;
+}
+
+function getErrorCause(error: unknown): { name: string | null; message: string } | null {
+  if (!(error instanceof Error) || !("cause" in error)) return null;
+
+  const cause = error.cause;
+  if (cause instanceof Error) {
+    return {
+      name: cause.name,
+      message: cause.message,
+    };
+  }
+  if (typeof cause === "string") {
+    return {
+      name: null,
+      message: cause,
+    };
+  }
+  if (cause === undefined || cause === null) return null;
+
+  try {
+    return {
+      name: null,
+      message: JSON.stringify(cause),
+    };
+  } catch {
+    return {
+      name: null,
+      message: String(cause),
+    };
+  }
+}
+
+function classifyRefreshError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("tarkov api request failed")) {
+    return "tarkov-api-network-or-proxy-failure";
+  }
+  if (normalized.includes("failed to fetch")) {
+    return "network-or-cors-fetch-failure";
+  }
+  if (normalized.includes("http error")) {
+    return "upstream-http-error";
+  }
+  if (normalized.includes("graphql error")) {
+    return "graphql-response-error";
+  }
+  if (
+    normalized.includes("cannot read properties") ||
+    normalized.includes("undefined") ||
+    normalized.includes("null")
+  ) {
+    return "client-data-shape-error";
+  }
+  return "unknown";
+}
+
+function isTarkovApiOutageError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("api.tarkov.dev") ||
+    normalized.includes("tarkov api upstream error") ||
+    normalized.includes("worker exceeded resource limits") ||
+    normalized.includes("error code: 1102") ||
+    normalized.includes("status: 503") ||
+    normalized.includes("status 503")
+  );
+}
+
+function buildApiRequestKey(gameMode: GameMode, language: LanguageCode): string {
+  return `${gameMode}:${language}`;
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -553,9 +647,12 @@ function App() {
   const [isGameModeLoading, setIsGameModeLoading] = useState(false);
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const hasInitializedRef = useRef(false);
+  const initStartedRef = useRef(false);
   const lastLoadedGameModeRef = useRef<GameMode | null>(null);
   const lastLoadedLanguageRef = useRef<LanguageCode | null>(null);
   const gameModeRequestRef = useRef(0);
+  const activeDataRetryAfterRef = useRef<Record<string, number>>({});
+  const prefetchRetryAfterRef = useRef<Record<string, number>>({});
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
   const [showKappa, setShowKappa] = useState(false);
@@ -636,15 +733,31 @@ function App() {
       source,
       errorMessage,
       errorStack,
+      errorName,
+      errorCause,
       hasCachedData,
       details,
     }: {
       source: RefreshErrorSource;
       errorMessage: string;
       errorStack?: string | null;
+      errorName?: string | null;
+      errorCause?: { name: string | null; message: string } | null;
       hasCachedData: boolean;
       details?: string;
     }): RefreshErrorDialogState => {
+      const apiUrl = getTarkovApiUrl();
+      const apiTransport = apiUrl.startsWith("/")
+        ? "same-origin-proxy"
+        : apiUrl.includes("api.tarkov.dev")
+          ? "direct-tarkov-api"
+          : "configured-override";
+      const cache = getCombinedCacheDebugInfo(
+        activeProfileGameMode,
+        apiLanguage,
+      );
+      const currentUrl =
+        typeof window !== "undefined" ? new URL(window.location.href) : null;
       const report = {
         timestamp: new Date().toISOString(),
         source,
@@ -653,24 +766,93 @@ function App() {
         stack: errorStack ?? null,
         hasCachedData,
         details: details ?? null,
+        error: {
+          name: errorName ?? null,
+          category: classifyRefreshError(errorMessage),
+          cause: errorCause ?? null,
+        },
+        api: {
+          tarkovApiUrl: apiUrl,
+          transport: apiTransport,
+          overlayUrl: OVERLAY_URL,
+        },
+        build: {
+          mode: import.meta.env.MODE,
+          dev: import.meta.env.DEV,
+          prod: import.meta.env.PROD,
+          baseUrl: import.meta.env.BASE_URL,
+          configuredTarkovApiUrl:
+            import.meta.env.VITE_TARKOV_API_URL?.trim() || null,
+        },
+        runtime: {
+          online:
+            typeof navigator !== "undefined" ? navigator.onLine : null,
+          visibilityState:
+            typeof document !== "undefined" ? document.visibilityState : null,
+          language:
+            typeof navigator !== "undefined" ? navigator.language : null,
+          languages:
+            typeof navigator !== "undefined" ? navigator.languages : null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          viewport:
+            typeof window !== "undefined"
+              ? {
+                  width: window.innerWidth,
+                  height: window.innerHeight,
+                  devicePixelRatio: window.devicePixelRatio,
+                }
+              : null,
+        },
+        profileContext: {
+          activeProfileId: activeProfileId || null,
+          activeProfileGameMode,
+          apiLanguage,
+          activeProfileFaction: activeProfileFaction ?? null,
+          activeProfileEdition: activeProfileEdition ?? null,
+          profileCount: profiles.length,
+        },
+        cache,
+        uiState: {
+          viewMode,
+          groupBy,
+          collectorGroupBy,
+          selectedMap,
+          isLoading,
+          isRefreshing,
+          isGameModeLoading,
+          isSwitchingMode,
+          overlayLoaded: Boolean(overlay),
+        },
         activeProfileId: activeProfileId || null,
         currentPath:
           typeof window !== "undefined" ? window.location.href : null,
+        currentOrigin: currentUrl?.origin ?? null,
+        currentPathname: currentUrl?.pathname ?? null,
         userAgent:
           typeof navigator !== "undefined" ? navigator.userAgent : null,
         dataSnapshot: {
           taskCount: allTasks.length,
+          visibleTaskCount: tasks.length,
+          taskWithEventsCount: tasksWithEvents.length,
+          eventTaskCount: eventTasks.length,
+          baseTaskCount: baseTasks.length,
           achievementCount: achievements.length,
           hideoutStationCount: hideoutStations.length,
+          collectorObjectiveCount:
+            apiCollectorItems?.data?.task?.objectives?.length ?? 0,
+          completedTaskCount: completedTasksRef.current.size,
+          completedTaskObjectiveCount: completedTaskObjectivesRef.current.size,
         },
       };
 
       return {
         source,
         title: "Data refresh issue",
-        summary: hasCachedData
-          ? "The latest Tarkov data could not be refreshed. Your cached data is still available, but it may be stale."
-          : "The app could not load fresh Tarkov data, so some views may be empty until the API issue clears.",
+        summary: isTarkovApiOutageError(errorMessage)
+          ? TARKOV_API_OUTAGE_MESSAGE
+          : hasCachedData
+            ? "The latest Tarkov data could not be refreshed. Your cached data is still available, but it may be stale."
+            : "The app could not load fresh Tarkov data, so some views may be empty until the API issue clears.",
         errorMessage,
         reportText: JSON.stringify(report, null, 2),
       };
@@ -679,18 +861,41 @@ function App() {
       achievements.length,
       activeProfileId,
       allTasks.length,
+      apiCollectorItems,
+      apiLanguage,
+      activeProfileEdition,
+      activeProfileFaction,
+      activeProfileGameMode,
       hideoutStations.length,
+      profiles.length,
+      tasks.length,
+      tasksWithEvents.length,
+      eventTasks.length,
+      baseTasks.length,
+      viewMode,
+      groupBy,
+      collectorGroupBy,
+      selectedMap,
+      isLoading,
+      isRefreshing,
+      isGameModeLoading,
+      isSwitchingMode,
+      overlay,
     ],
   );
   const reportRefreshError = useCallback(
     (source: RefreshErrorSource, error: unknown, hasCachedData: boolean) => {
       const errorMessage = getErrorMessage(error);
       const errorStack = getErrorStack(error);
+      const errorName = getErrorName(error);
+      const errorCause = getErrorCause(error);
       setRefreshErrorDialog(
         buildRefreshErrorDialogState({
           source,
           errorMessage,
           errorStack,
+          errorName,
+          errorCause,
           hasCachedData,
         }),
       );
@@ -763,6 +968,9 @@ function App() {
     try {
       setIsRefreshing(true);
       const data = await fetchCombinedData(activeProfileGameMode, apiLanguage);
+      delete activeDataRetryAfterRef.current[
+        buildApiRequestKey(activeProfileGameMode, apiLanguage)
+      ];
       applyCombinedData(data, activeProfileGameMode, apiLanguage);
     } catch (err) {
       console.error("Manual refresh error", err);
@@ -777,6 +985,9 @@ function App() {
     applyCombinedData,
     reportRefreshError,
   ]);
+  const handleQuickImportGameLogs = useCallback(() => {
+    window.dispatchEvent(new Event("eft-log-import:quick"));
+  }, []);
 
   const handleDismissAnnouncement = useCallback(
     (announcementId: string) => {
@@ -805,6 +1016,12 @@ function App() {
       gameMode: GameMode,
       language: LanguageCode = apiLanguageRef.current,
     ) => {
+      const requestKey = buildApiRequestKey(gameMode, language);
+      const retryAfter = activeDataRetryAfterRef.current[requestKey] ?? 0;
+      if (Date.now() < retryAfter) {
+        return;
+      }
+
       const requestId = ++gameModeRequestRef.current;
       const cached = loadCombinedCache(gameMode, language);
 
@@ -825,9 +1042,12 @@ function App() {
       try {
         const data = await fetchCombinedData(gameMode, language);
         if (gameModeRequestRef.current !== requestId) return;
+        delete activeDataRetryAfterRef.current[requestKey];
         applyCombinedData(data, gameMode, language);
       } catch (err) {
         if (gameModeRequestRef.current !== requestId) return;
+        activeDataRetryAfterRef.current[requestKey] =
+          Date.now() + ACTIVE_DATA_RETRY_COOLDOWN_MS;
         console.error("Game mode data refresh error", err);
         if (!cached && gameMode === "pve") {
           toast.warning("PvE task data is unavailable", {
@@ -1434,6 +1654,9 @@ function App() {
   }, [baseTasks, visibleCompletedTasks]);
 
   useEffect(() => {
+    if (initStartedRef.current) return;
+    initStartedRef.current = true;
+
     const init = async () => {
       let resolvedInitialGameMode = DEFAULT_GAME_MODE;
       let resolvedInitialLanguage = apiLanguageRef.current;
@@ -1758,6 +1981,9 @@ function App() {
             overlayLoaded = true;
           } catch (err) {
             console.error("API refresh error", err);
+            activeDataRetryAfterRef.current[
+              buildApiRequestKey(initialGameMode, initialLanguage)
+            ] = Date.now() + ACTIVE_DATA_RETRY_COOLDOWN_MS;
             reportRefreshError("background-refresh", err, Boolean(cached));
             if (!cached) {
               // No cache and API failed → empty state
@@ -1779,6 +2005,9 @@ function App() {
             overlayLoaded = true;
           } catch (err) {
             console.error("API fetch error", err);
+            activeDataRetryAfterRef.current[
+              buildApiRequestKey(initialGameMode, initialLanguage)
+            ] = Date.now() + ACTIVE_DATA_RETRY_COOLDOWN_MS;
             reportRefreshError("initial-fetch", err, false);
             setAllTasks([]);
             setApiCollectorItems(null);
@@ -1857,10 +2086,15 @@ function App() {
     }
     if (isCombinedCacheFresh(inactiveGameMode, apiLanguage)) return;
 
+    const requestKey = buildApiRequestKey(inactiveGameMode, apiLanguage);
+    const retryAfter = prefetchRetryAfterRef.current[requestKey] ?? 0;
+    if (Date.now() < retryAfter) return;
+
     let cancelled = false;
     void fetchCombinedData(inactiveGameMode, apiLanguage)
       .then((data) => {
         if (cancelled) return;
+        delete prefetchRetryAfterRef.current[requestKey];
         setModeTasksByMode((prev) => ({
           ...prev,
           [inactiveGameMode]: data.tasks.data.tasks,
@@ -1868,6 +2102,8 @@ function App() {
       })
       .catch((err) => {
         if (!cancelled) {
+          prefetchRetryAfterRef.current[requestKey] =
+            Date.now() + PREFETCH_RETRY_COOLDOWN_MS;
           console.warn("Inactive game mode prefetch error", err);
         }
       });
@@ -2018,7 +2254,15 @@ function App() {
       taskToastManager.add({
         id: toastId,
         title: `Backfilled previous quests for ${params.clickedTaskName}`,
-        description: "Undo automatic previous quest completion.",
+        description: `${params.autoCompletedTaskIds.length} previous ${
+          params.autoCompletedTaskIds.length === 1 ? "quest" : "quests"
+        } completed automatically.`,
+        data: {
+          backfilledTasks: buildBackfilledTaskToastItems(
+            params.autoCompletedTaskIds,
+            knownTasksById,
+          ),
+        },
         actionProps: {
           children: "Undo",
           onClick: async () => {
@@ -2791,6 +3035,74 @@ function App() {
     }
   }, []);
 
+  const handleImportGameLogs = useCallback(
+    async (
+      summary: EftLogImportScanSummary,
+      options?: { excludedAutoCompleteTaskIds?: string[] },
+    ) => {
+      if (!activeProfileId) return;
+
+      const importResult = applyEftLogImport({
+        matches: summary.matches,
+        tasks: tasksWithEvents,
+        knownTasksById,
+        completedTasks,
+        completedTaskObjectives,
+        logicalTaskIdsByTaskId,
+        excludedAutoCompleteTaskIds: options?.excludedAutoCompleteTaskIds,
+      });
+
+      if (importResult.importedTaskIds.length === 0) return;
+
+      await AutoBackupService.createBackup(
+        profiles,
+        activeProfileId,
+        "before-eft-log-import",
+        { force: true },
+      );
+
+      taskStorage.setProfile(activeProfileId);
+      await taskStorage.init();
+      await Promise.all([
+        taskStorage.saveCompletedTasks(importResult.completedTasks),
+        taskStorage.saveCompletedTaskObjectives(
+          importResult.completedTaskObjectives,
+        ),
+      ]);
+
+      completedTasksRef.current = importResult.completedTasks;
+      completedTaskObjectivesRef.current =
+        importResult.completedTaskObjectives;
+      setCompletedTasks(importResult.completedTasks);
+      setCompletedTaskObjectives(importResult.completedTaskObjectives);
+      await handleImportComplete();
+
+      toast.success(
+        `Imported ${importResult.importedTaskIds.length} quest ${
+          importResult.importedTaskIds.length === 1 ? "completion" : "completions"
+        } from EFT logs${
+          importResult.autoCompletedTaskIds.length > 0
+            ? ` and backfilled ${importResult.autoCompletedTaskIds.length} previous ${
+                importResult.autoCompletedTaskIds.length === 1
+                  ? "quest"
+                  : "quests"
+              }`
+            : ""
+        }.`,
+      );
+    },
+    [
+      activeProfileId,
+      completedTaskObjectives,
+      completedTasks,
+      handleImportComplete,
+      knownTasksById,
+      logicalTaskIdsByTaskId,
+      profiles,
+      tasksWithEvents,
+    ],
+  );
+
   // Handler for importing data into a new profile
   const handleImportAsNewProfile = useCallback(
     async (name: string, data: import("@/utils/indexedDB").ExportData) => {
@@ -3049,6 +3361,11 @@ function App() {
           onImportComplete={handleImportComplete}
           onImportAsNewProfile={handleImportAsNewProfile}
           onImportAllProfiles={handleImportAllProfiles}
+          tasks={tasksWithEvents}
+          knownTasksById={knownTasksById}
+          completedTasks={completedTasks}
+          logicalTaskIdsByTaskId={logicalTaskIdsByTaskId}
+          onImportGameLogs={handleImportGameLogs}
           traders={traderList}
           hiddenTraders={hiddenTraders}
           onToggleTraderVisibility={handleToggleTraderVisibility}
@@ -3116,6 +3433,14 @@ function App() {
                         aria-label="View progress"
                       >
                         <BarChart3 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleQuickImportGameLogs}
+                        aria-label="Quick sync with EFT logs beta"
+                      >
+                        <FolderInput className="h-4 w-4" />
                       </Button>
                       <Select
                         value={apiLanguage}
@@ -3262,6 +3587,16 @@ function App() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="pl-2 pr-2.5 gap-2"
+                      onClick={handleQuickImportGameLogs}
+                      aria-label="Quick sync with EFT logs beta"
+                    >
+                      <FolderInput className="h-4 w-4" />
+                      <span className="text-xs">Sync Logs (Beta)</span>
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

@@ -76,11 +76,14 @@ import {
   FolderSync,
 } from "lucide-react";
 import { ExportImportDialog } from "@/components/ExportImportDialog";
+import { EftLogImportDialog } from "@/components/EftLogImportDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   SelectiveResetDialog,
   type ResetOptions,
 } from "@/components/SelectiveResetDialog";
+import type { Task } from "@/types";
+import type { EftLogImportScanSummary } from "@/utils/eftLogImport";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   viewMode:
@@ -132,6 +135,14 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onImportAllProfiles: (
     data: import("@/utils/indexedDB").AllProfilesExportData,
   ) => Promise<void>;
+  tasks: Task[];
+  knownTasksById: Map<string, Task>;
+  completedTasks: Set<string>;
+  logicalTaskIdsByTaskId: Map<string, Set<string>>;
+  onImportGameLogs: (
+    summary: EftLogImportScanSummary,
+    options?: { excludedAutoCompleteTaskIds?: string[] },
+  ) => Promise<void>;
   isLoading?: boolean;
   isGameModeLoading?: boolean;
   isSwitchingMode?: boolean;
@@ -170,6 +181,11 @@ export function AppSidebar({
   onImportComplete,
   onImportAsNewProfile,
   onImportAllProfiles,
+  tasks,
+  knownTasksById,
+  completedTasks,
+  logicalTaskIdsByTaskId,
+  onImportGameLogs,
   isLoading = false,
   isGameModeLoading = false,
   isSwitchingMode = false,
@@ -177,6 +193,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const [perTraderOpen, setPerTraderOpen] = React.useState(false);
   const [exportImportOpen, setExportImportOpen] = React.useState(false);
+  const [eftLogImportOpen, setEftLogImportOpen] = React.useState(false);
   const [perMapOpen, setPerMapOpen] = React.useState(false);
   const [nameModalOpen, setNameModalOpen] = React.useState<null | {
     mode: "create" | "rename";
@@ -302,7 +319,7 @@ export function AppSidebar({
                         }}
                       >
                         <FolderSync className="mr-2 h-4 w-4" />
-                        Export / Import
+                        Import \ Export
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         disabled={!activeProfile}
@@ -478,6 +495,18 @@ export function AppSidebar({
                   onImportComplete={onImportComplete}
                   onImportAsNewProfile={onImportAsNewProfile}
                   onImportAllProfiles={onImportAllProfiles}
+                  onOpenGameLogImport={() => setEftLogImportOpen(true)}
+                />
+                <EftLogImportDialog
+                  open={eftLogImportOpen}
+                  onOpenChange={setEftLogImportOpen}
+                  profileName={activeProfile?.name || "Profile"}
+                  activeGameMode={activeGameMode}
+                  tasks={tasks}
+                  knownTasksById={knownTasksById}
+                  completedTasks={completedTasks}
+                  logicalTaskIdsByTaskId={logicalTaskIdsByTaskId}
+                  onApply={onImportGameLogs}
                 />
                 {/* Reset confirmation */}
                 <SelectiveResetDialog
