@@ -417,7 +417,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "end-setup-survivor",
     type: "story",
     data: {
-      label: "Head to Shoreline (22:00 to 04:00)",
+      label: "Head to Shoreline (21:00 to 06:00)",
       description:
         "Intercom at Tower, swipe Keycard. Approach Terminal (no weapon in hand). Start escape attempt",
       note: "Final extraction sequence",
@@ -676,7 +676,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "end-setup-savior",
     type: "story",
     data: {
-      label: "Head to Shoreline (22:00 to 04:00)",
+      label: "Head to Shoreline (21:00 to 06:00)",
       description:
         "Intercom at Tower, swipe Keycard. Approach Terminal (no weapon in hand). Start escape attempt",
       note: "Final extraction sequence",
@@ -848,7 +848,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "end-setup-fallen",
     type: "story",
     data: {
-      label: "Head to Shoreline (22:00 to 04:00)",
+      label: "Head to Shoreline (21:00 to 06:00)",
       description:
         "Intercom at Tower, swipe Keycard. Approach Terminal (no weapon in hand). Start escape attempt",
       note: "Final extraction sequence",
@@ -964,7 +964,7 @@ export const initialNodes: StorylineNode[] = applyStorylineNodePositions([
     id: "end-setup-debtor",
     type: "story",
     data: {
-      label: "Head to Shoreline (22:00 to 04:00)",
+      label: "Head to Shoreline (21:00 to 06:00)",
       description:
         "Intercom at Tower, swipe Keycard. Approach Terminal (no weapon in hand). Start escape attempt",
       note: "Final extraction sequence",
