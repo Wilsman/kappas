@@ -361,6 +361,7 @@ export function StorylineQuestsView({
             return (
               <div
                 key={quest.id}
+                id={`storyline-quest-${quest.id}`}
                 className="rounded-lg border bg-card p-5 shadow-sm hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start gap-4">

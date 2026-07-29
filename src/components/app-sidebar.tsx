@@ -15,6 +15,7 @@ import {
   Bug,
   StickyNote,
   Scale,
+  TowerControl,
 } from "lucide-react";
 
 import {
@@ -100,11 +101,12 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "storyline-map"
     | "hideout-requirements"
     | "current"
-    | "kord-breach";
+    | "kord-breach"
+    | "lightkeeper";
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void;
   onOpenStorylineMap: () => void;
-  onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
-  focusMode: "all" | "kappa" | "lightkeeper";
+  onSetFocus: (mode: "all" | "kappa") => void;
+  focusMode: "all" | "kappa";
   traders: string[];
   hiddenTraders: Set<string>;
   onToggleTraderVisibility: (trader: string) => void;
@@ -607,6 +609,20 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Lightkeeper access journey */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={viewMode === "lightkeeper"}
+                  onClick={() => onSetViewMode("lightkeeper")}
+                >
+                  <TowerControl />
+                  <span>Lightkeeper Access</span>
+                  <span className="ml-auto rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-amber-400">
+                    NEW
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* 1.0 Storyline */}
               <SidebarMenuItem>
                 <SidebarMenuButton
@@ -701,26 +717,6 @@ export function AppSidebar({
                     >
                       <ListTodo />
                       <span>Kappa</span>
-                    </a>
-                  </SidebarMenuSubButton>
-                </li>
-                {/* Lightkeeper focus (Checklist + Lightkeeper filter) */}
-                <li>
-                  <SidebarMenuSubButton
-                    asChild
-                    isActive={
-                      viewMode === "grouped" && focusMode === "lightkeeper"
-                    }
-                  >
-                    <a
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSetViewMode("grouped");
-                        onSetFocus("lightkeeper");
-                      }}
-                    >
-                      <ListTodo />
-                      <span>Lightkeeper</span>
                     </a>
                   </SidebarMenuSubButton>
                 </li>

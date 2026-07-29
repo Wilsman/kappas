@@ -274,6 +274,7 @@ describe("TaskStorage - User Preferences", () => {
     const prefs = {
       notes: "Test notes",
       playerLevel: 42,
+      scavKarma: 1.23,
       enableLevelFilter: true,
       showCompleted: false,
       dismissedAnnouncementIds: ["prestige-requirements-easier-v2"],
@@ -597,7 +598,11 @@ describe("ExportImportService - Single Profile", () => {
         "task-b::1::progress": 8,
       },
       prestigeProgress: { "prestige-2": { level: 5 } },
-      userPreferences: { notes: "Imported notes", playerLevel: 20 },
+      userPreferences: {
+        notes: "Imported notes",
+        playerLevel: 20,
+        scavKarma: 2.5,
+      },
     };
 
     await ExportImportService.importAllData(exportData);
@@ -615,6 +620,7 @@ describe("ExportImportService - Single Profile", () => {
     expect(progress["task-b::1::progress"]).toBe(8);
     expect(prefs.notes).toBe("Imported notes");
     expect(prefs.playerLevel).toBe(20);
+    expect(prefs.scavKarma).toBe(2.5);
     expect(prestige).toEqual({ level: 5 });
   });
 

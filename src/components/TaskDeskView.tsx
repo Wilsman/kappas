@@ -87,8 +87,8 @@ interface TaskDeskViewProps {
   achievements: Achievement[];
   completedTasks: Set<string>;
   hiddenTraders: Set<string>;
-  focusMode: "all" | "kappa" | "lightkeeper";
-  onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
+  focusMode: "all" | "kappa";
+  onSetFocus: (mode: "all" | "kappa") => void;
   onToggleComplete: (taskId: string) => void;
   onTaskClick: (taskId: string) => void;
   mapFilter?: string | null;
@@ -112,13 +112,12 @@ interface TaskDeskViewProps {
   ) => void;
 }
 
-type TaskFilter = "all" | "kappa" | "lightkeeper" | "btr";
+type TaskFilter = "all" | "kappa" | "btr";
 
 const parseTaskFilter = (value: string | null): TaskFilter | null => {
   if (
     value === "all" ||
     value === "kappa" ||
-    value === "lightkeeper" ||
     value === "btr"
   ) {
     return value;
@@ -519,7 +518,6 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
     () => ({
       all: baseTasks.length,
       kappa: baseTasks.filter((task) => task.kappaRequired).length,
-      lightkeeper: baseTasks.filter((task) => task.lightkeeperRequired).length,
       btr: baseTasks.filter((task) => task.trader.name === "BTR Driver").length,
     }),
     [baseTasks],
@@ -529,9 +527,6 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
     (taskList: Task[], nextIds: Set<string>) =>
       taskList.filter((task) => {
         if (activeTaskFilter === "kappa" && !task.kappaRequired) {
-          return false;
-        }
-        if (activeTaskFilter === "lightkeeper" && !task.lightkeeperRequired) {
           return false;
         }
         if (activeTaskFilter === "btr" && task.trader.name !== "BTR Driver") {
@@ -748,11 +743,9 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
   const activeFilterLabel =
     activeTaskFilter === "kappa"
       ? "Kappa"
-      : activeTaskFilter === "lightkeeper"
-        ? "Lightkeeper"
-        : activeTaskFilter === "btr"
-          ? "BTR"
-          : "All";
+      : activeTaskFilter === "btr"
+        ? "BTR"
+        : "All";
 
   const handleTaskFilterChange = useCallback(
     (filter: TaskFilter) => {
@@ -1111,7 +1104,6 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                   [
                     ["all", "All"],
                     ["kappa", "Kappa"],
-                    ["lightkeeper", "Lightkeeper"],
                     ["btr", "BTR"],
                   ] as const
                 ).map(([value, label]) => {
@@ -1831,11 +1823,6 @@ export const TaskDeskView: React.FC<TaskDeskViewProps> = ({
                                                   {task.kappaRequired && (
                                                     <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-primary">
                                                       Kappa
-                                                    </span>
-                                                  )}
-                                                  {task.lightkeeperRequired && (
-                                                    <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-400">
-                                                      Lightkeeper
                                                     </span>
                                                   )}
                                                   {task.trader.name ===

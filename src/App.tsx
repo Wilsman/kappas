@@ -226,6 +226,11 @@ const KordBreachPlanner = lazy(() =>
     default: m.KordBreachPlanner,
   })),
 );
+const LightkeeperJourney = lazy(() =>
+  import("./components/LightkeeperJourney").then((m) => ({
+    default: m.LightkeeperJourney,
+  })),
+);
 import { CommandMenu } from "./components/CommandMenu";
 import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -661,7 +666,7 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
   const [showKappa, setShowKappa] = useState(false);
-  const [showLightkeeper, setShowLightkeeper] = useState(false);
+  const [scavKarma, setScavKarma] = useState<number | null>(null);
   const [apiCollectorItems, setApiCollectorItems] =
     useState<CollectorItemsData | null>(null);
 
@@ -702,6 +707,7 @@ function App() {
     | "hideout-requirements"
     | "current"
     | "kord-breach"
+    | "lightkeeper"
   >("grouped");
   const [groupBy, setGroupBy] = useState<"trader" | "map">("trader");
   const [collectorGroupBy, setCollectorGroupBy] = useState<
@@ -722,13 +728,27 @@ function App() {
     [activeProfileId],
   );
 
+  const handleSetScavKarma = useCallback(
+    async (value: number | null) => {
+      const nextValue =
+        typeof value === "number" && Number.isFinite(value) ? value : null;
+      setScavKarma(nextValue);
+      taskStorage.setProfile(activeProfileId);
+      await taskStorage.init();
+      await taskStorage.saveUserPreferences({ scavKarma: nextValue });
+    },
+    [activeProfileId],
+  );
+
   const isMobile = useIsMobile();
 
   // Always use checklist on mobile
   useEffect(() => {
     if (isMobile) {
       setViewMode((currentView) =>
-        currentView === "kord-breach" ? currentView : "grouped",
+        currentView === "kord-breach" || currentView === "lightkeeper"
+          ? currentView
+          : "grouped",
       );
     }
   }, [isMobile]);
@@ -1176,6 +1196,9 @@ function App() {
       if (nextView === "kord-breach") {
         return "/Kord-Breach";
       }
+      if (nextView === "lightkeeper") {
+        return "/Lightkeeper";
+      }
       return "/";
     },
     [],
@@ -1234,6 +1257,8 @@ function App() {
       nextView = "current";
     } else if (parts[0] === "kord-breach") {
       nextView = "kord-breach";
+    } else if (parts[0] === "lightkeeper") {
+      nextView = "lightkeeper";
     }
 
     return { nextView, nextCollectorGroupBy, nextStorylineView, nextEndingId };
@@ -1244,6 +1269,10 @@ function App() {
   useEffect(() => {
     const applyFromLocation = () => {
       skipNextPathSyncRef.current = true;
+      const legacyParams = new URLSearchParams(window.location.search);
+      if (legacyParams.get("taskFilter") === "lightkeeper") {
+        window.history.replaceState(null, "", "/Lightkeeper?path=quests");
+      }
       const { pathname } = window.location;
       const {
         nextView,
@@ -1312,6 +1341,8 @@ function App() {
 
   const usesViewportCanvas = viewMode === "storyline-map";
   const isKordBreachView = viewMode === "kord-breach";
+  const isLightkeeperView = viewMode === "lightkeeper";
+  const isFullWidthView = isKordBreachView || isLightkeeperView;
 
   // Note: preserve query params (e.g., ?tasksSearch=...) to enable deep links
   // When navigating between views we already replace the path without query above.
@@ -1560,6 +1591,11 @@ function App() {
         // Load player level from user preferences
         const savedPrefs = await taskStorage.loadUserPreferences();
         setDismissedAnnouncementIds(savedPrefs.dismissedAnnouncementIds ?? []);
+        setScavKarma(
+          typeof savedPrefs.scavKarma === "number"
+            ? savedPrefs.scavKarma
+            : null,
+        );
         const loadedLevel = Number(savedPrefs.playerLevel);
         if (Number.isFinite(loadedLevel)) {
           setPlayerLevel(Math.max(1, loadedLevel));
@@ -1645,25 +1681,13 @@ function App() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [tasksWithEvents]);
 
-  // Calculate Kappa and Lightkeeper task totals
-  const {
-    totalKappaTasks,
-    completedKappaTasks,
-    totalLightkeeperTasks,
-    completedLightkeeperTasks,
-  } = useMemo(() => {
+  // Calculate Kappa task totals
+  const { totalKappaTasks, completedKappaTasks } = useMemo(() => {
     const kappaTasks = baseTasks.filter((task) => task.kappaRequired);
-    const lightkeeperTasks = baseTasks.filter(
-      (task) => task.lightkeeperRequired,
-    );
 
     return {
       totalKappaTasks: kappaTasks.length,
       completedKappaTasks: kappaTasks.filter((task) =>
-        visibleCompletedTasks.has(task.id),
-      ).length,
-      totalLightkeeperTasks: lightkeeperTasks.length,
-      completedLightkeeperTasks: lightkeeperTasks.filter((task) =>
         visibleCompletedTasks.has(task.id),
       ).length,
     };
@@ -1947,6 +1971,11 @@ function App() {
         // Load player level from user preferences (with migration from localStorage)
         const savedPrefs = await taskStorage.loadUserPreferences();
         setDismissedAnnouncementIds(savedPrefs.dismissedAnnouncementIds ?? []);
+        setScavKarma(
+          typeof savedPrefs.scavKarma === "number"
+            ? savedPrefs.scavKarma
+            : null,
+        );
         let loadedLevel = Number(savedPrefs.playerLevel);
         if (!Number.isFinite(loadedLevel)) {
           // Migrate from localStorage if exists
@@ -2423,23 +2452,14 @@ function App() {
   }, []);
 
   // Focus mode derived state and setter for clearer UX
-  const focusMode = showKappa
-    ? "kappa"
-    : showLightkeeper
-      ? "lightkeeper"
-      : "all";
+  const focusMode: "all" | "kappa" = showKappa ? "kappa" : "all";
 
   const handleSetFocus = useCallback(
-    (mode: "all" | "kappa" | "lightkeeper") => {
+    (mode: "all" | "kappa") => {
       if (mode === "kappa") {
         setShowKappa(true);
-        setShowLightkeeper(false);
-      } else if (mode === "lightkeeper") {
-        setShowKappa(false);
-        setShowLightkeeper(true);
       } else {
         setShowKappa(false);
-        setShowLightkeeper(false);
       }
     },
     [],
@@ -2951,7 +2971,9 @@ function App() {
           await taskStorage.saveUserPreferences({
             playerLevel: 1,
             enableLevelFilter: false,
+            ...(resetAll ? { scavKarma: null } : {}),
           });
+          if (resetAll) setScavKarma(null);
           window.dispatchEvent(new Event("taskTracker:reset"));
         }
       } catch (err) {
@@ -3043,6 +3065,10 @@ function App() {
       setCompletedStorylineMapNodes(savedStorylineMapNodes);
       setCompletedTaskObjectives(savedTaskObjectives);
       setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+      const savedPrefs = await taskStorage.loadUserPreferences();
+      setScavKarma(
+        typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
+      );
       // Notify components like NotesWidget and PrestigesView to refresh
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
       window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
@@ -3206,6 +3232,10 @@ function App() {
       setCompletedStorylineMapNodes(savedStorylineMapNodes);
       setCompletedTaskObjectives(savedTaskObjectives);
       setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+      const savedPrefs = await taskStorage.loadUserPreferences();
+      setScavKarma(
+        typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
+      );
 
       // Notify components to refresh
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
@@ -3283,6 +3313,12 @@ function App() {
           setCompletedStorylineMapNodes(savedStorylineMapNodes);
           setCompletedTaskObjectives(savedTaskObjectives);
           setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+          const savedPrefs = await taskStorage.loadUserPreferences();
+          setScavKarma(
+            typeof savedPrefs.scavKarma === "number"
+              ? savedPrefs.scavKarma
+              : null,
+          );
         }
       }
 
@@ -3306,18 +3342,45 @@ function App() {
     [viewMode],
   );
 
+  const handleOpenLightkeeperTask = useCallback(
+    (taskId: string, taskName: string) => {
+      setShowKappa(false);
+      setViewMode("grouped");
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("taskTracker:globalSearch", {
+            detail: { term: taskName, scope: "tasks", taskId },
+          }),
+        );
+        setHighlightedTask(taskId);
+        setTimeout(() => setHighlightedTask(null), 2000);
+      }, 100);
+    },
+    [],
+  );
+
+  const handleOpenBatya = useCallback(() => {
+    setViewMode("storyline");
+    setTimeout(() => {
+      document.getElementById("storyline-quest-batya")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 150);
+  }, []);
+
+  const handleOpenTicket = useCallback(() => {
+    setStorylineView("fullMap");
+    setSelectedEndingId(null);
+    setViewMode("storyline-map");
+  }, []);
+
   // Derive which totals to display in the right Progress panel based on Focus mode
   const { displayTotalQuests, displayCompletedQuests } = useMemo(() => {
     if (focusMode === "kappa") {
       return {
         displayTotalQuests: totalKappaTasks,
         displayCompletedQuests: completedKappaTasks,
-      };
-    }
-    if (focusMode === "lightkeeper") {
-      return {
-        displayTotalQuests: totalLightkeeperTasks,
-        displayCompletedQuests: completedLightkeeperTasks,
       };
     }
     return {
@@ -3330,13 +3393,10 @@ function App() {
     completedQuests,
     totalKappaTasks,
     completedKappaTasks,
-    totalLightkeeperTasks,
-    completedLightkeeperTasks,
   ]);
 
   const progressTitle = useMemo(() => {
     if (focusMode === "kappa") return "Kappa Progress";
-    if (focusMode === "lightkeeper") return "Lightkeeper Progress";
     return "Progress Overview";
   }, [focusMode]);
   const isTaskDataLoading =
@@ -3370,6 +3430,14 @@ function App() {
             applicationCategory: "GameApplication",
             operatingSystem: "Web Browser",
           }}
+        />
+      ) : isLightkeeperView ? (
+        <SEO
+          title="Lightkeeper Access Tracker - Escape from Tarkov"
+          description="Track Scav karma, all three Network Provider access routes, and Mechanic's complete Lightkeeper taskline."
+          canonical={`${window.location.origin}/Lightkeeper`}
+          imageAlt="Lightkeeper access journey tracker"
+          keywords="Escape from Tarkov, Lightkeeper, Network Provider Part 1, Batya, The Ticket, Mechanic tasks"
         />
       ) : (
         <SEO />
@@ -3431,7 +3499,7 @@ function App() {
                 <div
                   className={cn(
                     "flex flex-col gap-2 py-2 min-[988px]:items-center",
-                    isKordBreachView
+                    isFullWidthView
                       ? "min-[988px]:flex-row"
                       : "min-[988px]:grid min-[988px]:grid-cols-3",
                   )}
@@ -3443,9 +3511,11 @@ function App() {
                       <h1 className="text-lg font-semibold truncate sm:text-xl min-[988px]:peer-data-[state=collapsed]:hidden">
                         {isKordBreachView
                           ? "Kord Breach Modifier Planner"
+                          : isLightkeeperView
+                            ? "Lightkeeper Access"
                           : isMobile
-                          ? "EFT Tracker"
-                          : "Escape from Tarkov Task Tracker"}
+                            ? "EFT Tracker"
+                            : "Escape from Tarkov Task Tracker"}
                       </h1>
                       {isKordBreachView ? (
                         <span className="inline-flex border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-400">
@@ -3471,7 +3541,7 @@ function App() {
                     <div
                       className={cn(
                         "items-center gap-2 min-[988px]:hidden",
-                        isKordBreachView ? "hidden" : "flex",
+                        isFullWidthView ? "hidden" : "flex",
                       )}
                     >
                       <Button
@@ -3544,7 +3614,7 @@ function App() {
                   <div
                     className={cn(
                       "hidden items-center justify-center gap-2",
-                      !isKordBreachView && "min-[988px]:flex",
+                      !isFullWidthView && "min-[988px]:flex",
                     )}
                   >
                     <span className="text-xs text-muted-foreground">Focus</span>
@@ -3579,30 +3649,6 @@ function App() {
                         />
                         Kappa
                       </Button>
-                      <Button
-                        variant={
-                          focusMode === "lightkeeper" ? "default" : "ghost"
-                        }
-                        size="sm"
-                        className={cn(
-                          "rounded-full px-3",
-                          focusMode === "lightkeeper"
-                            ? "bg-amber-600 text-white hover:bg-amber-600"
-                            : "text-amber-600 hover:text-amber-700 border border-amber-500/30",
-                        )}
-                        onClick={() => handleSetFocus("lightkeeper")}
-                      >
-                        <span
-                          className={cn(
-                            "mr-2 h-2 w-2 rounded-full",
-                            focusMode === "lightkeeper"
-                              ? "bg-white"
-                              : "bg-amber-500",
-                          )}
-                          aria-hidden
-                        />
-                        Lightkeeper
-                      </Button>
                     </div>
                   </div>
 
@@ -3610,7 +3656,7 @@ function App() {
                   <div
                     className={cn(
                       "hidden items-center justify-end gap-3",
-                      !isKordBreachView && "min-[988px]:flex",
+                      !isFullWidthView && "min-[988px]:flex",
                     )}
                   >
                     <Button
@@ -3702,6 +3748,7 @@ function App() {
                   usesViewportCanvas && "flex flex-col",
                   viewMode === "grouped" ||
                     viewMode === "kord-breach" ||
+                    viewMode === "lightkeeper" ||
                     viewMode === "tracked-items" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
@@ -3713,13 +3760,36 @@ function App() {
                 )}
               >
                 {/* Quests sub-tabs removed; view selection handled via sidebar */}
-                {isTaskDataLoading && !isKordBreachView ? (
+                {isTaskDataLoading && !isFullWidthView ? (
                   <ContentSkeleton />
                 ) : (
                   <LazyLoadErrorBoundary>
                     <Suspense fallback={<ContentSkeleton />}>
                       {viewMode === "kord-breach" ? (
                         <KordBreachPlanner />
+                      ) : viewMode === "lightkeeper" ? (
+                        <LightkeeperJourney
+                          tasks={tasksWithEvents}
+                          scavKarma={scavKarma}
+                          completedTasks={completedTasks}
+                          completedStorylineObjectives={
+                            completedStorylineObjectives
+                          }
+                          completedStorylineMapNodes={
+                            completedStorylineMapNodes
+                          }
+                          onScavKarmaChange={handleSetScavKarma}
+                          onToggleTask={handleToggleComplete}
+                          onToggleStorylineObjective={
+                            handleToggleStorylineObjective
+                          }
+                          onToggleStorylineMapNode={
+                            handleToggleStorylineMapNode
+                          }
+                          onOpenTask={handleOpenLightkeeperTask}
+                          onOpenBatya={handleOpenBatya}
+                          onOpenTicket={handleOpenTicket}
+                        />
                       ) : viewMode === "grouped" ? (
                         <CheckListView
                           key={`${activeProfileId}:${
@@ -3730,7 +3800,6 @@ function App() {
                           completedTasks={visibleCompletedTasks}
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
-                          showLightkeeper={showLightkeeper}
                           onSetFocus={handleSetFocus}
                           onToggleComplete={handleToggleComplete}
                           onTaskClick={handleTaskClick}
@@ -3929,7 +3998,7 @@ function App() {
                           completedTasks={visibleCompletedTasks}
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
-                          showLightkeeper={showLightkeeper}
+                          showLightkeeper={false}
                           onToggleComplete={handleToggleComplete}
                           highlightedTaskId={highlightedTask}
                         />
@@ -3939,7 +4008,7 @@ function App() {
                           completedTasks={visibleCompletedTasks}
                           hiddenTraders={hiddenTraders}
                           showKappa={showKappa}
-                          showLightkeeper={showLightkeeper}
+                          showLightkeeper={false}
                           onToggleComplete={handleToggleComplete}
                           highlightedTaskId={highlightedTask}
                         />
@@ -3950,7 +4019,7 @@ function App() {
               </main>
 
               {/* Right Progress */}
-              {!isKordBreachView && (
+              {!isFullWidthView && (
                 <LegacySidebar
                 position="right"
                 header={
@@ -3974,8 +4043,6 @@ function App() {
                     completedCollectorItems={completedCollectorItems.size}
                     totalKappaTasks={totalKappaTasks}
                     completedKappaTasks={completedKappaTasks}
-                    totalLightkeeperTasks={totalLightkeeperTasks}
-                    completedLightkeeperTasks={completedLightkeeperTasks}
                     totalAchievements={achievements.length}
                     completedAchievements={completedAchievements.size}
                     totalStorylineObjectives={totalStorylineObjectives}
@@ -4032,8 +4099,6 @@ function App() {
               completedCollectorItems={completedCollectorItems.size}
               totalKappaTasks={totalKappaTasks}
               completedKappaTasks={completedKappaTasks}
-              totalLightkeeperTasks={totalLightkeeperTasks}
-              completedLightkeeperTasks={completedLightkeeperTasks}
               totalAchievements={achievements.length}
               completedAchievements={completedAchievements.size}
               totalStorylineObjectives={totalStorylineObjectives}

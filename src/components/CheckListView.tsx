@@ -93,8 +93,7 @@ interface CheckListViewProps {
   completedTasks: Set<string>;
   hiddenTraders: Set<string>;
   showKappa: boolean;
-  showLightkeeper: boolean;
-  onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
+  onSetFocus: (mode: "all" | "kappa") => void;
   onToggleComplete: (taskId: string) => void;
   onTaskClick: (taskId: string) => void;
   mapFilter?: string | null;
@@ -118,10 +117,10 @@ interface CheckListViewProps {
   ) => void;
 }
 
-type TaskFocusFilter = "all" | "kappa" | "lightkeeper";
+type TaskFocusFilter = "all" | "kappa";
 
 const parseTaskFocusFilter = (value: string | null): TaskFocusFilter | null => {
-  if (value === "all" || value === "kappa" || value === "lightkeeper") {
+  if (value === "all" || value === "kappa") {
     return value;
   }
 
@@ -134,7 +133,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   completedTasks,
   hiddenTraders,
   showKappa,
-  showLightkeeper,
   onSetFocus,
   onToggleComplete,
   onTaskClick: _onTaskClick,
@@ -191,11 +189,7 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
     setSearchTerm(urlSearchTerm);
   }, [urlSearchTerm]);
 
-  const activeTaskFilter: TaskFocusFilter = showKappa
-    ? "kappa"
-    : showLightkeeper
-      ? "lightkeeper"
-      : "all";
+  const activeTaskFilter: TaskFocusFilter = showKappa ? "kappa" : "all";
 
   useEffect(() => {
     const nextUrlFilter =
@@ -492,12 +486,8 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
   const filterTasks = useCallback(
     (taskList: Task[], nextIds: Set<string>) =>
       taskList.filter((task) => {
-        // Kappa/Lightkeeper filters
-        if (showKappa && showLightkeeper) {
-          if (!(task.kappaRequired || task.lightkeeperRequired)) return false;
-        } else if (showKappa && !task.kappaRequired) {
-          return false;
-        } else if (showLightkeeper && !task.lightkeeperRequired) {
+        // Kappa focus filter
+        if (showKappa && !task.kappaRequired) {
           return false;
         }
         // Map filter (from sidebar)
@@ -547,7 +537,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
       }),
     [
       showKappa,
-      showLightkeeper,
       hiddenTraders,
       searchTerm,
       mapFilter,
@@ -1700,14 +1689,6 @@ export const CheckListView: React.FC<CheckListViewProps> = ({
                                       className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500"
                                     >
                                       K
-                                    </span>
-                                  )}
-                                  {task.lightkeeperRequired && (
-                                    <span
-                                      title="Lightkeeper"
-                                      className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500"
-                                    >
-                                      LK
                                     </span>
                                   )}
                                 </div>

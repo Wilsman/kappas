@@ -88,7 +88,8 @@ interface CommandMenuProps {
     | "storyline-map"
     | "hideout-requirements"
     | "current"
-    | "kord-breach";
+    | "kord-breach"
+    | "lightkeeper";
   groupBy: "trader" | "map";
   collectorGroupBy: "collector" | "hideout-stations";
   traders: string[];
@@ -508,37 +509,14 @@ export function CommandMenu(props: CommandMenuProps) {
   );
 
   const itemFlags = React.useMemo(() => {
-    const flags = new Map<string, { kappa: boolean; lightkeeper: boolean }>();
+    const flags = new Map<string, { kappa: boolean }>();
     for (const item of collectorItems ?? []) {
       const key = item.name.toLowerCase();
       if (!key) continue;
-      flags.set(key, { kappa: true, lightkeeper: false });
-    }
-    for (const task of tasks ?? []) {
-      if (!task.lightkeeperRequired) continue;
-      const mark = (name?: string | null) => {
-        if (!name) return;
-        const key = name.toLowerCase();
-        const current = flags.get(key) ?? {
-          kappa: false,
-          lightkeeper: false,
-        };
-        flags.set(key, { ...current, lightkeeper: true });
-      };
-      for (const obj of task.objectives ?? []) {
-        for (const item of obj.items ?? []) mark(item.name);
-      }
-      for (const reward of (task.startRewards?.items ?? []).filter(
-        hasRewardItem,
-      ))
-        mark(reward.item.name);
-      for (const reward of (task.finishRewards?.items ?? []).filter(
-        hasRewardItem,
-      ))
-        mark(reward.item.name);
+      flags.set(key, { kappa: true });
     }
     return flags;
-  }, [collectorItems, tasks]);
+  }, [collectorItems]);
 
   const achievementMatches = React.useMemo(() => {
     if (!hasQuery) return [] as Achievement[];
@@ -712,6 +690,10 @@ export function CommandMenu(props: CommandMenuProps) {
       onSetViewMode("kord-breach");
       setOpen(false);
     },
+    navigateLightkeeper() {
+      onSetViewMode("lightkeeper");
+      setOpen(false);
+    },
   } as const;
 
   const selectedPreview = previewIndex.get(selectedValue);
@@ -738,7 +720,6 @@ export function CommandMenu(props: CommandMenuProps) {
       const traderName = task.trader?.name;
       const statusLabel = completedTasks.has(task.id) ? "Done" : "Open";
       const kappaLabel = task.kappaRequired ? "Kappa" : null;
-      const lightkeeperLabel = task.lightkeeperRequired ? "Lightkeeper" : null;
       const objectiveGroups = (task.objectives ?? []).map((obj) => {
         const description = formatTaskObjectiveLabel(obj);
         const firRequired = /found in raid|in-raid|\bfi?r\b/i.test(description);
@@ -911,22 +892,13 @@ export function CommandMenu(props: CommandMenuProps) {
                   Level {task.minPlayerLevel}
                 </p>
               </div>
-              {(kappaLabel || lightkeeperLabel) && (
+              {kappaLabel && (
                 <div className="col-span-2 flex gap-2">
-                  {kappaLabel && (
-                    <ContextChip
-                      label="Kappa"
-                      tone="warning"
-                      className="flex-1 justify-center py-1.5"
-                    />
-                  )}
-                  {lightkeeperLabel && (
-                    <ContextChip
-                      label="Lightkeeper"
-                      tone="info"
-                      className="flex-1 justify-center py-1.5"
-                    />
-                  )}
+                  <ContextChip
+                    label="Kappa"
+                    tone="warning"
+                    className="flex-1 justify-center py-1.5"
+                  />
                 </div>
               )}
             </div>
@@ -1365,9 +1337,6 @@ export function CommandMenu(props: CommandMenuProps) {
                 {itemFlag?.kappa && (
                   <ContextChip label="Kappa" tone="warning" />
                 )}
-                {itemFlag?.lightkeeper && (
-                  <ContextChip label="Lightkeeper" tone="info" />
-                )}
               </div>
             </div>
           </div>
@@ -1525,9 +1494,6 @@ export function CommandMenu(props: CommandMenuProps) {
                           ? "Done"
                           : "Open";
                         const kappaLabel = t.kappaRequired ? "Kappa" : null;
-                        const lightkeeperLabel = t.lightkeeperRequired
-                          ? "Lightkeeper"
-                          : null;
                         return (
                           <CommandItem
                             key={`task-${t.id}`}
@@ -1566,12 +1532,6 @@ export function CommandMenu(props: CommandMenuProps) {
                                     <div
                                       className="h-1.5 w-1.5 rounded-full bg-amber-500"
                                       title="Kappa Required"
-                                    />
-                                  )}
-                                  {lightkeeperLabel && (
-                                    <div
-                                      className="h-1.5 w-1.5 rounded-full bg-sky-500"
-                                      title="Lightkeeper Required"
                                     />
                                   )}
                                   <div
@@ -1804,12 +1764,6 @@ export function CommandMenu(props: CommandMenuProps) {
                                     title="Kappa Item"
                                   />
                                 )}
-                                {i.flags?.lightkeeper && (
-                                  <div
-                                    className="h-1.5 w-1.5 rounded-full bg-sky-500"
-                                    title="Lightkeeper Item"
-                                  />
-                                )}
                               </div>
                             </div>
                             <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
@@ -1845,6 +1799,13 @@ export function CommandMenu(props: CommandMenuProps) {
                   {viewMode === "kord-breach" ? "(current)" : ""}
                 </CommandItem>
                 <CommandItem
+                  value="lightkeeper access network provider mechanic journey"
+                  onSelect={handle.navigateLightkeeper}
+                >
+                  Lightkeeper Access{" "}
+                  {viewMode === "lightkeeper" ? "(current)" : ""}
+                </CommandItem>
+                <CommandItem
                   value="storyline-quests"
                   onSelect={handle.navigateStoryline}
                 >
@@ -1866,12 +1827,6 @@ export function CommandMenu(props: CommandMenuProps) {
                 <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
                 <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
                   Kappa
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.4)]" />
-                <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-widest">
-                  Lightkeeper
                 </span>
               </div>
               <div className="flex items-center gap-2">

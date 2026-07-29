@@ -85,6 +85,7 @@ function areStringSetsEqual(a: Set<string>, b: Set<string>): boolean {
 export interface UserPreferences {
   notes: string;
   playerLevel: number;
+  scavKarma?: number | null;
   enableLevelFilter: boolean;
   showCompleted: boolean;
   showEvents: boolean;
@@ -629,6 +630,11 @@ export class TaskStorage {
           if (item.id === "notes") prefs.notes = item.value as string;
           else if (item.id === "playerLevel")
             prefs.playerLevel = item.value as number;
+          else if (item.id === "scavKarma")
+            prefs.scavKarma =
+              typeof item.value === "number" && Number.isFinite(item.value)
+                ? item.value
+                : null;
           else if (item.id === "enableLevelFilter")
             prefs.enableLevelFilter = item.value as boolean;
           else if (item.id === "showCompleted")

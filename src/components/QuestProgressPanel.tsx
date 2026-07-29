@@ -27,8 +27,6 @@ interface QuestProgressPanelProps {
   completedStorylineObjectives?: number;
   totalKappaTasks?: number;
   completedKappaTasks?: number;
-  totalLightkeeperTasks?: number;
-  completedLightkeeperTasks?: number;
   totalPrestigeSteps?: number;
   completedPrestigeSteps?: number;
   currentPrestigeId?: string;
@@ -132,8 +130,6 @@ export function QuestProgressPanel({
   completedStorylineObjectives = 0,
   totalKappaTasks = 0,
   completedKappaTasks = 0,
-  totalLightkeeperTasks = 0,
-  completedLightkeeperTasks = 0,
   totalPrestigeSteps = 0,
   completedPrestigeSteps = 0,
   currentPrestigeId,
@@ -160,10 +156,6 @@ export function QuestProgressPanel({
       : 0;
   const kappaProgress =
     totalKappaTasks > 0 ? (completedKappaTasks / totalKappaTasks) * 100 : 0;
-  const lightkeeperProgress =
-    totalLightkeeperTasks > 0
-      ? (completedLightkeeperTasks / totalLightkeeperTasks) * 100
-      : 0;
   const prestigeProgress =
     totalPrestigeSteps > 0
       ? (completedPrestigeSteps / totalPrestigeSteps) * 100
@@ -256,7 +248,6 @@ export function QuestProgressPanel({
 
       {/* Focused section (TOP) */}
       {(totalKappaTasks > 0 ||
-        totalLightkeeperTasks > 0 ||
         totalCollectorItems > 0 ||
         totalAchievements > 0 ||
         totalPrestigeSteps > 0) && (
@@ -293,24 +284,6 @@ export function QuestProgressPanel({
                 value={itemProgress}
                 className="h-2"
                 indicatorClassName="bg-green-500"
-              />
-            </div>
-          )}
-
-          {totalLightkeeperTasks > 0 && (
-            // divider line
-            <div className="space-y-2 mb-3">
-              <div className="h-px bg-muted/50 my-4" />
-              <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
-                <span>💡 Lightkeeper Required</span>
-                <span>
-                  {completedLightkeeperTasks}/{totalLightkeeperTasks}
-                </span>
-              </div>
-              <Progress
-                value={lightkeeperProgress}
-                className="h-2"
-                indicatorClassName="bg-orange-500"
               />
             </div>
           )}

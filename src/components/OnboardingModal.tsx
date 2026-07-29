@@ -32,7 +32,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
           <div className="space-y-3">
             <h3 className="text-lg font-semibold">Focus Mode</h3>
             <p className="text-sm text-muted-foreground">
-              Filter tasks for focusing on either Kappa or Lightkeeper:
+              Filter the checklist to focus on Kappa-required tasks:
             </p>
 
             {/* Dummy Focus Control */}
@@ -60,25 +60,11 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                   />
                   Kappa
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "rounded-full px-3",
-                    "text-amber-600 hover:text-amber-700 border border-amber-500/30",
-                  )}
-                >
-                  <span
-                    className="mr-2 h-2 w-2 rounded-full bg-amber-500"
-                    aria-hidden
-                  />
-                  Lightkeeper
-                </Button>
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
-              Switch to show ONLY Kappa-required tasks or ONLY
-              Lightkeeper-required tasks. Click All to show everything.
+              Lightkeeper now has its own two-stage access journey in the
+              sidebar, including all three Network Provider routes.
             </p>
           </div>
           {/* Search Feature */}
