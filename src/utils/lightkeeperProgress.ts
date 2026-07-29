@@ -17,7 +17,6 @@ export interface LightkeeperRouteProgress {
   total: number;
   isComplete: boolean;
   steps: Array<LightkeeperStep & { isComplete: boolean }>;
-  nextStep?: LightkeeperStep;
 }
 
 export const LIGHTKEEPER_STAGE_TWO_TASKS = [
@@ -70,7 +69,7 @@ export const LIGHTKEEPER_TICKET_STEPS: LightkeeperStep[] = [
   },
 ];
 
-export const LIGHTKEEPER_CLASSIC_STEPS: LightkeeperStep[] = [
+export const LIGHTKEEPER_SIDEQUEST_STEPS: LightkeeperStep[] = [
   {
     id: "a-fuel-matter",
     label: "A Fuel Matter",
@@ -155,7 +154,6 @@ function buildRoute(
   steps: LightkeeperRouteProgress["steps"],
 ): LightkeeperRouteProgress {
   const completed = steps.filter((step) => step.isComplete).length;
-  const next = steps.find((step) => !step.isComplete);
 
   return {
     id,
@@ -164,15 +162,6 @@ function buildRoute(
     total: steps.length,
     isComplete: completed === steps.length,
     steps,
-    nextStep: next
-      ? {
-          id: next.id,
-          label: next.label,
-          taskIds: next.taskIds,
-          objectiveId: next.objectiveId,
-          mapNodeId: next.mapNodeId,
-        }
-      : undefined,
   };
 }
 
@@ -218,8 +207,8 @@ export function calculateLightkeeperProgress({
     ),
     quests: buildRoute(
       "quests",
-      "Classic Quests",
-      withCompletion(LIGHTKEEPER_CLASSIC_STEPS, (step) =>
+      "Sidequests Route",
+      withCompletion(LIGHTKEEPER_SIDEQUEST_STEPS, (step) =>
         (step.taskIds ?? []).some((taskId) => completedTasks.has(taskId)),
       ),
     ),

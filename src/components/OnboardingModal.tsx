@@ -63,8 +63,9 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
-              Lightkeeper now has its own two-stage access journey in the
-              sidebar, including all three Network Provider routes.
+              Lightkeeper now has its own access journey in the sidebar,
+              including all three Network Provider routes and the full
+              Mechanic taskline.
             </p>
           </div>
           {/* Search Feature */}

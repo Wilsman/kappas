@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateLightkeeperProgress,
   LIGHTKEEPER_BATYA_STEPS,
-  LIGHTKEEPER_CLASSIC_STEPS,
+  LIGHTKEEPER_SIDEQUEST_STEPS,
   LIGHTKEEPER_STAGE_TWO_TASKS,
   normalizeLightkeeperPath,
 } from "@/utils/lightkeeperProgress";
@@ -49,7 +49,7 @@ describe("calculateLightkeeperProgress", () => {
     expect(progress.stageOneReady).toBe(true);
   });
 
-  it("selects the first incomplete route step as the next action", () => {
+  it("tracks partial progress across the selected route", () => {
     const completedStorylineObjectives = new Set(
       LIGHTKEEPER_BATYA_STEPS.slice(0, 14).map((step) => step.id),
     );
@@ -60,15 +60,13 @@ describe("calculateLightkeeperProgress", () => {
     });
 
     expect(progress.routes.batya.completed).toBe(14);
-    expect(progress.routes.batya.nextStep?.id).toBe("batya-main-15");
-    expect(progress.routes.batya.nextStep?.label).toBe(
-      "Learn more about the Bogatyr squad's activities",
-    );
+    expect(progress.routes.batya.total).toBe(22);
+    expect(progress.routes.batya.steps[14].isComplete).toBe(false);
   });
 
-  it("accepts any Chemical outcome in the classic quest route", () => {
+  it("accepts any Chemical outcome in the sidequests route", () => {
     const completedTasks = new Set(
-      LIGHTKEEPER_CLASSIC_STEPS.flatMap((step) =>
+      LIGHTKEEPER_SIDEQUEST_STEPS.flatMap((step) =>
         step.id === "chemical-choice" ? [step.taskIds![1]] : [step.taskIds![0]],
       ),
     );
@@ -79,6 +77,7 @@ describe("calculateLightkeeperProgress", () => {
     });
 
     expect(progress.routes.quests.completed).toBe(13);
+    expect(progress.routes.quests.label).toBe("Sidequests Route");
     expect(progress.routes.quests.isComplete).toBe(true);
   });
 
