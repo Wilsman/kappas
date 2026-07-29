@@ -221,6 +221,11 @@ const CurrentlyWorkingOnView = lazy(() =>
     default: m.CurrentlyWorkingOnView,
   })),
 );
+const KordBreachPlanner = lazy(() =>
+  import("./components/KordBreachPlanner").then((m) => ({
+    default: m.KordBreachPlanner,
+  })),
+);
 import { CommandMenu } from "./components/CommandMenu";
 import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -696,6 +701,7 @@ function App() {
     | "storyline-map"
     | "hideout-requirements"
     | "current"
+    | "kord-breach"
   >("grouped");
   const [groupBy, setGroupBy] = useState<"trader" | "map">("trader");
   const [collectorGroupBy, setCollectorGroupBy] = useState<
@@ -720,7 +726,11 @@ function App() {
 
   // Always use checklist on mobile
   useEffect(() => {
-    if (isMobile) setViewMode("grouped");
+    if (isMobile) {
+      setViewMode((currentView) =>
+        currentView === "kord-breach" ? currentView : "grouped",
+      );
+    }
   }, [isMobile]);
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
@@ -1163,6 +1173,9 @@ function App() {
       if (nextView === "current") {
         return "/Current";
       }
+      if (nextView === "kord-breach") {
+        return "/Kord-Breach";
+      }
       return "/";
     },
     [],
@@ -1219,6 +1232,8 @@ function App() {
       }
     } else if (parts[0] === "current") {
       nextView = "current";
+    } else if (parts[0] === "kord-breach") {
+      nextView = "kord-breach";
     }
 
     return { nextView, nextCollectorGroupBy, nextStorylineView, nextEndingId };
@@ -1296,6 +1311,7 @@ function App() {
   }, []);
 
   const usesViewportCanvas = viewMode === "storyline-map";
+  const isKordBreachView = viewMode === "kord-breach";
 
   // Note: preserve query params (e.g., ?tasksSearch=...) to enable deep links
   // When navigating between views we already replace the path without query above.
@@ -3337,7 +3353,27 @@ function App() {
 
   return (
     <NuqsAdapter>
-      <SEO />
+      {isKordBreachView ? (
+        <SEO
+          title="Kord Breach Modifier Planner - Balance Your Tarkov Season 1 Build"
+          description="Pick Escape from Tarkov Kord Breach positive and negative modifiers, compare their effects, and balance your Season 1 build to exactly 0 points."
+          canonical={`${window.location.origin}/Kord-Breach`}
+          imageAlt="Kord Breach Season 1 modifier planner"
+          keywords="Escape from Tarkov, Kord Breach, Tarkov Season 1, Kord Breach modifiers, Tarkov perks, modifier planner, Kappa Protocol"
+          schemaMarkup={{
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            name: "Kord Breach Modifier Planner",
+            description:
+              "An interactive Escape from Tarkov Season 1 modifier balance planner.",
+            url: `${window.location.origin}/Kord-Breach`,
+            applicationCategory: "GameApplication",
+            operatingSystem: "Web Browser",
+          }}
+        />
+      ) : (
+        <SEO />
+      )}
       <SidebarProvider>
         <AppSidebar
           viewMode={viewMode}
@@ -3392,30 +3428,52 @@ function App() {
             {/* Header */}
             <header className="border-b bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
               <div className="px-2">
-                <div className="flex flex-col gap-2 py-2 min-[988px]:grid min-[988px]:grid-cols-3 min-[988px]:items-center">
+                <div
+                  className={cn(
+                    "flex flex-col gap-2 py-2 min-[988px]:items-center",
+                    isKordBreachView
+                      ? "min-[988px]:flex-row"
+                      : "min-[988px]:grid min-[988px]:grid-cols-3",
+                  )}
+                >
                   {/* Left: title + mobile actions */}
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <SidebarTrigger className="-ml-1" />
                       <h1 className="text-lg font-semibold truncate sm:text-xl min-[988px]:peer-data-[state=collapsed]:hidden">
-                        {isMobile
+                        {isKordBreachView
+                          ? "Kord Breach Modifier Planner"
+                          : isMobile
                           ? "EFT Tracker"
                           : "Escape from Tarkov Task Tracker"}
                       </h1>
-                      <span
-                        className={cn(
-                          "inline-flex text-[10px] px-2 py-0.5 rounded-full font-semibold border",
-                          "bg-orange-600/10 text-orange-600 border-orange-600/20",
-                        )}
-                      >
-                        BETA
-                      </span>
-                      <span className="hidden min-[988px]:inline-flex min-[988px]:peer-data-[state=collapsed]:hidden text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-600 border border-emerald-600/20">
-                        Live API
-                      </span>
+                      {isKordBreachView ? (
+                        <span className="inline-flex border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-400">
+                          Season 1
+                        </span>
+                      ) : (
+                        <>
+                          <span
+                            className={cn(
+                              "inline-flex text-[10px] px-2 py-0.5 rounded-full font-semibold border",
+                              "bg-orange-600/10 text-orange-600 border-orange-600/20",
+                            )}
+                          >
+                            BETA
+                          </span>
+                          <span className="hidden min-[988px]:inline-flex min-[988px]:peer-data-[state=collapsed]:hidden text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-600 border border-emerald-600/20">
+                            Live API
+                          </span>
+                        </>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-2 min-[988px]:hidden">
+                    <div
+                      className={cn(
+                        "items-center gap-2 min-[988px]:hidden",
+                        isKordBreachView ? "hidden" : "flex",
+                      )}
+                    >
                       <Button
                         variant="outline"
                         size="icon"
@@ -3483,7 +3541,12 @@ function App() {
                   </div>
 
                   {/* Center: Focus segmented control */}
-                  <div className="hidden min-[988px]:flex items-center justify-center gap-2">
+                  <div
+                    className={cn(
+                      "hidden items-center justify-center gap-2",
+                      !isKordBreachView && "min-[988px]:flex",
+                    )}
+                  >
                     <span className="text-xs text-muted-foreground">Focus</span>
                     <div className="flex items-center gap-1 p-1 rounded-full border bg-muted/30">
                       <Button
@@ -3544,7 +3607,12 @@ function App() {
                   </div>
 
                   {/* Right: Search hint + Refresh */}
-                  <div className="hidden min-[988px]:flex items-center justify-end gap-3">
+                  <div
+                    className={cn(
+                      "hidden items-center justify-end gap-3",
+                      !isKordBreachView && "min-[988px]:flex",
+                    )}
+                  >
                     <Button
                       variant="outline"
                       size="sm"
@@ -3633,6 +3701,7 @@ function App() {
                   "flex-1 min-h-0 min-w-0 bg-background relative",
                   usesViewportCanvas && "flex flex-col",
                   viewMode === "grouped" ||
+                    viewMode === "kord-breach" ||
                     viewMode === "tracked-items" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
@@ -3644,12 +3713,14 @@ function App() {
                 )}
               >
                 {/* Quests sub-tabs removed; view selection handled via sidebar */}
-                {isTaskDataLoading ? (
+                {isTaskDataLoading && !isKordBreachView ? (
                   <ContentSkeleton />
                 ) : (
                   <LazyLoadErrorBoundary>
                     <Suspense fallback={<ContentSkeleton />}>
-                      {viewMode === "grouped" ? (
+                      {viewMode === "kord-breach" ? (
+                        <KordBreachPlanner />
+                      ) : viewMode === "grouped" ? (
                         <CheckListView
                           key={`${activeProfileId}:${
                             activeProfileFaction ?? "none"
@@ -3879,7 +3950,8 @@ function App() {
               </main>
 
               {/* Right Progress */}
-              <LegacySidebar
+              {!isKordBreachView && (
+                <LegacySidebar
                 position="right"
                 header={
                   <div className="flex items-center gap-2">
@@ -3915,7 +3987,8 @@ function App() {
                     isLoading={isLoading}
                   />
                 </div>
-              </LegacySidebar>
+                </LegacySidebar>
+              )}
             </div>
           </div>
         </SidebarInset>

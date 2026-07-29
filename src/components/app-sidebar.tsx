@@ -14,6 +14,7 @@ import {
   Target,
   Bug,
   StickyNote,
+  Scale,
 } from "lucide-react";
 
 import {
@@ -98,7 +99,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "storyline"
     | "storyline-map"
     | "hideout-requirements"
-    | "current";
+    | "current"
+    | "kord-breach";
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void;
   onOpenStorylineMap: () => void;
   onSetFocus: (mode: "all" | "kappa" | "lightkeeper") => void;
@@ -588,6 +590,20 @@ export function AppSidebar({
                 >
                   <Target />
                   <span>Currently Working On</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Kord Breach modifier planner */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={viewMode === "kord-breach"}
+                  onClick={() => onSetViewMode("kord-breach")}
+                >
+                  <Scale />
+                  <span>Kord Breach</span>
+                  <span className="ml-auto rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-400">
+                    NEW
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 

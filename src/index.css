@@ -14,6 +14,17 @@
   }
 }
 
+@keyframes kord-breach-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @font-face {
   font-family: "Bender";
   src: url("/fonts/Jovanny Lemonad - Bender.woff") format("woff");
@@ -231,6 +242,34 @@
 }
 
 @layer components {
+  .kord-breach-shell {
+    position: relative;
+    isolation: isolate;
+    background: hsl(var(--background));
+  }
+
+  .kord-breach-enter {
+    animation: kord-breach-enter 420ms ease-out both;
+  }
+
+  .kord-breach-enter-delay {
+    animation-delay: 60ms;
+  }
+
+  .kord-breach-enter-delay-2 {
+    animation-delay: 110ms;
+  }
+
+  .kord-breach-enter-delay-3 {
+    animation-delay: 160ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kord-breach-enter {
+      animation: none;
+    }
+  }
+
   .task-toast-viewport {
     width: min(420px, calc(100vw - 2rem));
     height: var(--toast-frontmost-height);

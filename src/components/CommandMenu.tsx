@@ -87,7 +87,8 @@ interface CommandMenuProps {
     | "storyline"
     | "storyline-map"
     | "hideout-requirements"
-    | "current";
+    | "current"
+    | "kord-breach";
   groupBy: "trader" | "map";
   collectorGroupBy: "collector" | "hideout-stations";
   traders: string[];
@@ -705,6 +706,10 @@ export function CommandMenu(props: CommandMenuProps) {
     },
     navigateStorylineMap() {
       onOpenStorylineMap();
+      setOpen(false);
+    },
+    navigateKordBreach() {
+      onSetViewMode("kord-breach");
       setOpen(false);
     },
   } as const;
@@ -1832,6 +1837,13 @@ export function CommandMenu(props: CommandMenuProps) {
               <CommandSeparator />
 
               <CommandGroup heading="Links">
+                <CommandItem
+                  value="kord-breach-modifier-planner season one perks"
+                  onSelect={handle.navigateKordBreach}
+                >
+                  Kord Breach Modifier Planner{" "}
+                  {viewMode === "kord-breach" ? "(current)" : ""}
+                </CommandItem>
                 <CommandItem
                   value="storyline-quests"
                   onSelect={handle.navigateStoryline}
