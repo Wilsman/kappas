@@ -224,14 +224,22 @@ export function AppSidebar({
       <SidebarHeader>
         <div className="flex flex-col gap-3 px-2 py-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <a
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                onSetViewMode("grouped");
+              }}
+              className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              aria-label="Go to EFT Tracker homepage"
+            >
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent/30 text-sidebar-foreground">
                 <Database className="h-4 w-4" />
               </div>
               <span className="text-sm font-semibold tracking-wide group-data-[collapsible=icon]:hidden">
                 EFT Tracker
               </span>
-            </div>
+            </a>
             <span className="rounded-full border border-sidebar-border/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
               Beta
             </span>

@@ -1340,6 +1340,7 @@ function App() {
   }, []);
 
   const usesViewportCanvas = viewMode === "storyline-map";
+  const usesViewportFrame = usesViewportCanvas || viewMode === "lightkeeper";
   const isKordBreachView = viewMode === "kord-breach";
   const isLightkeeperView = viewMode === "lightkeeper";
   const isFullWidthView = isKordBreachView || isLightkeeperView;
@@ -2599,6 +2600,7 @@ function App() {
       taskId: string,
       objectiveKey: string,
       legacyObjectiveKey?: string | string[],
+      syncTaskCompletion = true,
     ) => {
       if (!activeProfileId) return;
 
@@ -2652,12 +2654,14 @@ function App() {
         taskId,
         nextVisibleTaskObjectives,
       );
-      const completionSync = syncTaskCompletionFromObjectives(
-        taskId,
-        completedTasks,
-        wasAllObjectivesCompleted,
-        isAllObjectivesCompleted,
-      );
+      const completionSync = syncTaskCompletion
+        ? syncTaskCompletionFromObjectives(
+            taskId,
+            completedTasks,
+            wasAllObjectivesCompleted,
+            isAllObjectivesCompleted,
+          )
+        : { completedTasks, autoCompletedTaskIds: [] };
       const nextCompletedTasks = completionSync.completedTasks;
       setCompletedTaskObjectives(next);
       setCompletedTasks(nextCompletedTasks);
@@ -3359,16 +3363,6 @@ function App() {
     [],
   );
 
-  const handleOpenBatya = useCallback(() => {
-    setViewMode("storyline");
-    setTimeout(() => {
-      document.getElementById("storyline-quest-batya")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 150);
-  }, []);
-
   const handleOpenTicket = useCallback(() => {
     setStorylineView("fullMap");
     setSelectedEndingId(null);
@@ -3490,7 +3484,7 @@ function App() {
           <div
             className={cn(
               "bg-background text-foreground flex flex-col overflow-hidden",
-              usesViewportCanvas ? "h-[100dvh] min-h-0" : "min-h-[100dvh]",
+              usesViewportFrame ? "h-[100dvh] min-h-0" : "min-h-[100dvh]",
             )}
           >
             {/* Header */}
@@ -3770,8 +3764,13 @@ function App() {
                       ) : viewMode === "lightkeeper" ? (
                         <LightkeeperJourney
                           tasks={tasksWithEvents}
+                          achievements={achievements}
                           scavKarma={scavKarma}
                           completedTasks={completedTasks}
+                          completedTaskObjectives={
+                            visibleCompletedTaskObjectives
+                          }
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
                           completedStorylineObjectives={
                             completedStorylineObjectives
                           }
@@ -3780,6 +3779,10 @@ function App() {
                           }
                           onScavKarmaChange={handleSetScavKarma}
                           onToggleTask={handleToggleComplete}
+                          onToggleTaskObjective={handleToggleTaskObjective}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
                           onToggleStorylineObjective={
                             handleToggleStorylineObjective
                           }
@@ -3787,7 +3790,6 @@ function App() {
                             handleToggleStorylineMapNode
                           }
                           onOpenTask={handleOpenLightkeeperTask}
-                          onOpenBatya={handleOpenBatya}
                           onOpenTicket={handleOpenTicket}
                         />
                       ) : viewMode === "grouped" ? (

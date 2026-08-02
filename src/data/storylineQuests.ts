@@ -8,6 +8,7 @@ export interface StorylineObjective {
     iconLink?: string;
     requiredCount: number;
     foundInRaid?: boolean;
+    increment?: number;
   };
   progress?: {
     current: number;
@@ -89,6 +90,11 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
         type: "main",
         description:
           "Hand over any 5 found in raid Building materials items to Skier",
+        itemRequirement: {
+          itemName: "Building materials items",
+          requiredCount: 5,
+          foundInRaid: true,
+        },
       },
       {
         id: "tour-main-11",
@@ -195,12 +201,26 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
         id: "tour-opt-1",
         type: "optional",
         description: "Collect the required 250,000 Roubles",
+        itemRequirement: {
+          itemId: "5449016a4bdc2d6f028b456f",
+          itemName: "Roubles",
+          iconLink:
+            "https://assets.tarkov.dev/5449016a4bdc2d6f028b456f-icon.webp",
+          requiredCount: 250000,
+          foundInRaid: false,
+          increment: 25000,
+        },
       },
       {
         id: "tour-opt-2",
         type: "optional",
         description:
           "Find any 5 items in raid from the Building materials category",
+        itemRequirement: {
+          itemName: "Building materials items",
+          requiredCount: 5,
+          foundInRaid: true,
+        },
       },
       {
         id: "tour-opt-3",
@@ -279,7 +299,7 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
       {
         id: "falling-skies-main-7",
         type: "main",
-        description: "Wait 1 hour for information from Prapor",
+        description: "Wait for information from Prapor",
       },
       {
         id: "falling-skies-main-8",
@@ -335,7 +355,7 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
       {
         id: "falling-skies-main-14",
         type: "main",
-        description: "Wait 3-5 hours for information from Prapor",
+        description: "Wait for information from Prapor",
       },
       {
         id: "falling-skies-main-15",
@@ -350,7 +370,7 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
       {
         id: "falling-skies-main-17",
         type: "main",
-        description: "Wait 1-3 hours for information from Prapor",
+        description: "Wait for information from Prapor",
       },
       {
         id: "falling-skies-main-18",
@@ -371,6 +391,20 @@ export const STORYLINE_QUESTS: StorylineQuest[] = [
         id: "falling-skies-opt-1",
         type: "optional",
         description: "Hand over 2,000 USD to Therapist to learn details about the SUV",
+        itemRequirement: {
+          itemId: "5696686a4bdc2da3298b456a",
+          itemName: "Dollars",
+          iconLink:
+            "https://assets.tarkov.dev/5696686a4bdc2da3298b456a-icon.webp",
+          requiredCount: 2000,
+          foundInRaid: false,
+          increment: 1000,
+        },
+      },
+      {
+        id: "falling-skies-opt-2",
+        type: "optional",
+        description: "Find any additional clues",
       },
     ],
   },

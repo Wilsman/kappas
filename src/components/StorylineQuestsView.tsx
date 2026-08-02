@@ -268,9 +268,10 @@ export function StorylineQuestsView({
     }
     const itemKey = getStorylineObjectiveItemKey(objective, requirement);
     const currentCount = taskObjectiveItemProgress[itemKey] ?? 0;
+    const increment = requirement.increment ?? 1;
     const nextCount = Math.max(
       0,
-      Math.min(requirement.requiredCount, currentCount + delta),
+      Math.min(requirement.requiredCount, currentCount + delta * increment),
     );
     onUpdateTaskObjectiveItemProgress(itemKey, nextCount);
   };

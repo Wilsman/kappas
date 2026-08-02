@@ -1,0 +1,13 @@
+{
+  "routes": [
+    {
+      "routePath": "/api/tarkov/graphql",
+      "mountPath": "/api/tarkov",
+      "method": "",
+      "module": [
+        "api/tarkov/graphql.ts:onRequest"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 import {
   BookOpen,
   Check,
+  ChevronDown,
   Circle,
   Diamond,
   ExternalLink,
@@ -10,18 +11,26 @@ import {
   ListChecks,
   LockKeyhole,
   Map as MapIcon,
+  Minus,
+  Package,
+  Plus,
   RadioTower,
   TowerControl,
 } from "lucide-react";
-import type { Task } from "@/types";
+import type { Achievement, Task } from "@/types";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { TaskDetailsContent } from "@/components/TaskDetailsContent";
 import { cn } from "@/lib/utils";
 import {
   calculateLightkeeperProgress,
   LIGHTKEEPER_STAGE_TWO_TASKS,
-  NETWORK_PROVIDER_PART_ONE_ID,
   normalizeLightkeeperPath,
   type LightkeeperPath,
   type LightkeeperRouteProgress,
@@ -38,16 +47,29 @@ import {
 
 interface LightkeeperJourneyProps {
   tasks: Task[];
+  achievements: Achievement[];
   scavKarma: number | null;
   completedTasks: Set<string>;
+  completedTaskObjectives: Set<string>;
+  taskObjectiveItemProgress: Record<string, number>;
   completedStorylineObjectives: Set<string>;
   completedStorylineMapNodes: Set<string>;
   onScavKarmaChange: (value: number | null) => void;
   onToggleTask: (taskId: string) => void;
+  onToggleTaskObjective: (
+    taskId: string,
+    objectiveKey: string,
+    legacyObjectiveKey?: string | string[],
+    syncTaskCompletion?: boolean,
+  ) => void;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number,
+    legacyObjectiveItemKey?: string | string[],
+  ) => void;
   onToggleStorylineObjective: (objectiveId: string) => void;
   onToggleStorylineMapNode: (nodeId: string) => void;
   onOpenTask: (taskId: string, taskName: string) => void;
-  onOpenBatya: () => void;
   onOpenTicket: () => void;
 }
 
@@ -57,22 +79,47 @@ const PATH_ICONS = {
   quests: ListChecks,
 } as const;
 
+const JOURNEY_SECTIONS = [
+  {
+    id: "lightkeeper-requirements",
+    label: "Unlock Network Provider",
+    compactLabel: "Unlock Provider",
+  },
+  {
+    id: "lightkeeper-mechanic-taskline",
+    label: "Gain Access to Lightkeeper",
+    compactLabel: "Gain Access",
+  },
+  {
+    id: "lightkeeper-getting-acquainted",
+    label: "Getting Acquainted",
+    compactLabel: "Acquainted",
+  },
+] as const;
+
+const KNOCK_KNOCK_ID = LIGHTKEEPER_STAGE_TWO_TASKS.at(-2)?.id ?? "";
+const GETTING_ACQUAINTED_ID = LIGHTKEEPER_STAGE_TWO_TASKS.at(-1)?.id ?? "";
+
 function getTaskName(tasksById: Map<string, Task>, taskId: string) {
   return tasksById.get(taskId)?.name ?? "Quest";
 }
 
 export function LightkeeperJourney({
   tasks,
+  achievements,
   scavKarma,
   completedTasks,
+  completedTaskObjectives,
+  taskObjectiveItemProgress,
   completedStorylineObjectives,
   completedStorylineMapNodes,
   onScavKarmaChange,
   onToggleTask,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
   onToggleStorylineObjective,
   onToggleStorylineMapNode,
   onOpenTask,
-  onOpenBatya,
   onOpenTicket,
 }: LightkeeperJourneyProps) {
   const [pathParam, setPathParam] = useQueryState("path", {
@@ -119,17 +166,18 @@ export function LightkeeperJourney({
       ),
     [selectedTargetId, sidequestJourney],
   );
-  const networkProviderComplete =
-    progress.stageOneReached ||
-    completedTasks.has(NETWORK_PROVIDER_PART_ONE_ID);
+  const knockKnockComplete =
+    completedTasks.has(KNOCK_KNOCK_ID) || progress.lightkeeperUnlocked;
   const currentStageTwoId = progress.stageOneReady
     ? progress.nextStageTwoTask?.id
     : undefined;
   const journeyStatus = progress.lightkeeperUnlocked
     ? "Lightkeeper Unlocked"
-    : progress.stageOneReady
-      ? `Mechanic taskline · ${progress.stageTwoCompleted} / ${progress.stageTwoTotal}`
-      : "Requirements in progress";
+    : !progress.stageOneReady
+      ? "Unlock Network Provider"
+      : knockKnockComplete
+        ? "Getting Acquainted"
+        : `Gain access · ${Math.min(progress.stageTwoCompleted, 7)} / 7`;
 
   const setSelectedPath = (path: LightkeeperPath) => {
     void setPathParam(path, { history: "push" });
@@ -168,10 +216,6 @@ export function LightkeeperJourney({
   };
 
   const openStepSource = (step: LightkeeperStep) => {
-    if (selectedPath === "batya") {
-      onOpenBatya();
-      return;
-    }
     if (selectedPath === "ticket") {
       onOpenTicket();
       return;
@@ -180,124 +224,106 @@ export function LightkeeperJourney({
     if (taskId) onOpenTask(taskId, getTaskName(tasksById, taskId));
   };
 
+  const scrollToJourneySection = (sectionId: string) => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    section.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  };
+
   return (
-    <main className="min-h-full overflow-y-auto bg-background">
-      <div className="mx-auto w-full max-w-6xl px-4 pb-20 pt-5 sm:px-6 lg:px-10">
-        <header className="border border-border/80 bg-card/40 px-5 py-5 sm:px-7 sm:py-6">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-            <div>
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-amber-500">
-                Mechanic access dossier
-              </p>
-              <h1 className="text-2xl font-bold uppercase tracking-wide text-foreground sm:text-3xl">
-                Lightkeeper Access
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Track the requirements and Mechanic taskline needed to reach
-                Lightkeeper
-              </p>
-            </div>
-            <div
+    <main className="min-h-full bg-background">
+      <div className="mx-auto w-full max-w-6xl px-4 pb-20 sm:px-6 lg:px-10">
+        <header className="sticky top-0 z-20 -mx-4 border-y border-border/80 bg-background/95 px-4 shadow-[0_12px_30px_rgba(0,0,0,0.18)] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:mx-0 sm:border-x sm:px-4">
+          <div className="flex h-7 min-w-0 items-center gap-2 border-b border-border/70 px-1">
+            <span className="hidden shrink-0 text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground sm:inline">
+              Access status
+            </span>
+            <span className="hidden text-border sm:inline" aria-hidden="true">
+              /
+            </span>
+            <span
               className={cn(
-                "w-fit border px-3 py-2 text-xs font-bold uppercase tracking-wider",
+                "truncate text-[10px] font-bold uppercase tracking-[0.14em]",
                 progress.lightkeeperUnlocked
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                  : "border-amber-500/35 bg-amber-500/10 text-amber-400",
+                  ? "text-emerald-400"
+                  : "text-amber-400",
               )}
             >
               {journeyStatus}
-            </div>
+            </span>
           </div>
 
-          <div className="mt-6 hidden grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] items-center gap-2 md:grid">
-            {[
-              ["01", "Requirements"],
-              ["02", "Network Provider"],
-              ["03", "Mechanic Taskline"],
-              ["04", "Lightkeeper"],
-            ].map(([number, label], index) => {
+          <nav
+            aria-label="Lightkeeper access progress"
+            className="grid grid-cols-3"
+          >
+            {JOURNEY_SECTIONS.map((section, index) => {
               const complete =
                 index === 0
                   ? progress.stageOneReady
                   : index === 1
-                    ? networkProviderComplete
-                    : index === 2
-                      ? progress.lightkeeperUnlocked
-                      : progress.lightkeeperUnlocked;
+                    ? knockKnockComplete
+                    : progress.lightkeeperUnlocked;
               const active =
                 !progress.lightkeeperUnlocked &&
                 ((index === 0 && !progress.stageOneReady) ||
                   (index === 1 &&
                     progress.stageOneReady &&
-                    !networkProviderComplete) ||
-                  (index === 2 && networkProviderComplete));
+                    !knockKnockComplete) ||
+                  (index === 2 && knockKnockComplete));
               return (
-                <div key={label} className="contents">
-                  <div
-                    className={cn(
-                      "min-w-0 border-t-2 pt-2",
-                      complete
-                        ? "border-emerald-500 text-emerald-400"
-                        : active
-                          ? "border-amber-500 text-amber-400"
-                          : "border-border text-muted-foreground",
-                    )}
-                  >
-                    <span className="mr-2 font-mono text-[10px]">{number}</span>
-                    <span className="text-xs font-bold uppercase tracking-wide">
-                      {label}
-                    </span>
-                  </div>
-                  {index < 3 && (
-                    <div className="h-px w-5 bg-border" aria-hidden="true" />
+                <button
+                  key={section.id}
+                  type="button"
+                  aria-current={active ? "step" : undefined}
+                  aria-label={`Jump to ${section.label}`}
+                  onClick={() => scrollToJourneySection(section.id)}
+                  className={cn(
+                    "relative flex min-h-11 min-w-0 items-center justify-center border-b-2 border-r border-r-border/70 px-1.5 text-center text-[8px] font-bold uppercase leading-tight tracking-normal transition-colors last:border-r-0 hover:bg-card/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500 motion-reduce:transition-none sm:justify-start sm:px-3 sm:text-[10px] sm:tracking-[0.08em]",
+                    complete
+                      ? "border-b-emerald-500 text-emerald-400"
+                      : active
+                        ? "border-b-amber-500 bg-amber-500/[0.06] text-amber-400"
+                        : "border-b-border text-muted-foreground",
                   )}
-                </div>
+                >
+                  <span className="hidden md:inline">{section.label}</span>
+                  <span className="md:hidden">{section.compactLabel}</span>
+                  <span
+                    className={cn(
+                      "absolute right-1.5 top-1.5 size-1 rounded-full sm:right-2",
+                      complete
+                        ? "bg-emerald-400"
+                        : active
+                          ? "bg-amber-400"
+                          : "bg-muted-foreground/35",
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
               );
             })}
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 border border-border md:hidden">
-            <div
-              className={cn(
-                "min-h-11 border-r border-border px-3 py-2",
-                !progress.stageOneReady
-                  ? "bg-amber-500/10 text-amber-400"
-                  : "text-emerald-400",
-              )}
-            >
-              <p className="text-xs font-bold">Access route</p>
-              <p className="text-[10px] uppercase tracking-widest">
-                {progress.stageOneReady ? "Ready" : "In progress"}
-              </p>
-            </div>
-            <div
-              className={cn(
-                "min-h-11 px-3 py-2",
-                progress.stageOneReady
-                  ? progress.lightkeeperUnlocked
-                    ? "text-emerald-400"
-                    : "bg-amber-500/10 text-amber-400"
-                  : "text-muted-foreground",
-              )}
-            >
-              <p className="text-xs font-bold">Mechanic Taskline</p>
-              <p className="text-[10px] uppercase tracking-widest">
-                {progress.stageOneReady
-                  ? `${progress.stageTwoCompleted} / ${progress.stageTwoTotal}`
-                  : "Locked"}
-              </p>
-            </div>
-          </div>
+          </nav>
         </header>
 
-        <div className="relative mt-7 pl-8 sm:pl-12">
+        <div className="relative mt-6 pl-8 sm:pl-12">
           <div
             className="absolute bottom-5 left-[11px] top-3 w-px bg-amber-500/55 sm:left-[19px]"
             aria-hidden="true"
           />
 
           <JourneyMarker type="stage" />
-          <section className="pb-10">
+          <section
+            id="lightkeeper-requirements"
+            className="scroll-mt-20 pb-10"
+          >
             <SectionEyebrow>Access requirements</SectionEyebrow>
             <h2 className="mt-1 text-xl font-bold uppercase tracking-wide text-foreground">
               Unlock Network Provider - Part 1
@@ -434,12 +460,19 @@ export function LightkeeperJourney({
                     prerequisites={filteredSidequestJourney.prerequisites}
                     targets={filteredSidequestJourney.targets}
                     selectedTargetId={selectedTargetId}
+                    achievements={achievements}
                     completedTasks={completedTasks}
+                    completedTaskObjectives={completedTaskObjectives}
+                    taskObjectiveItemProgress={taskObjectiveItemProgress}
                     tasksById={tasksById}
                     onSelectTarget={(targetId) =>
                       void setTargetParam(targetId, { history: "push" })
                     }
                     onToggleTask={onToggleTask}
+                    onToggleTaskObjective={onToggleTaskObjective}
+                    onUpdateTaskObjectiveItemProgress={
+                      onUpdateTaskObjectiveItemProgress
+                    }
                     onOpenTask={onOpenTask}
                   />
                 ) : (
@@ -448,8 +481,18 @@ export function LightkeeperJourney({
                     steps={selectedRoute.steps}
                     tasksById={tasksById}
                     completedTasks={completedTasks}
+                    completedStorylineObjectives={
+                      completedStorylineObjectives
+                    }
+                    taskObjectiveItemProgress={taskObjectiveItemProgress}
                     onToggleStep={toggleStep}
                     onToggleTask={onToggleTask}
+                    onToggleStorylineObjective={
+                      onToggleStorylineObjective
+                    }
+                    onUpdateTaskObjectiveItemProgress={
+                      onUpdateTaskObjectiveItemProgress
+                    }
                     onOpenStep={openStepSource}
                     onOpenTask={onOpenTask}
                   />
@@ -458,64 +501,11 @@ export function LightkeeperJourney({
             </div>
           </section>
 
-          <JourneyMarker type="milestone" />
-          <section className="pb-10">
-            <div
-              className={cn(
-                "border-l-2 px-4 py-4",
-                networkProviderComplete
-                  ? "border-emerald-500 bg-emerald-500/8"
-                  : progress.stageOneReady
-                    ? "border-amber-500 bg-amber-500/8"
-                    : "border-border bg-card/25",
-              )}
-            >
-              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    Mechanic milestone
-                  </p>
-                  <h2 className="mt-1 text-lg font-bold uppercase tracking-wide">
-                    Network Provider - Part 1
-                  </h2>
-                  <p
-                    className={cn(
-                      "mt-1 text-sm font-semibold",
-                      networkProviderComplete
-                        ? "text-emerald-400"
-                        : progress.stageOneReady
-                          ? "text-amber-400"
-                          : "text-muted-foreground",
-                    )}
-                  >
-                    {networkProviderComplete
-                      ? "Completed — Mechanic taskline underway"
-                      : progress.stageOneReady
-                        ? "Ready at Mechanic"
-                        : "Locked — finish Scav karma and one route"}
-                  </p>
-                </div>
-                {progress.stageOneReady && (
-                  <Button
-                    variant="outline"
-                    className="min-h-11 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
-                    onClick={() =>
-                      onOpenTask(
-                        NETWORK_PROVIDER_PART_ONE_ID,
-                        "Network Provider - Part 1",
-                      )
-                    }
-                  >
-                    View task
-                    <ExternalLink className="ml-2 size-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </section>
-
           <JourneyMarker type="stage" muted={!progress.stageOneReady} />
-          <section className="pb-10">
+          <section
+            id="lightkeeper-mechanic-taskline"
+            className="scroll-mt-20 pb-10"
+          >
             <SectionEyebrow muted={!progress.stageOneReady}>
               Mechanic taskline
             </SectionEyebrow>
@@ -534,11 +524,12 @@ export function LightkeeperJourney({
               Acquainted; the final task completes the unlock.
             </p>
 
-            <div className="mt-5 border border-border bg-card/25">
-              {LIGHTKEEPER_STAGE_TWO_TASKS.map((task, index) => {
-                const complete = completedTasks.has(task.id);
+            <div className="mt-5 space-y-4">
+              {LIGHTKEEPER_STAGE_TWO_TASKS.map((taskStep) => {
+                const task = tasksById.get(taskStep.id);
+                const complete = completedTasks.has(taskStep.id);
                 const current =
-                  progress.stageOneReady && task.id === currentStageTwoId;
+                  progress.stageOneReady && taskStep.id === currentStageTwoId;
                 const interactive =
                   progress.stageOneReady && (current || complete);
                 const status = complete
@@ -548,31 +539,31 @@ export function LightkeeperJourney({
                     : "Locked";
 
                 return (
-                  <div
-                    key={task.id}
+                  <article
+                    key={taskStep.id}
+                    id={
+                      taskStep.id === GETTING_ACQUAINTED_ID
+                        ? "lightkeeper-getting-acquainted"
+                        : undefined
+                    }
                     className={cn(
-                      "relative flex min-h-16 flex-col gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
+                      "scroll-mt-20 overflow-hidden border border-border bg-card/25",
                       complete && "bg-emerald-500/[0.04]",
                       current && "bg-amber-500/[0.08]",
-                      !interactive && !complete && "opacity-55",
+                      !interactive && !complete && "border-border/70",
                     )}
                   >
-                    {index < LIGHTKEEPER_STAGE_TWO_TASKS.length - 1 && (
-                      <div
-                        className="absolute bottom-[-17px] left-[25px] top-[39px] w-px bg-border"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex min-h-16 flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+                      <div className="flex min-w-0 items-center gap-3">
                       <button
                         type="button"
                         aria-label={
                           complete
-                            ? `Mark ${task.name} incomplete`
-                            : `Mark ${task.name} complete`
+                            ? `Mark ${taskStep.name} incomplete`
+                            : `Mark ${taskStep.name} complete`
                         }
                         disabled={!interactive}
-                        onClick={() => onToggleTask(task.id)}
+                        onClick={() => onToggleTask(taskStep.id)}
                         className={cn(
                           "relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500",
                           complete
@@ -601,20 +592,19 @@ export function LightkeeperJourney({
                                 : "text-muted-foreground",
                           )}
                         >
-                          {task.name}
+                          {taskStep.name}
                         </p>
                         <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                           {status}
                         </p>
                       </div>
-                    </div>
-                    {interactive && (
+                      </div>
                       <div className="flex gap-2 pl-10 sm:pl-0">
                         {current && (
                           <Button
                             size="sm"
                             className="min-h-11 bg-amber-500 text-black hover:bg-amber-400"
-                            onClick={() => onToggleTask(task.id)}
+                            onClick={() => onToggleTask(taskStep.id)}
                           >
                             Mark complete
                           </Button>
@@ -623,13 +613,42 @@ export function LightkeeperJourney({
                           size="sm"
                           variant="ghost"
                           className="min-h-11"
-                          onClick={() => onOpenTask(task.id, task.name)}
+                          onClick={() =>
+                            onOpenTask(taskStep.id, taskStep.name)
+                          }
                         >
                           View task
                         </Button>
                       </div>
+                    </div>
+                    {task ? (
+                      <TaskDetailsContent
+                        task={task}
+                        achievements={achievements}
+                        completedTaskObjectives={completedTaskObjectives}
+                        taskObjectiveItemProgress={taskObjectiveItemProgress}
+                        onToggleTaskObjective={(
+                          taskId,
+                          objectiveKey,
+                          legacyObjectiveKey,
+                        ) =>
+                          onToggleTaskObjective(
+                            taskId,
+                            objectiveKey,
+                            legacyObjectiveKey,
+                            interactive,
+                          )
+                        }
+                        onUpdateTaskObjectiveItemProgress={
+                          onUpdateTaskObjectiveItemProgress
+                        }
+                      />
+                    ) : (
+                      <p className="border-t border-border/70 px-4 py-4 text-xs text-muted-foreground">
+                        Task details are unavailable in the current data set.
+                      </p>
                     )}
-                  </div>
+                  </article>
                 );
               })}
             </div>
@@ -640,8 +659,9 @@ export function LightkeeperJourney({
             muted={!progress.lightkeeperUnlocked}
           />
           <section
+            id="lightkeeper-unlock"
             className={cn(
-              "border px-5 py-5",
+              "scroll-mt-20 border px-5 py-5",
               progress.lightkeeperUnlocked
                 ? "border-emerald-500/45 bg-emerald-500/10"
                 : "border-border bg-card/25",
@@ -762,20 +782,39 @@ function SidequestJourneyChecklist({
   prerequisites,
   targets,
   selectedTargetId,
+  achievements,
   completedTasks,
+  completedTaskObjectives,
+  taskObjectiveItemProgress,
   tasksById,
   onSelectTarget,
   onToggleTask,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
   onOpenTask,
 }: {
   journey: LightkeeperSidequestJourney;
   prerequisites: LightkeeperSidequestJourneyRow[];
   targets: LightkeeperSidequestJourneyTarget[];
   selectedTargetId: string;
+  achievements: Achievement[];
   completedTasks: Set<string>;
+  completedTaskObjectives: Set<string>;
+  taskObjectiveItemProgress: Record<string, number>;
   tasksById: Map<string, Task>;
   onSelectTarget: (targetId: string) => void;
   onToggleTask: (taskId: string) => void;
+  onToggleTaskObjective: (
+    taskId: string,
+    objectiveKey: string,
+    legacyObjectiveKey?: string | string[],
+    syncTaskCompletion?: boolean,
+  ) => void;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number,
+    legacyObjectiveItemKey?: string | string[],
+  ) => void;
   onOpenTask: (taskId: string, taskName: string) => void;
 }) {
   const journeyComplete = journey.completed === journey.total;
@@ -871,7 +910,15 @@ function SidequestJourneyChecklist({
               key={task.id}
               task={task}
               isLast={index === prerequisites.length - 1}
+              taskData={tasksById.get(task.id)}
+              achievements={achievements}
+              completedTaskObjectives={completedTaskObjectives}
+              taskObjectiveItemProgress={taskObjectiveItemProgress}
               onToggle={() => onToggleTask(task.id)}
+              onToggleTaskObjective={onToggleTaskObjective}
+              onUpdateTaskObjectiveItemProgress={
+                onUpdateTaskObjectiveItemProgress
+              }
               onOpen={() => onOpenTask(task.id, task.name)}
             />
           ))
@@ -890,9 +937,16 @@ function SidequestJourneyChecklist({
           <SidequestDestinationRow
             key={target.id}
             target={target}
+            achievements={achievements}
             completedTasks={completedTasks}
+            completedTaskObjectives={completedTaskObjectives}
+            taskObjectiveItemProgress={taskObjectiveItemProgress}
             tasksById={tasksById}
             onToggleTask={onToggleTask}
+            onToggleTaskObjective={onToggleTaskObjective}
+            onUpdateTaskObjectiveItemProgress={
+              onUpdateTaskObjectiveItemProgress
+            }
             onOpenTask={onOpenTask}
           />
         ))}
@@ -943,13 +997,34 @@ function SidequestTargetFilter({
 
 function SidequestPrerequisiteRow({
   task,
+  taskData,
   isLast,
+  achievements,
+  completedTaskObjectives,
+  taskObjectiveItemProgress,
   onToggle,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
   onOpen,
 }: {
   task: LightkeeperSidequestJourneyRow;
+  taskData?: Task;
   isLast: boolean;
+  achievements: Achievement[];
+  completedTaskObjectives: Set<string>;
+  taskObjectiveItemProgress: Record<string, number>;
   onToggle: () => void;
+  onToggleTaskObjective: (
+    taskId: string,
+    objectiveKey: string,
+    legacyObjectiveKey?: string | string[],
+    syncTaskCompletion?: boolean,
+  ) => void;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number,
+    legacyObjectiveItemKey?: string | string[],
+  ) => void;
   onOpen: () => void;
 }) {
   const status = task.isComplete
@@ -959,103 +1034,138 @@ function SidequestPrerequisiteRow({
       : "Locked";
 
   return (
-    <div
+    <Collapsible
       className={cn(
-        "relative flex min-h-16 flex-col gap-2 border-b border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4",
+        "relative border-b border-border",
         task.isComplete && "bg-emerald-500/[0.04]",
       )}
     >
       {!isLast && (
         <div
-          className="absolute bottom-[-17px] left-[26px] top-[39px] w-px bg-border sm:left-[30px]"
+          className="absolute left-[26px] top-[39px] h-[42px] w-px bg-border sm:left-[30px]"
           aria-hidden="true"
         />
       )}
-      <div className="flex min-w-0 items-start gap-3">
-        <button
-          type="button"
-          aria-label={`${task.isComplete ? "Mark incomplete" : "Mark complete"}: ${task.name}`}
-          onClick={onToggle}
-          className={cn(
-            "relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500",
-            task.isComplete
-              ? "border-emerald-500 bg-emerald-500 text-black"
-              : task.isAvailable
-                ? "border-amber-500 text-amber-400"
-                : "border-border text-muted-foreground",
-          )}
-        >
-          {task.isComplete ? (
-            <Check className="size-4" />
-          ) : task.isAvailable ? (
-            <Circle className="size-3 fill-current" />
-          ) : (
-            <LockKeyhole className="size-3" />
-          )}
-        </button>
-        <div className="min-w-0">
-          <p
+      <div className="flex min-h-16 flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <button
+            type="button"
+            aria-label={`${task.isComplete ? "Mark incomplete" : "Mark complete"}: ${task.name}`}
+            onClick={onToggle}
             className={cn(
-              "text-sm font-semibold",
+              "relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500",
               task.isComplete
-                ? "text-emerald-400"
+                ? "border-emerald-500 bg-emerald-500 text-black"
                 : task.isAvailable
-                  ? "text-amber-200"
-                  : "text-foreground",
+                  ? "border-amber-500 text-amber-400"
+                  : "border-border text-muted-foreground",
             )}
           >
-            {task.name}
-          </p>
-          <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            {status}
-            {task.traderName && ` · ${task.traderName}`}
-            {(task.minPlayerLevel ?? 0) > 1 &&
-              ` · Level ${task.minPlayerLevel}`}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Leads to
-            </span>
-            {task.targetLabels.slice(0, 2).map((label) => (
-              <span
-                key={label}
-                className="border border-border bg-card/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-              >
-                {label}
-              </span>
-            ))}
-            {task.targetLabels.length > 2 && (
-              <span className="font-mono text-[10px] text-muted-foreground">
-                +{task.targetLabels.length - 2}
-              </span>
+            {task.isComplete ? (
+              <Check className="size-4" />
+            ) : task.isAvailable ? (
+              <Circle className="size-3 fill-current" />
+            ) : (
+              <LockKeyhole className="size-3" />
             )}
+          </button>
+          <div className="min-w-0">
+            <p
+              className={cn(
+                "text-sm font-semibold",
+                task.isComplete
+                  ? "text-emerald-400"
+                  : task.isAvailable
+                    ? "text-amber-200"
+                    : "text-foreground",
+              )}
+            >
+              {task.name}
+            </p>
+            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              {status}
+              {task.traderName && ` · ${task.traderName}`}
+              {(task.minPlayerLevel ?? 0) > 1 &&
+                ` · Level ${task.minPlayerLevel}`}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Leads to
+              </span>
+              {task.targetLabels.slice(0, 2).map((label) => (
+                <span
+                  key={label}
+                  className="border border-border bg-card/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  {label}
+                </span>
+              ))}
+              {task.targetLabels.length > 2 && (
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  +{task.targetLabels.length - 2}
+                </span>
+              )}
+            </div>
           </div>
         </div>
+        <div className="flex flex-wrap gap-1 pl-10 sm:pl-0">
+          <TaskDetailsTrigger task={taskData} />
+          <Button
+            size="sm"
+            variant="ghost"
+            className="min-h-11"
+            onClick={onOpen}
+          >
+            View task
+            <ExternalLink className="ml-2 size-3.5" />
+          </Button>
+        </div>
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="min-h-11 self-start pl-10 sm:self-auto sm:pl-3"
-        onClick={onOpen}
-      >
-        View task
-        <ExternalLink className="ml-2 size-3.5" />
-      </Button>
-    </div>
+      <SidequestTaskDetails
+        task={taskData}
+        achievements={achievements}
+        completedTaskObjectives={completedTaskObjectives}
+        taskObjectiveItemProgress={taskObjectiveItemProgress}
+        allowTaskCompletionSync={task.isAvailable || task.isComplete}
+        onToggleTaskObjective={onToggleTaskObjective}
+        onUpdateTaskObjectiveItemProgress={
+          onUpdateTaskObjectiveItemProgress
+        }
+      />
+    </Collapsible>
   );
 }
 
 function SidequestDestinationRow({
   target,
+  achievements,
   completedTasks,
+  completedTaskObjectives,
+  taskObjectiveItemProgress,
   tasksById,
   onToggleTask,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
   onOpenTask,
 }: {
   target: LightkeeperSidequestJourneyTarget;
+  achievements: Achievement[];
   completedTasks: Set<string>;
+  completedTaskObjectives: Set<string>;
+  taskObjectiveItemProgress: Record<string, number>;
   tasksById: Map<string, Task>;
   onToggleTask: (taskId: string) => void;
+  onToggleTaskObjective: (
+    taskId: string,
+    objectiveKey: string,
+    legacyObjectiveKey?: string | string[],
+    syncTaskCompletion?: boolean,
+  ) => void;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number,
+    legacyObjectiveItemKey?: string | string[],
+  ) => void;
   onOpenTask: (taskId: string, taskName: string) => void;
 }) {
   const isChoice = target.taskIds.length > 1;
@@ -1065,9 +1175,10 @@ function SidequestDestinationRow({
       ? "Available"
       : "Locked";
   const taskId = target.taskIds[0];
+  const task = taskId ? tasksById.get(taskId) : undefined;
 
   return (
-    <div
+    <Collapsible
       className={cn(
         "border-b border-border px-3 py-3 last:border-b-0 sm:px-4",
         target.isComplete && "bg-emerald-500/[0.04]",
@@ -1116,15 +1227,18 @@ function SidequestDestinationRow({
           </div>
         </div>
         {!isChoice && taskId && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="min-h-11 self-start pl-10 sm:self-auto sm:pl-3"
-            onClick={() => onOpenTask(taskId, target.label)}
-          >
-            View task
-            <ExternalLink className="ml-2 size-3.5" />
-          </Button>
+          <div className="flex flex-wrap gap-1 pl-10 sm:pl-0">
+            <TaskDetailsTrigger task={task} />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="min-h-11"
+              onClick={() => onOpenTask(taskId, target.label)}
+            >
+              View task
+              <ExternalLink className="ml-2 size-3.5" />
+            </Button>
+          </div>
         )}
       </div>
 
@@ -1140,65 +1254,180 @@ function SidequestDestinationRow({
                 completedTasks.has(requirement.task.id),
               );
             return (
-              <div
+              <Collapsible
                 key={choiceTaskId}
                 className={cn(
-                  "flex flex-col gap-2 border border-border bg-card/35 px-3 py-2 sm:flex-row sm:items-center sm:justify-between",
+                  "border border-border bg-card/35",
                   complete && "border-emerald-500/30",
                 )}
               >
-                <button
-                  type="button"
-                  className="flex min-h-11 min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                  aria-label={`${complete ? "Mark incomplete" : "Mark complete"}: ${choiceName}`}
-                  onClick={() => onToggleTask(choiceTaskId)}
-                >
-                  <span
-                    className={cn(
-                      "flex size-6 shrink-0 items-center justify-center rounded-full border",
-                      complete
-                        ? "border-emerald-500 bg-emerald-500 text-black"
-                        : available
-                          ? "border-amber-500 text-amber-400"
-                          : "border-border text-muted-foreground",
-                    )}
+                <div className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="button"
+                    className="flex min-h-11 min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    aria-label={`${complete ? "Mark incomplete" : "Mark complete"}: ${choiceName}`}
+                    onClick={() => onToggleTask(choiceTaskId)}
                   >
-                    {complete ? (
-                      <Check className="size-3.5" />
-                    ) : available ? (
-                      <Circle className="size-2.5 fill-current" />
-                    ) : (
-                      <LockKeyhole className="size-2.5" />
-                    )}
-                  </span>
-                  <span className="min-w-0">
                     <span
                       className={cn(
-                        "block text-xs font-semibold",
-                        complete ? "text-emerald-400" : "text-foreground",
+                        "flex size-6 shrink-0 items-center justify-center rounded-full border",
+                        complete
+                          ? "border-emerald-500 bg-emerald-500 text-black"
+                          : available
+                            ? "border-amber-500 text-amber-400"
+                            : "border-border text-muted-foreground",
                       )}
                     >
-                      {choiceName}
+                      {complete ? (
+                        <Check className="size-3.5" />
+                      ) : available ? (
+                        <Circle className="size-2.5 fill-current" />
+                      ) : (
+                        <LockKeyhole className="size-2.5" />
+                      )}
                     </span>
-                    <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-                      {complete ? "Complete" : available ? "Available" : "Locked"}
+                    <span className="min-w-0">
+                      <span
+                        className={cn(
+                          "block text-xs font-semibold",
+                          complete ? "text-emerald-400" : "text-foreground",
+                        )}
+                      >
+                        {choiceName}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
+                        {complete
+                          ? "Complete"
+                          : available
+                            ? "Available"
+                            : "Locked"}
+                      </span>
                     </span>
-                  </span>
-                </button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="min-h-11 self-start pl-9 sm:self-auto sm:pl-3"
-                  onClick={() => onOpenTask(choiceTaskId, choiceName)}
-                >
-                  View task
-                </Button>
-              </div>
+                  </button>
+                  <div className="flex flex-wrap gap-1 pl-9 sm:pl-0">
+                    <TaskDetailsTrigger task={choiceTask} />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="min-h-11"
+                      onClick={() => onOpenTask(choiceTaskId, choiceName)}
+                    >
+                      View task
+                    </Button>
+                  </div>
+                </div>
+                <SidequestTaskDetails
+                  task={choiceTask}
+                  achievements={achievements}
+                  completedTaskObjectives={completedTaskObjectives}
+                  taskObjectiveItemProgress={taskObjectiveItemProgress}
+                  allowTaskCompletionSync={available || complete}
+                  onToggleTaskObjective={onToggleTaskObjective}
+                  onUpdateTaskObjectiveItemProgress={
+                    onUpdateTaskObjectiveItemProgress
+                  }
+                />
+              </Collapsible>
             );
           })}
         </div>
       )}
-    </div>
+      {!isChoice && (
+        <SidequestTaskDetails
+          task={task}
+          achievements={achievements}
+          completedTaskObjectives={completedTaskObjectives}
+          taskObjectiveItemProgress={taskObjectiveItemProgress}
+          allowTaskCompletionSync={
+            target.isAvailable || target.isComplete
+          }
+          onToggleTaskObjective={onToggleTaskObjective}
+          onUpdateTaskObjectiveItemProgress={
+            onUpdateTaskObjectiveItemProgress
+          }
+        />
+      )}
+    </Collapsible>
+  );
+}
+
+function TaskDetailsTrigger({ task }: { task?: Task }) {
+  return (
+    <CollapsibleTrigger asChild>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="group min-h-11"
+        aria-label={`Toggle details for ${task?.name ?? "task"}`}
+      >
+        Details
+        {(task?.objectives?.length ?? 0) > 0 && (
+          <span className="ml-1 font-mono text-[10px] text-muted-foreground">
+            ({task?.objectives?.length})
+          </span>
+        )}
+        <ChevronDown className="ml-1.5 size-3.5 transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+      </Button>
+    </CollapsibleTrigger>
+  );
+}
+
+function SidequestTaskDetails({
+  task,
+  achievements,
+  completedTaskObjectives,
+  taskObjectiveItemProgress,
+  allowTaskCompletionSync,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
+}: {
+  task?: Task;
+  achievements: Achievement[];
+  completedTaskObjectives: Set<string>;
+  taskObjectiveItemProgress: Record<string, number>;
+  allowTaskCompletionSync: boolean;
+  onToggleTaskObjective: (
+    taskId: string,
+    objectiveKey: string,
+    legacyObjectiveKey?: string | string[],
+    syncTaskCompletion?: boolean,
+  ) => void;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number,
+    legacyObjectiveItemKey?: string | string[],
+  ) => void;
+}) {
+  return (
+    <CollapsibleContent>
+      {task ? (
+        <TaskDetailsContent
+          task={task}
+          achievements={achievements}
+          completedTaskObjectives={completedTaskObjectives}
+          taskObjectiveItemProgress={taskObjectiveItemProgress}
+          onToggleTaskObjective={(
+            taskId,
+            objectiveKey,
+            legacyObjectiveKey,
+          ) =>
+            onToggleTaskObjective(
+              taskId,
+              objectiveKey,
+              legacyObjectiveKey,
+              allowTaskCompletionSync,
+            )
+          }
+          onUpdateTaskObjectiveItemProgress={
+            onUpdateTaskObjectiveItemProgress
+          }
+        />
+      ) : (
+        <p className="border-t border-border/70 px-4 py-4 text-xs text-muted-foreground">
+          Task details are unavailable in the current data set.
+        </p>
+      )}
+    </CollapsibleContent>
   );
 }
 
@@ -1207,8 +1436,12 @@ function RouteChecklist({
   steps,
   tasksById,
   completedTasks,
+  completedStorylineObjectives,
+  taskObjectiveItemProgress,
   onToggleStep,
   onToggleTask,
+  onToggleStorylineObjective,
+  onUpdateTaskObjectiveItemProgress,
   onOpenStep,
   onOpenTask,
 }: {
@@ -1216,21 +1449,119 @@ function RouteChecklist({
   steps: LightkeeperRouteProgress["steps"];
   tasksById: Map<string, Task>;
   completedTasks: Set<string>;
+  completedStorylineObjectives: Set<string>;
+  taskObjectiveItemProgress: Record<string, number>;
   onToggleStep: (step: LightkeeperStep) => void;
   onToggleTask: (taskId: string) => void;
+  onToggleStorylineObjective: (objectiveId: string) => void;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number,
+    legacyObjectiveItemKey?: string | string[],
+  ) => void;
   onOpenStep: (step: LightkeeperStep) => void;
   onOpenTask: (taskId: string, taskName: string) => void;
 }) {
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const chapterStats = new Map<string, { completed: number; total: number }>();
+  let statsChapter: string | undefined;
+
+  steps.forEach((step) => {
+    if (step.chapter) statsChapter = step.chapter;
+    if (!statsChapter || step.isOptional) return;
+
+    const stats = chapterStats.get(statsChapter) ?? { completed: 0, total: 0 };
+    stats.total += 1;
+    if (step.isComplete) stats.completed += 1;
+    chapterStats.set(statsChapter, stats);
+  });
+
+  let activeChapter: string | undefined;
+
   return (
     <div className="mt-5 border border-border bg-background/20">
       {steps.map((step, index) => {
-        const isChoice = (step.taskIds?.length ?? 0) > 1;
+        if (step.chapter) activeChapter = step.chapter;
+        const stepChapter = activeChapter;
+        const isChapterExpanded =
+          path !== "ticket" ||
+          !stepChapter ||
+          expandedChapters.has(stepChapter);
+        const stepChapterStats = step.chapter
+          ? chapterStats.get(step.chapter)
+          : undefined;
+        const isTaskChoice = (step.taskIds?.length ?? 0) > 1;
+        const isObjectiveChoice = (step.choices?.length ?? 0) > 0;
+        const isChoice = isTaskChoice || isObjectiveChoice;
+        const itemRequirement = step.itemRequirement;
+        const objectiveItemKey = itemRequirement
+          ? `storyline-objective::${step.objectiveId ?? step.id}::${
+              itemRequirement.itemId || itemRequirement.itemName || "item"
+            }`
+          : "";
+        const itemCount = itemRequirement
+          ? Math.max(
+              0,
+              Math.min(
+                itemRequirement.requiredCount,
+                taskObjectiveItemProgress[objectiveItemKey] ?? 0,
+              ),
+            )
+          : 0;
+        const itemIncrement = itemRequirement?.increment ?? 1;
         return (
+          <Fragment key={step.id}>
+          {step.chapter && (
+            <button
+              type="button"
+              className="flex min-h-16 w-full items-center justify-between gap-4 border-b border-border bg-card/50 px-4 py-3 text-left transition-colors hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500 sm:px-5"
+              aria-expanded={isChapterExpanded}
+              onClick={() =>
+                setExpandedChapters((current) => {
+                  const next = new Set(current);
+                  if (next.has(step.chapter!)) {
+                    next.delete(step.chapter!);
+                  } else {
+                    next.add(step.chapter!);
+                  }
+                  return next;
+                })
+              }
+            >
+              <span className="min-w-0">
+                <span className="block text-[11px] font-bold uppercase tracking-[0.2em] text-amber-400">
+                  {step.chapter}
+                </span>
+                {step.chapterDescription && (
+                  <span className="mt-1 block max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                    {step.chapterDescription}
+                  </span>
+                )}
+              </span>
+              <span className="flex shrink-0 items-center gap-3">
+                {stepChapterStats && (
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {stepChapterStats.completed} / {stepChapterStats.total}
+                  </span>
+                )}
+                <ChevronDown
+                  className={cn(
+                    "size-4 text-muted-foreground transition-transform",
+                    isChapterExpanded && "rotate-180",
+                  )}
+                  aria-hidden="true"
+                />
+              </span>
+            </button>
+          )}
+          {isChapterExpanded && (
           <div
-            key={step.id}
             className={cn(
               "relative border-b border-border px-3 py-3 last:border-b-0 sm:px-4",
               step.isComplete && "bg-emerald-500/[0.04]",
+              step.isOptional && !step.isComplete && "bg-slate-500/[0.03]",
             )}
           >
             {index < steps.length - 1 && (
@@ -1271,32 +1602,197 @@ function RouteChecklist({
                     {step.label}
                   </p>
                   <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {step.isComplete
-                      ? "Complete"
-                      : isChoice
-                        ? "Complete any one"
-                        : "Incomplete"}
+                    {step.isOptional
+                      ? step.isComplete
+                        ? "Optional · Complete"
+                        : "Optional"
+                      : step.isComplete
+                        ? "Complete"
+                        : step.completionChoiceIds?.length
+                          ? "Hand over required for shortcut"
+                          : isChoice
+                            ? "Complete any one"
+                            : "Incomplete"}
                   </p>
                 </div>
               </div>
-              {!isChoice && (
+              {step.wikiUrl ? (
+                <Button
+                  asChild
+                  size="sm"
+                  variant="ghost"
+                  className="min-h-11 self-start pl-10 sm:self-auto sm:pl-3"
+                >
+                  <a
+                    href={step.wikiUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Wiki guide
+                    <ExternalLink className="ml-2 size-3.5" />
+                  </a>
+                </Button>
+              ) : !isChoice ? (
                 <Button
                   size="sm"
                   variant="ghost"
                   className="min-h-11 self-start pl-10 sm:self-auto sm:pl-3"
                   onClick={() => onOpenStep(step)}
                 >
-                  {path === "batya"
-                    ? "Open Batya"
-                    : path === "ticket"
-                      ? "Open Storyline"
-                      : "View task"}
+                  {path === "ticket" ? "Open Storyline" : "View task"}
                   <ExternalLink className="ml-2 size-3.5" />
                 </Button>
-              )}
+              ) : null}
             </div>
 
-            {isChoice && (
+            {itemRequirement && (
+              <div className="ml-0 mt-3 border border-border bg-card/35 p-3 sm:ml-10">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden border border-border bg-background/70">
+                      {itemRequirement.iconLink ? (
+                        <img
+                          src={itemRequirement.iconLink}
+                          alt=""
+                          className="size-full object-contain p-1"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Package className="size-4 text-muted-foreground" />
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-foreground">
+                        {itemRequirement.itemName}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {Math.max(0, itemRequirement.requiredCount - itemCount).toLocaleString()} remaining
+                        {itemRequirement.foundInRaid && (
+                          <span className="ml-2 rounded-sm bg-amber-500/15 px-1.5 py-0.5 font-bold uppercase text-amber-400">
+                            FIR
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="size-11"
+                      disabled={itemCount <= 0}
+                      aria-label={`Decrease ${itemRequirement.itemName}`}
+                      onClick={() =>
+                        onUpdateTaskObjectiveItemProgress(
+                          objectiveItemKey,
+                          Math.max(0, itemCount - itemIncrement),
+                        )
+                      }
+                    >
+                      <Minus className="size-4" />
+                    </Button>
+                    <span className="min-w-20 text-center font-mono text-xs text-foreground">
+                      {itemCount.toLocaleString()} / {itemRequirement.requiredCount.toLocaleString()}
+                    </span>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="size-11"
+                      disabled={itemCount >= itemRequirement.requiredCount}
+                      aria-label={`Increase ${itemRequirement.itemName}`}
+                      onClick={() =>
+                        onUpdateTaskObjectiveItemProgress(
+                          objectiveItemKey,
+                          Math.min(
+                            itemRequirement.requiredCount,
+                            itemCount + itemIncrement,
+                          ),
+                        )
+                      }
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isObjectiveChoice && (
+              <div className="mt-3 grid gap-2 sm:ml-10">
+                {step.choices?.map((choice) => {
+                  const complete = completedStorylineObjectives.has(choice.id);
+                  return (
+                    <div
+                      key={choice.id}
+                      className={cn(
+                        "flex flex-col gap-2 border border-border bg-card/35 px-3 py-2 sm:flex-row sm:items-center sm:justify-between",
+                        complete && "border-emerald-500/30 bg-emerald-500/[0.04]",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="flex min-h-11 min-w-0 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:items-center"
+                        aria-label={`${complete ? "Mark incomplete" : "Mark complete"}: ${choice.label}`}
+                        onClick={() => onToggleStorylineObjective(choice.id)}
+                      >
+                        <span
+                          className={cn(
+                            "mt-1 flex size-6 shrink-0 items-center justify-center rounded-full border sm:mt-0",
+                            complete
+                              ? "border-emerald-500 bg-emerald-500 text-black"
+                              : "border-border text-muted-foreground",
+                          )}
+                        >
+                          {complete ? (
+                            <Check className="size-3.5" />
+                          ) : (
+                            <Circle className="size-2.5" />
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span
+                            className={cn(
+                              "block text-xs font-semibold leading-relaxed",
+                              complete
+                                ? "text-emerald-400"
+                                : "text-foreground",
+                            )}
+                          >
+                            {choice.label}
+                          </span>
+                          {choice.note && (
+                            <span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">
+                              {choice.note}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      {choice.wikiUrl && (
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="ghost"
+                          className="min-h-11 self-start pl-9 sm:self-auto sm:pl-3"
+                        >
+                          <a
+                            href={choice.wikiUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {path === "batya" ? "Map wiki" : "Wiki guide"}
+                            <ExternalLink className="ml-2 size-3.5" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {isTaskChoice && (
               <div className="ml-10 mt-3 grid gap-2">
                 {step.taskIds?.map((taskId) => {
                   const taskName = getTaskName(tasksById, taskId);
@@ -1354,6 +1850,8 @@ function RouteChecklist({
               </div>
             )}
           </div>
+          )}
+          </Fragment>
         );
       })}
     </div>
