@@ -400,6 +400,11 @@ export function AppSidebar({
                           }`}
                         >
                           {GAME_MODE_LABELS[gameMode]}
+                          {gameMode === "pvp-season" && !isSwitchingMode && (
+                            <span className="absolute -right-1 -top-1 rounded-full border border-amber-500/40 bg-background px-1 py-0.5 text-[7px] font-bold uppercase leading-none tracking-wide text-amber-400">
+                              Beta
+                            </span>
+                          )}
                           {isSwitchingMode && activeGameMode === gameMode && (
                             <div className="absolute -top-1 -right-1 h-3 w-3">
                               <svg
