@@ -18,6 +18,7 @@ import {
   DEFAULT_GAME_MODE,
   normalizeGameMode,
   type GameMode,
+  type GraphqlGameMode,
 } from "@/utils/gameMode";
 import {
   DEFAULT_LANGUAGE,
@@ -1853,7 +1854,10 @@ const ACHIEVEMENTS_QUERY = `
   }
 `;
 
-const buildCombinedQuery = (gameMode: GameMode, language: LanguageCode) => `
+const buildCombinedQuery = (
+  gameMode: GraphqlGameMode,
+  language: LanguageCode,
+) => `
 {
   tasks(lang: ${language}, gameMode: ${gameMode}) {
     id
@@ -1981,6 +1985,14 @@ export async function fetchCombinedData(
       onStage,
     );
   } catch (err) {
+    if (normalizedGameMode === "pvp-season") {
+      console.warn(
+        "[Tarkov API] Seasonal JSON data fetch failed; GraphQL fallback is unavailable for pvp-season.",
+        err,
+      );
+      throw err;
+    }
+
     console.warn(
       "[Tarkov API] JSON data fetch failed; falling back to GraphQL.",
       err,
@@ -1995,7 +2007,7 @@ export async function fetchCombinedData(
 }
 
 async function fetchCombinedGraphqlData(
-  normalizedGameMode: GameMode,
+  normalizedGameMode: GraphqlGameMode,
   normalizedLanguage: LanguageCode,
   onStage?: (stage: FetchStage) => void,
 ): Promise<CombinedCachePayload & { overlay: Overlay }> {

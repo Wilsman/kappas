@@ -7,6 +7,7 @@ import {
   buildEftLogImportScanSummary,
   detectEftLogSessionGameMode,
   extractCompletedQuestIdsFromLogText,
+  getEftLogSourceGameMode,
   getEftSessionPatchVersion,
   isEftLogSessionIncludedForSourceMode,
   isEftTopLevelLogsFolder,
@@ -147,6 +148,11 @@ describe("eftLogImport", () => {
     expect(isEftLogSessionIncludedForSourceMode("pve", "regular")).toBe(false);
     expect(isEftLogSessionIncludedForSourceMode("unknown", "pve")).toBe(false);
     expect(isEftLogSessionIncludedForSourceMode("pve", "pve")).toBe(true);
+  });
+
+  it("keeps Seasonal profiles on the existing PvP/PvE log-source boundary", () => {
+    expect(getEftLogSourceGameMode("pvp-season")).toBe("regular");
+    expect(getEftLogSourceGameMode("pve")).toBe("pve");
   });
 
   it("extracts completed quest IDs from backend and push notification payloads", () => {

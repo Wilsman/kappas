@@ -7,8 +7,14 @@ import type { GameMode } from "@/utils/gameMode";
 import { getEquivalentTaskIds } from "@/utils/taskProgressView";
 
 export type EftLogImportMatchStatus = "new" | "already-complete";
-export type EftLogSessionGameMode = GameMode | "unknown";
-export type EftLogSourceGameMode = GameMode;
+export type EftLogSourceGameMode = "regular" | "pve";
+export type EftLogSessionGameMode = EftLogSourceGameMode | "unknown";
+
+export function getEftLogSourceGameMode(
+  gameMode: GameMode,
+): EftLogSourceGameMode {
+  return gameMode === "pve" ? "pve" : "regular";
+}
 
 export interface EftLogImportQuestMatch {
   taskId: string;

@@ -36,15 +36,18 @@ describe("task progress view mapping", () => {
   it("expands completed tasks across logical PvP/PvE variants", () => {
     const regularTask = makeTask("regular-task");
     const pveTask = makeTask("pve-task");
+    const seasonalTask = makeTask("seasonal-task");
     const groups = buildLogicalTaskIdGroups({
       regular: [regularTask],
       pve: [pveTask],
+      "pvp-season": [seasonalTask],
     });
 
     const expanded = expandCompletedTasks(new Set(["regular-task"]), groups);
 
     expect(expanded.has("regular-task")).toBe(true);
     expect(expanded.has("pve-task")).toBe(true);
+    expect(expanded.has("seasonal-task")).toBe(true);
   });
 
   it("does not complete mode-only quests with different logical identity", () => {

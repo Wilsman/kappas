@@ -340,6 +340,56 @@ describe("fetchCombinedData", () => {
     ]);
   });
 
+  it("requests dedicated Seasonal JSON endpoints", async () => {
+    const emptyTasksPayload = {
+      data: {
+        tasks: {},
+        achievements: {},
+      },
+    };
+    const overlayResponse = {
+      tasks: {},
+      $meta: { version: "test", generated: "2026-08-03T00:00:00.000Z" },
+    };
+    const fetchMock = mockJsonFetchSequence(
+      mockJsonResponse(emptyTasksPayload),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse({ data: {} }),
+      mockJsonResponse(overlayResponse),
+    );
+
+    await fetchCombinedData("pvp-season", "fr");
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0])).slice(0, 7)).toEqual([
+      "https://json.tarkov.dev/pvp-season/tasks",
+      "https://json.tarkov.dev/pvp-season/tasks_fr",
+      "https://json.tarkov.dev/pvp-season/hideout",
+      "https://json.tarkov.dev/pvp-season/hideout_fr",
+      "https://json.tarkov.dev/pvp-season/items_fr",
+      "https://json.tarkov.dev/pvp-season/traders_fr",
+      "https://json.tarkov.dev/pvp-season/maps_fr",
+    ]);
+  });
+
+  it("does not fall back to GraphQL when Seasonal JSON data fails", async () => {
+    const fetchMock = mockJsonFetchSequence(
+      mockJsonResponse({ error: "Seasonal unavailable" }, false, 503),
+    );
+
+    await expect(fetchCombinedData("pvp-season")).rejects.toThrow(
+      "status: 503",
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      "https://json.tarkov.dev/pvp-season/tasks",
+    );
+  });
+
   it("falls back to IDs and derived icons when JSON translations are missing", async () => {
     const tasksPayload = {
       data: {
@@ -1227,6 +1277,12 @@ describe("Cache functionality", () => {
       achievements: { data: { achievements: [] } },
       hideoutStations: { data: { hideoutStations: [] } },
     };
+    const seasonalPayload = {
+      tasks: { data: { tasks: [{ id: "seasonal-task" }] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
 
     await saveCombinedCache(
       regularPayload as unknown as Parameters<typeof saveCombinedCache>[0],
@@ -1236,11 +1292,18 @@ describe("Cache functionality", () => {
       pvePayload as unknown as Parameters<typeof saveCombinedCache>[0],
       "pve",
     );
+    await saveCombinedCache(
+      seasonalPayload as unknown as Parameters<typeof saveCombinedCache>[0],
+      "pvp-season",
+    );
 
     expect(loadCombinedCache("regular")?.tasks.data.tasks[0].id).toBe(
       "regular-task",
     );
     expect(loadCombinedCache("pve")?.tasks.data.tasks[0].id).toBe("pve-task");
+    expect(loadCombinedCache("pvp-season")?.tasks.data.tasks[0].id).toBe(
+      "seasonal-task",
+    );
   });
 
   it("should isolate task cache by language", async () => {

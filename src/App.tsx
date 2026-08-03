@@ -56,7 +56,7 @@ import {
 } from "@/utils/profile";
 import {
   DEFAULT_GAME_MODE,
-  getInactiveGameMode,
+  getInactiveGameModes,
   normalizeGameMode,
   type GameMode,
 } from "@/utils/gameMode";
@@ -2172,37 +2172,38 @@ function App() {
       return;
     }
 
-    const inactiveGameMode = getInactiveGameMode(activeProfileGameMode);
-    const cached = loadCombinedCache(inactiveGameMode, apiLanguage);
-    if (cached) {
-      setModeTasksByMode((prev) => ({
-        ...prev,
-        [inactiveGameMode]: cached.tasks.data.tasks,
-      }));
-    }
-    if (isCombinedCacheFresh(inactiveGameMode, apiLanguage)) return;
-
-    const requestKey = buildApiRequestKey(inactiveGameMode, apiLanguage);
-    const retryAfter = prefetchRetryAfterRef.current[requestKey] ?? 0;
-    if (Date.now() < retryAfter) return;
-
     let cancelled = false;
-    void fetchCombinedData(inactiveGameMode, apiLanguage)
-      .then((data) => {
-        if (cancelled) return;
-        delete prefetchRetryAfterRef.current[requestKey];
+    getInactiveGameModes(activeProfileGameMode).forEach((inactiveGameMode) => {
+      const cached = loadCombinedCache(inactiveGameMode, apiLanguage);
+      if (cached) {
         setModeTasksByMode((prev) => ({
           ...prev,
-          [inactiveGameMode]: data.tasks.data.tasks,
+          [inactiveGameMode]: cached.tasks.data.tasks,
         }));
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          prefetchRetryAfterRef.current[requestKey] =
-            Date.now() + PREFETCH_RETRY_COOLDOWN_MS;
-          console.warn("Inactive game mode prefetch error", err);
-        }
-      });
+      }
+      if (isCombinedCacheFresh(inactiveGameMode, apiLanguage)) return;
+
+      const requestKey = buildApiRequestKey(inactiveGameMode, apiLanguage);
+      const retryAfter = prefetchRetryAfterRef.current[requestKey] ?? 0;
+      if (Date.now() < retryAfter) return;
+
+      void fetchCombinedData(inactiveGameMode, apiLanguage)
+        .then((data) => {
+          if (cancelled) return;
+          delete prefetchRetryAfterRef.current[requestKey];
+          setModeTasksByMode((prev) => ({
+            ...prev,
+            [inactiveGameMode]: data.tasks.data.tasks,
+          }));
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            prefetchRetryAfterRef.current[requestKey] =
+              Date.now() + PREFETCH_RETRY_COOLDOWN_MS;
+            console.warn("Inactive game mode prefetch error", err);
+          }
+        });
+    });
 
     return () => {
       cancelled = true;

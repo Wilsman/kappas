@@ -36,6 +36,7 @@ import {
   buildEftLogImportScanSummary,
   detectEftLogSessionGameMode,
   extractCompletedQuestIdsFromLogText,
+  getEftLogSourceGameMode,
   getEftSessionPatchVersion,
   isEftLogSessionIncludedForSourceMode,
   isEftSessionFolderName,
@@ -549,7 +550,10 @@ export function EftLogImportDialog({
   >(new Set());
   const [sourceGameMode, setSourceGameMode] =
     useState<EftLogSourceGameMode>(() => {
-      return readQuickImportSettings()?.sourceGameMode ?? activeGameMode;
+      return (
+        readQuickImportSettings()?.sourceGameMode ??
+        getEftLogSourceGameMode(activeGameMode)
+      );
     });
 
   const resetState = useCallback(() => {
@@ -565,7 +569,7 @@ export function EftLogImportDialog({
 
   useEffect(() => {
     if (!readQuickImportSettings()) {
-      setSourceGameMode(activeGameMode);
+      setSourceGameMode(getEftLogSourceGameMode(activeGameMode));
     }
   }, [activeGameMode]);
 

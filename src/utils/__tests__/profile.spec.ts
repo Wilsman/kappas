@@ -67,4 +67,13 @@ describe("profile game mode metadata", () => {
 
     expect(getProfiles()[0].gameMode).toBe("pve");
   });
+
+  it("persists Seasonal as the pvp-season profile mode", () => {
+    const profile = createProfile("Seasonal PMC");
+
+    updateProfileGameMode(profile.id, "pvp-season");
+
+    expect(getProfiles()[0].gameMode).toBe("pvp-season");
+    expect(ensureProfiles().profiles[0].gameMode).toBe("pvp-season");
+  });
 });

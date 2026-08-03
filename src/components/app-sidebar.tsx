@@ -383,7 +383,7 @@ export function AppSidebar({
                         ))}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       {GAME_MODES.map((gameMode) => (
                         <button
                           key={gameMode}
