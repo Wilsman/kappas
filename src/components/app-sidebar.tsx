@@ -16,6 +16,7 @@ import {
   StickyNote,
   Scale,
   TowerControl,
+  Award,
 } from "lucide-react";
 
 import {
@@ -102,7 +103,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "hideout-requirements"
     | "current"
     | "kord-breach"
-    | "lightkeeper";
+    | "lightkeeper"
+    | "kappa";
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void;
   onOpenStorylineMap: () => void;
   onSetFocus: (mode: "all" | "kappa") => void;
@@ -612,6 +614,20 @@ export function AppSidebar({
                   <Scale />
                   <span>Kord Breach</span>
                   <span className="ml-auto rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-400">
+                    NEW
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Kappa unlock journey */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={viewMode === "kappa"}
+                  onClick={() => onSetViewMode("kappa")}
+                >
+                  <Award />
+                  <span>Kappa</span>
+                  <span className="ml-auto rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-amber-400">
                     NEW
                   </span>
                 </SidebarMenuButton>

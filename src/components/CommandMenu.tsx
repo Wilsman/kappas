@@ -89,7 +89,8 @@ interface CommandMenuProps {
     | "hideout-requirements"
     | "current"
     | "kord-breach"
-    | "lightkeeper";
+    | "lightkeeper"
+    | "kappa";
   groupBy: "trader" | "map";
   collectorGroupBy: "collector" | "hideout-stations";
   traders: string[];
@@ -692,6 +693,10 @@ export function CommandMenu(props: CommandMenuProps) {
     },
     navigateLightkeeper() {
       onSetViewMode("lightkeeper");
+      setOpen(false);
+    },
+    navigateKappa() {
+      onSetViewMode("kappa");
       setOpen(false);
     },
   } as const;
@@ -1804,6 +1809,12 @@ export function CommandMenu(props: CommandMenuProps) {
                 >
                   Lightkeeper Access{" "}
                   {viewMode === "lightkeeper" ? "(current)" : ""}
+                </CommandItem>
+                <CommandItem
+                  value="kappa collector unlock journey dawn new era"
+                  onSelect={handle.navigateKappa}
+                >
+                  Kappa {viewMode === "kappa" ? "(current)" : ""}
                 </CommandItem>
                 <CommandItem
                   value="storyline-quests"

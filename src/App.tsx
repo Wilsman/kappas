@@ -98,6 +98,10 @@ import {
   getEquivalentTaskObjectiveKeys,
 } from "@/utils/taskProgressView";
 import {
+  normalizeKappaLl4Traders,
+  type KappaLl4Trader,
+} from "@/utils/kappaProgress";
+import {
   fetchCombinedData,
   fetchOverlay,
   loadCombinedCache,
@@ -229,6 +233,11 @@ const KordBreachPlanner = lazy(() =>
 const LightkeeperJourney = lazy(() =>
   import("./components/LightkeeperJourney").then((m) => ({
     default: m.LightkeeperJourney,
+  })),
+);
+const KappaJourney = lazy(() =>
+  import("./components/KappaJourney").then((m) => ({
+    default: m.KappaJourney,
   })),
 );
 import { CommandMenu } from "./components/CommandMenu";
@@ -667,6 +676,10 @@ function App() {
   const [progressOpen, setProgressOpen] = useState(false);
   const [showKappa, setShowKappa] = useState(false);
   const [scavKarma, setScavKarma] = useState<number | null>(null);
+  const [kappaLl4Traders, setKappaLl4Traders] = useState<
+    Set<KappaLl4Trader>
+  >(new Set());
+  const kappaLl4TradersRef = useRef<Set<KappaLl4Trader>>(new Set());
   const [apiCollectorItems, setApiCollectorItems] =
     useState<CollectorItemsData | null>(null);
 
@@ -708,6 +721,7 @@ function App() {
     | "current"
     | "kord-breach"
     | "lightkeeper"
+    | "kappa"
   >("grouped");
   const [groupBy, setGroupBy] = useState<"trader" | "map">("trader");
   const [collectorGroupBy, setCollectorGroupBy] = useState<
@@ -740,13 +754,35 @@ function App() {
     [activeProfileId],
   );
 
+  const handleToggleKappaLl4Trader = useCallback(
+    async (trader: KappaLl4Trader) => {
+      const next = new Set(kappaLl4TradersRef.current);
+      if (next.has(trader)) next.delete(trader);
+      else next.add(trader);
+      kappaLl4TradersRef.current = next;
+      setKappaLl4Traders(next);
+      taskStorage.setProfile(activeProfileId);
+      await taskStorage.init();
+      await taskStorage.saveUserPreferences({
+        kappaLl4Traders: Array.from(next),
+      });
+    },
+    [activeProfileId],
+  );
+
+  useEffect(() => {
+    kappaLl4TradersRef.current = kappaLl4Traders;
+  }, [kappaLl4Traders]);
+
   const isMobile = useIsMobile();
 
   // Always use checklist on mobile
   useEffect(() => {
     if (isMobile) {
       setViewMode((currentView) =>
-        currentView === "kord-breach" || currentView === "lightkeeper"
+        currentView === "kord-breach" ||
+        currentView === "lightkeeper" ||
+        currentView === "kappa"
           ? currentView
           : "grouped",
       );
@@ -1199,6 +1235,9 @@ function App() {
       if (nextView === "lightkeeper") {
         return "/Lightkeeper";
       }
+      if (nextView === "kappa") {
+        return "/Kappa";
+      }
       return "/";
     },
     [],
@@ -1259,6 +1298,8 @@ function App() {
       nextView = "kord-breach";
     } else if (parts[0] === "lightkeeper") {
       nextView = "lightkeeper";
+    } else if (parts[0] === "kappa") {
+      nextView = "kappa";
     }
 
     return { nextView, nextCollectorGroupBy, nextStorylineView, nextEndingId };
@@ -1340,10 +1381,13 @@ function App() {
   }, []);
 
   const usesViewportCanvas = viewMode === "storyline-map";
-  const usesViewportFrame = usesViewportCanvas || viewMode === "lightkeeper";
+  const usesViewportFrame =
+    usesViewportCanvas || viewMode === "lightkeeper" || viewMode === "kappa";
   const isKordBreachView = viewMode === "kord-breach";
   const isLightkeeperView = viewMode === "lightkeeper";
-  const isFullWidthView = isKordBreachView || isLightkeeperView;
+  const isKappaView = viewMode === "kappa";
+  const isFullWidthView =
+    isKordBreachView || isLightkeeperView || isKappaView;
 
   // Note: preserve query params (e.g., ?tasksSearch=...) to enable deep links
   // When navigating between views we already replace the path without query above.
@@ -1596,6 +1640,9 @@ function App() {
           typeof savedPrefs.scavKarma === "number"
             ? savedPrefs.scavKarma
             : null,
+        );
+        setKappaLl4Traders(
+          new Set(normalizeKappaLl4Traders(savedPrefs.kappaLl4Traders)),
         );
         const loadedLevel = Number(savedPrefs.playerLevel);
         if (Number.isFinite(loadedLevel)) {
@@ -1976,6 +2023,9 @@ function App() {
           typeof savedPrefs.scavKarma === "number"
             ? savedPrefs.scavKarma
             : null,
+        );
+        setKappaLl4Traders(
+          new Set(normalizeKappaLl4Traders(savedPrefs.kappaLl4Traders)),
         );
         let loadedLevel = Number(savedPrefs.playerLevel);
         if (!Number.isFinite(loadedLevel)) {
@@ -2972,9 +3022,11 @@ function App() {
 
         // Reset player level filter state only if resetting all or normal tasks
         if (resetAll || resetNormalTasks) {
+          setKappaLl4Traders(new Set());
           await taskStorage.saveUserPreferences({
             playerLevel: 1,
             enableLevelFilter: false,
+            kappaLl4Traders: [],
             ...(resetAll ? { scavKarma: null } : {}),
           });
           if (resetAll) setScavKarma(null);
@@ -3072,6 +3124,9 @@ function App() {
       const savedPrefs = await taskStorage.loadUserPreferences();
       setScavKarma(
         typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
+      );
+      setKappaLl4Traders(
+        new Set(normalizeKappaLl4Traders(savedPrefs.kappaLl4Traders)),
       );
       // Notify components like NotesWidget and PrestigesView to refresh
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
@@ -3240,6 +3295,9 @@ function App() {
       setScavKarma(
         typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
       );
+      setKappaLl4Traders(
+        new Set(normalizeKappaLl4Traders(savedPrefs.kappaLl4Traders)),
+      );
 
       // Notify components to refresh
       window.dispatchEvent(new Event("taskTracker:profileChanged"));
@@ -3322,6 +3380,9 @@ function App() {
             typeof savedPrefs.scavKarma === "number"
               ? savedPrefs.scavKarma
               : null,
+          );
+          setKappaLl4Traders(
+            new Set(normalizeKappaLl4Traders(savedPrefs.kappaLl4Traders)),
           );
         }
       }
@@ -3433,6 +3494,15 @@ function App() {
           imageAlt="Lightkeeper access journey tracker"
           keywords="Escape from Tarkov, Lightkeeper, Network Provider Part 1, Batya, The Ticket, Mechanic tasks"
         />
+      ) : isKappaView ? (
+        <SEO
+          title="Kappa Unlock Tracker - Escape from Tarkov"
+          description="Track the new Collector unlock requirements, trader loyalty gates, Fence reputation, and the four required Escape from Tarkov quest chains."
+          canonical={`${window.location.origin}/Kappa`}
+          image="https://shared.fastly.steamstatic.com/community_assets/images/apps/3932890/2aea08313b894812ccb8baa231056ea70685cbf0.jpg"
+          imageAlt="Dawn of a New Era achievement artwork"
+          keywords="Escape from Tarkov, Kappa, Collector, Dawn of a New Era, Chemical Part 4, Shooter Born in Heaven"
+        />
       ) : (
         <SEO />
       )}
@@ -3507,6 +3577,8 @@ function App() {
                           ? "Kord Breach Modifier Planner"
                           : isLightkeeperView
                             ? "Lightkeeper Access"
+                            : isKappaView
+                              ? "Kappa"
                           : isMobile
                             ? "EFT Tracker"
                             : "Escape from Tarkov Task Tracker"}
@@ -3743,6 +3815,7 @@ function App() {
                   viewMode === "grouped" ||
                     viewMode === "kord-breach" ||
                     viewMode === "lightkeeper" ||
+                    viewMode === "kappa" ||
                     viewMode === "tracked-items" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
@@ -3791,6 +3864,28 @@ function App() {
                           }
                           onOpenTask={handleOpenLightkeeperTask}
                           onOpenTicket={handleOpenTicket}
+                        />
+                      ) : viewMode === "kappa" ? (
+                        <KappaJourney
+                          tasks={baseTasks}
+                          achievements={achievements}
+                          playerLevel={playerLevel}
+                          fenceReputation={scavKarma}
+                          ll4Traders={kappaLl4Traders}
+                          completedTasks={visibleCompletedTasks}
+                          completedTaskObjectives={
+                            visibleCompletedTaskObjectives
+                          }
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onPlayerLevelChange={handleSetPlayerLevel}
+                          onFenceReputationChange={handleSetScavKarma}
+                          onToggleLl4Trader={handleToggleKappaLl4Trader}
+                          onToggleTask={handleToggleComplete}
+                          onToggleTaskObjective={handleToggleTaskObjective}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
+                          onOpenTask={handleOpenLightkeeperTask}
                         />
                       ) : viewMode === "grouped" ? (
                         <CheckListView

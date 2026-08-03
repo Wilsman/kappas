@@ -86,6 +86,7 @@ export interface UserPreferences {
   notes: string;
   playerLevel: number;
   scavKarma?: number | null;
+  kappaLl4Traders?: string[];
   enableLevelFilter: boolean;
   showCompleted: boolean;
   showEvents: boolean;
@@ -635,6 +636,12 @@ export class TaskStorage {
               typeof item.value === "number" && Number.isFinite(item.value)
                 ? item.value
                 : null;
+          else if (item.id === "kappaLl4Traders")
+            prefs.kappaLl4Traders = Array.isArray(item.value)
+              ? item.value.filter(
+                  (trader): trader is string => typeof trader === "string",
+                )
+              : [];
           else if (item.id === "enableLevelFilter")
             prefs.enableLevelFilter = item.value as boolean;
           else if (item.id === "showCompleted")
