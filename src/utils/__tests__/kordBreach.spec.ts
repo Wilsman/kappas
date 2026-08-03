@@ -8,12 +8,15 @@ import {
 } from "@/data/kordBreachModifiers";
 import {
   calculateKordBreachBalance,
+  createRandomKordBreachBuild,
   findExactKordBreachSuggestions,
   formatKordBreachBuildSummary,
   getKordBreachSelectedModifiers,
   getKordBreachStatus,
   parseStoredKordBreachLayout,
+  parseStoredKordBreachRandomBlacklist,
   parseStoredKordBreachSelection,
+  serializeKordBreachRandomBlacklist,
   serializeKordBreachSelection,
   tokenizeKordBreachEffect,
 } from "@/utils/kordBreach";
@@ -115,6 +118,42 @@ describe("Kord Breach exact-match suggestions", () => {
   });
 });
 
+describe("Kord Breach random builds", () => {
+  it("creates a non-empty build that finishes exactly on zero", () => {
+    const build = createRandomKordBreachBuild([], () => 0.42);
+
+    expect(build.length).toBeGreaterThan(0);
+    expect(build.some((modifier) => modifier.category === "positive")).toBe(
+      true,
+    );
+    expect(build.some((modifier) => modifier.category === "negative")).toBe(
+      true,
+    );
+    expect(calculateKordBreachBalance(build).balance).toBe(0);
+  });
+
+  it("honors exclusions when producing a random build", () => {
+    const allowedIds = new Set(["juice-time", "hemophilia"]);
+    const blacklistedIds = KORD_BREACH_PERSONAL_MODIFIERS.filter(
+      (modifier) => !allowedIds.has(modifier.id),
+    ).map((modifier) => modifier.id);
+    const build = createRandomKordBreachBuild(blacklistedIds, () => 0.5);
+
+    expect(build.map((modifier) => modifier.id).sort()).toEqual([
+      "hemophilia",
+      "juice-time",
+    ]);
+  });
+
+  it("returns no build when exclusions remove every possible match", () => {
+    const allNegativeIds = KORD_BREACH_NEGATIVE_MODIFIERS.map(
+      (modifier) => modifier.id,
+    );
+
+    expect(createRandomKordBreachBuild(allNegativeIds, () => 0.5)).toEqual([]);
+  });
+});
+
 describe("Kord Breach saved builds", () => {
   it("round-trips valid ids and removes duplicates or unknown ids", () => {
     const stored = serializeKordBreachSelection([
@@ -145,6 +184,23 @@ describe("Kord Breach saved layout", () => {
     expect(parseStoredKordBreachLayout("dense")).toBe("detailed");
     expect(parseStoredKordBreachLayout("unknown")).toBe("detailed");
     expect(parseStoredKordBreachLayout(null)).toBe("detailed");
+  });
+});
+
+describe("Kord Breach saved randomizer exclusions", () => {
+  it("round-trips valid exclusion ids and rejects malformed state", () => {
+    const stored = serializeKordBreachRandomBlacklist([
+      "kappa-protocol",
+      "unknown",
+      "kappa-protocol",
+      "no-flea-market",
+    ]);
+
+    expect(parseStoredKordBreachRandomBlacklist(stored)).toEqual([
+      "kappa-protocol",
+      "no-flea-market",
+    ]);
+    expect(parseStoredKordBreachRandomBlacklist("not-json")).toEqual([]);
   });
 });
 

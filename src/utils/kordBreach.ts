@@ -5,6 +5,8 @@ import {
 
 export const KORD_BREACH_STORAGE_KEY = "kord-breach-build:v1";
 export const KORD_BREACH_LAYOUT_STORAGE_KEY = "kord-breach-layout:v1";
+export const KORD_BREACH_RANDOM_BLACKLIST_STORAGE_KEY =
+  "kord-breach-random-blacklist:v1";
 const KORD_BREACH_STORAGE_VERSION = 1;
 
 export type KordBreachLayout = "detailed" | "compact";
@@ -111,6 +113,34 @@ export function serializeKordBreachSelection(
   });
 }
 
+export function parseStoredKordBreachRandomBlacklist(
+  raw: string | null,
+): string[] {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as {
+      version?: unknown;
+      blacklistedIds?: unknown;
+    };
+    if (parsed?.version !== KORD_BREACH_STORAGE_VERSION) return [];
+    return sanitizeKordBreachModifierIds(parsed.blacklistedIds);
+  } catch {
+    return [];
+  }
+}
+
+export function serializeKordBreachRandomBlacklist(
+  blacklistedIds: Iterable<string>,
+): string {
+  return JSON.stringify({
+    version: KORD_BREACH_STORAGE_VERSION,
+    blacklistedIds: sanitizeKordBreachModifierIds(
+      Array.from(blacklistedIds),
+    ),
+  });
+}
+
 export function getKordBreachSelectedModifiers(
   selectedIds: Iterable<string>,
 ): KordBreachModifier[] {
@@ -145,6 +175,76 @@ export function calculateKordBreachBalance(
       selectedCount: 0,
     },
   );
+}
+
+function shuffleKordBreachModifiers(
+  modifiers: readonly KordBreachModifier[],
+  random: () => number,
+) {
+  const shuffled = [...modifiers];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomValue = Math.min(Math.max(random(), 0), 0.999999999);
+    const swapIndex = Math.floor(randomValue * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [
+      shuffled[swapIndex],
+      shuffled[index],
+    ];
+  }
+  return shuffled;
+}
+
+function buildRandomKordBreachSubsetsByTotal(
+  modifiers: readonly KordBreachModifier[],
+  random: () => number,
+) {
+  const subsetsByTotal = new Map<number, KordBreachModifier[]>([[0, []]]);
+
+  for (const modifier of shuffleKordBreachModifiers(modifiers, random)) {
+    const existingSubsets = Array.from(subsetsByTotal.entries());
+    const value = Math.abs(modifier.points);
+
+    for (const [total, subset] of existingSubsets) {
+      const nextTotal = total + value;
+      if (!subsetsByTotal.has(nextTotal) || random() < 0.35) {
+        subsetsByTotal.set(nextTotal, [...subset, modifier]);
+      }
+    }
+  }
+
+  return subsetsByTotal;
+}
+
+export function createRandomKordBreachBuild(
+  blacklistedIds: Iterable<string> = [],
+  random: () => number = Math.random,
+  modifiers: readonly KordBreachModifier[] = KORD_BREACH_PERSONAL_MODIFIERS,
+): KordBreachModifier[] {
+  const blacklisted = new Set(blacklistedIds);
+  const available = modifiers.filter(
+    (modifier) => !blacklisted.has(modifier.id),
+  );
+  const positivesByTotal = buildRandomKordBreachSubsetsByTotal(
+    available.filter((modifier) => modifier.category === "positive"),
+    random,
+  );
+  const negativesByTotal = buildRandomKordBreachSubsetsByTotal(
+    available.filter((modifier) => modifier.category === "negative"),
+    random,
+  );
+  const sharedTotals = Array.from(positivesByTotal.keys())
+    .filter((total) => total > 0 && negativesByTotal.has(total))
+    .sort((left, right) => left - right);
+
+  if (sharedTotals.length === 0) return [];
+
+  const randomValue = Math.min(Math.max(random(), 0), 0.999999999);
+  const selectedTotal =
+    sharedTotals[Math.floor(randomValue * sharedTotals.length)];
+
+  return [
+    ...(positivesByTotal.get(selectedTotal) ?? []),
+    ...(negativesByTotal.get(selectedTotal) ?? []),
+  ];
 }
 
 export function getKordBreachStatus(
