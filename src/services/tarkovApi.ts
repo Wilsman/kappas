@@ -47,29 +47,27 @@ export const getTarkovApiUrl = (
 export const OVERLAY_URL =
   "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
 const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
-const REMOVED_COLLECTOR_ITEM_IDS = new Set([
-  "5bc9bc53d4351e00367fbcee", // Golden rooster figurine
-  "5bc9b156d4351e00367fbce9", // Jar of DevilDog mayo
-  "5bd073c986f7747f627e796c", // Kotton beanie
-  "5bc9c377d4351e3bac12251b", // Old firesteel
-  "5bc9c29cd4351e003562b8a3", // Can of sprats
-]);
-const MISSING_COLLECTOR_ITEMS: CollectorItemsData["data"]["task"]["objectives"][number]["items"] =
+const ADDITIONAL_COLLECTOR_ITEMS: CollectorItemsData["data"]["task"]["objectives"][number]["items"] =
   [
     {
-      id: "69f9d547b98cc4120608692a",
-      name: "DesmondPilak CD",
-      iconLink: "https://assets.tarkov.dev/69f9d547b98cc4120608692a-icon.webp",
+      id: "6a3557f841667bc4bb00fea4",
+      name: "Bottle of YXMC water",
+      iconLink: "https://assets.tarkov.dev/6a3557f841667bc4bb00fea4-icon.webp",
     },
     {
-      id: "69f9d60b5de6674f08060f2a",
-      name: "Dunduk floppy disk",
-      iconLink: "https://assets.tarkov.dev/69f9d60b5de6674f08060f2a-icon.webp",
+      id: "6a3532423ec9d7082a05d430",
+      name: "Can of GigaBeef meat",
+      iconLink: "https://assets.tarkov.dev/6a3532423ec9d7082a05d430-icon.webp",
     },
     {
-      id: "69f9d319c906cd16da03b374",
-      name: "SheefGG piggy bank",
-      iconLink: "https://assets.tarkov.dev/69f9d319c906cd16da03b374-icon.webp",
+      id: "6a35322b81d315afe1018ef3",
+      name: "French bakery baguette",
+      iconLink: "https://assets.tarkov.dev/6a35322b81d315afe1018ef3-icon.webp",
+    },
+    {
+      id: "6a4ce086b5644e9f0a08d08a",
+      name: "LM KC-130 model aircraft",
+      iconLink: "https://assets.tarkov.dev/6a4ce086b5644e9f0a08d08a-icon.webp",
     },
   ];
 
@@ -559,27 +557,11 @@ function normalizeBuildingFoundationsObjectives(task: Task): Task {
   };
 }
 
-export function removeDeprecatedCollectorItems<
-  T extends CollectorItemsData["data"]["task"],
->(task: T): T {
-  return {
-    ...task,
-    objectives: task.objectives
-      .map((objective) => ({
-        ...objective,
-        items: objective.items.filter(
-          (item) => !item.id || !REMOVED_COLLECTOR_ITEM_IDS.has(item.id),
-        ),
-      }))
-      .filter((objective) => objective.items.length > 0),
-  };
-}
-
-export function addMissingCollectorItems<
+export function addAdditionalCollectorItems<
   T extends CollectorItemsData["data"]["task"],
 >(task: T): T {
   const existingItemKeys = collectObjectiveItemKeys(task.objectives);
-  const objectivesToAdd = MISSING_COLLECTOR_ITEMS.filter((item) => {
+  const objectivesToAdd = ADDITIONAL_COLLECTOR_ITEMS.filter((item) => {
     const itemKey = normalizeItemKey(item);
     return itemKey && !existingItemKeys.has(itemKey);
   }).map((item) => ({
@@ -597,11 +579,7 @@ export function addMissingCollectorItems<
 export function normalizeCollectorItems<
   T extends CollectorItemsData["data"]["task"],
 >(task: T): T {
-  const taskWithoutDeprecatedItems = removeDeprecatedCollectorItems(task);
-  if (taskWithoutDeprecatedItems.objectives.length === 0) {
-    return taskWithoutDeprecatedItems;
-  }
-  return addMissingCollectorItems(taskWithoutDeprecatedItems);
+  return addAdditionalCollectorItems(task);
 }
 
 export async function fetchOverlay(): Promise<Overlay> {
@@ -843,15 +821,17 @@ interface StoredCache {
   payload: CombinedCachePayload;
 }
 
-interface TaskOnlyCache {
+interface ModeCacheData {
   updatedAt: number;
-  payload: { tasks: TaskData };
+  payload: {
+    tasks: TaskData;
+    achievements: AchievementsData;
+  };
 }
 
 interface SharedCacheData {
   updatedAt: number;
   collectorItems: CollectorItemsData;
-  achievements: AchievementsData;
   hideoutStations: { data: HideoutStationsData };
 }
 
@@ -949,27 +929,27 @@ function buildLegacyCombinedCacheKey(gameMode: GameMode): string {
 
 function readSplitCache(
   sharedCacheKey: string,
-  taskCacheKey: string,
+  modeCacheKey: string,
 ): CombinedCachePayload | null {
   const sharedCacheRaw = localStorage.getItem(sharedCacheKey);
-  const taskCacheRaw = localStorage.getItem(taskCacheKey);
+  const modeCacheRaw = localStorage.getItem(modeCacheKey);
 
-  if (!sharedCacheRaw || !taskCacheRaw) return null;
+  if (!sharedCacheRaw || !modeCacheRaw) return null;
 
   try {
     const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
-    const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
+    const modeCache: ModeCacheData = JSON.parse(modeCacheRaw);
 
     if (
       sharedCache?.collectorItems &&
-      sharedCache?.achievements &&
       sharedCache?.hideoutStations &&
-      taskCache?.payload?.tasks
+      modeCache?.payload?.tasks &&
+      modeCache?.payload?.achievements
     ) {
       return {
-        tasks: taskCache.payload.tasks,
+        tasks: modeCache.payload.tasks,
         collectorItems: sharedCache.collectorItems,
-        achievements: sharedCache.achievements,
+        achievements: modeCache.payload.achievements,
         hideoutStations: sharedCache.hideoutStations,
       };
     }
@@ -982,22 +962,29 @@ function readSplitCache(
 
 function isSplitCacheFresh(
   sharedCacheKey: string,
-  taskCacheKey: string,
+  modeCacheKey: string,
   ttlMs: number,
 ): boolean {
   const sharedCacheRaw = localStorage.getItem(sharedCacheKey);
-  const taskCacheRaw = localStorage.getItem(taskCacheKey);
+  const modeCacheRaw = localStorage.getItem(modeCacheKey);
 
-  if (!sharedCacheRaw || !taskCacheRaw) return false;
+  if (!sharedCacheRaw || !modeCacheRaw) return false;
 
   try {
     const sharedCache: SharedCacheData = JSON.parse(sharedCacheRaw);
-    const taskCache: TaskOnlyCache = JSON.parse(taskCacheRaw);
+    const modeCache: ModeCacheData = JSON.parse(modeCacheRaw);
 
-    if (sharedCache?.updatedAt && taskCache?.updatedAt) {
+    if (
+      sharedCache?.updatedAt &&
+      sharedCache.collectorItems &&
+      sharedCache.hideoutStations &&
+      modeCache?.updatedAt &&
+      modeCache.payload?.tasks &&
+      modeCache.payload?.achievements
+    ) {
       const now = Date.now();
       return (
-        now - sharedCache.updatedAt < ttlMs && now - taskCache.updatedAt < ttlMs
+        now - sharedCache.updatedAt < ttlMs && now - modeCache.updatedAt < ttlMs
       );
     }
   } catch {
@@ -1147,13 +1134,13 @@ export function loadCombinedCache(
   const normalizedGameMode = normalizeGameMode(gameMode);
   const normalizedLanguage = normalizeLanguage(language);
 
-  // Try to load from new split cache format (shared + tasks in localStorage)
+  // Try to load from the split cache format (shared + mode-specific data).
   const sharedCacheKey = buildSharedCacheKey(normalizedLanguage);
-  const taskCacheKey = buildCombinedCacheKey(
+  const modeCacheKey = buildCombinedCacheKey(
     normalizedGameMode,
     normalizedLanguage,
   );
-  const splitCache = readSplitCache(sharedCacheKey, taskCacheKey);
+  const splitCache = readSplitCache(sharedCacheKey, modeCacheKey);
   if (splitCache) return splitCache;
 
   // Fallback to legacy cache for compatibility
@@ -1210,13 +1197,16 @@ export function isCombinedCacheFresh(
     const modeCache = readStoredCache(
       buildLegacyCombinedCacheKey(normalizedGameMode),
     );
-    if (modeCache?.updatedAt) {
+    if (modeCache?.updatedAt && isCombinedCachePayload(modeCache.payload)) {
       return Date.now() - modeCache.updatedAt < ttlMs;
     }
 
     if (normalizedGameMode === DEFAULT_GAME_MODE) {
       const legacyCache = readStoredCache(API_CACHE_KEY);
-      if (legacyCache?.updatedAt) {
+      if (
+        legacyCache?.updatedAt &&
+        isCombinedCachePayload(legacyCache.payload)
+      ) {
         return Date.now() - legacyCache.updatedAt < ttlMs;
       }
     }
@@ -1234,12 +1224,11 @@ export async function saveCombinedCache(
   const normalizedLanguage = normalizeLanguage(language);
   const now = Date.now();
 
-  // Save shared data to localStorage (smaller, shared across modes)
+  // Keep the existing smaller shared-data entry for the remaining payload.
   if (canAttemptLocalStorageWrite()) {
     const sharedData: SharedCacheData = {
       updatedAt: now,
       collectorItems: payload.collectorItems,
-      achievements: payload.achievements,
       hideoutStations: payload.hideoutStations,
     };
     setCacheItemWithQuotaRecovery(
@@ -1248,15 +1237,19 @@ export async function saveCombinedCache(
     );
   }
 
-  // Save task data to localStorage (mode-specific, smaller now)
+  // Achievement rates come from each mode's JSON payload, so keep them with
+  // the mode-specific task data instead of allowing prefetches to overwrite them.
   if (canAttemptLocalStorageWrite()) {
-    const taskData: TaskOnlyCache = {
+    const modeData: ModeCacheData = {
       updatedAt: now,
-      payload: { tasks: payload.tasks },
+      payload: {
+        tasks: payload.tasks,
+        achievements: payload.achievements,
+      },
     };
     setCacheItemWithQuotaRecovery(
       buildCombinedCacheKey(normalizedGameMode, normalizedLanguage),
-      JSON.stringify(taskData),
+      JSON.stringify(modeData),
     );
   }
 

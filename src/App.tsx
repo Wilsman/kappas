@@ -790,6 +790,9 @@ function App() {
   }, [isMobile]);
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [modeAchievementsByMode, setModeAchievementsByMode] = useState<
+    Partial<Record<GameMode, Achievement[]>>
+  >({});
   const [completedAchievements, setCompletedAchievements] = useState<
     Set<string>
   >(new Set());
@@ -983,6 +986,10 @@ function App() {
       setAllTasks(payload.tasks.data.tasks);
       setApiCollectorItems(payload.collectorItems);
       setAchievements(payload.achievements.data.achievements);
+      setModeAchievementsByMode((prev) => ({
+        ...prev,
+        [gameMode]: payload.achievements.data.achievements,
+      }));
       setHideoutStations(payload.hideoutStations.data.hideoutStations);
       if (payload.overlay) setOverlay(payload.overlay);
       lastLoadedGameModeRef.current = gameMode;
@@ -2086,6 +2093,10 @@ function App() {
               setAllTasks([]);
               setApiCollectorItems(null);
               setAchievements([]);
+              setModeAchievementsByMode((prev) => ({
+                ...prev,
+                [initialGameMode]: [],
+              }));
             }
           } finally {
             if (!cached) setIsLoading(false);
@@ -2108,6 +2119,10 @@ function App() {
             setAllTasks([]);
             setApiCollectorItems(null);
             setAchievements([]);
+            setModeAchievementsByMode((prev) => ({
+              ...prev,
+              [initialGameMode]: [],
+            }));
           } finally {
             setIsLoading(false);
           }
@@ -2180,6 +2195,10 @@ function App() {
           ...prev,
           [inactiveGameMode]: cached.tasks.data.tasks,
         }));
+        setModeAchievementsByMode((prev) => ({
+          ...prev,
+          [inactiveGameMode]: cached.achievements.data.achievements,
+        }));
       }
       if (isCombinedCacheFresh(inactiveGameMode, apiLanguage)) return;
 
@@ -2194,6 +2213,10 @@ function App() {
           setModeTasksByMode((prev) => ({
             ...prev,
             [inactiveGameMode]: data.tasks.data.tasks,
+          }));
+          setModeAchievementsByMode((prev) => ({
+            ...prev,
+            [inactiveGameMode]: data.achievements.data.achievements,
           }));
         })
         .catch((err) => {
@@ -3989,6 +4012,8 @@ function App() {
                       ) : viewMode === "achievements" ? (
                         <AchievementsView
                           achievements={achievements}
+                          achievementsByMode={modeAchievementsByMode}
+                          activeGameMode={activeProfileGameMode}
                           completed={completedAchievements}
                           onToggle={handleToggleAchievement}
                         />

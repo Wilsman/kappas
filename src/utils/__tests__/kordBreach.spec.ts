@@ -24,9 +24,9 @@ import {
 describe("Kord Breach modifier data", () => {
   it("contains the announced global and personal modifier counts", () => {
     expect(KORD_BREACH_GLOBAL_MODIFIERS).toHaveLength(6);
-    expect(KORD_BREACH_POSITIVE_MODIFIERS).toHaveLength(17);
+    expect(KORD_BREACH_POSITIVE_MODIFIERS).toHaveLength(18);
     expect(KORD_BREACH_NEGATIVE_MODIFIERS).toHaveLength(13);
-    expect(KORD_BREACH_ALL_MODIFIERS).toHaveLength(36);
+    expect(KORD_BREACH_ALL_MODIFIERS).toHaveLength(37);
   });
 
   it("uses unique ids and correctly signed personal values", () => {
@@ -44,17 +44,17 @@ describe("Kord Breach modifier data", () => {
     ).toBe(true);
   });
 
-  it("preserves the announced headline values", () => {
+  it("matches the official Kord Breach headline values", () => {
     expect(
       KORD_BREACH_PERSONAL_MODIFIERS.find(
         (modifier) => modifier.id === "kappa-protocol",
       )?.points,
-    ).toBe(-21);
+    ).toBe(-12);
     expect(
       KORD_BREACH_PERSONAL_MODIFIERS.find(
         (modifier) => modifier.id === "no-flea-market",
       )?.points,
-    ).toBe(6);
+    ).toBe(10);
   });
 });
 
@@ -78,7 +78,7 @@ describe("Kord Breach balance", () => {
     const deficit = calculateKordBreachBalance(
       getKordBreachSelectedModifiers(["kappa-protocol"]),
     );
-    expect(deficit.balance).toBe(-21);
+    expect(deficit.balance).toBe(-12);
     expect(getKordBreachStatus(deficit).kind).toBe("deficit");
   });
 });
@@ -87,18 +87,18 @@ describe("Kord Breach exact-match suggestions", () => {
   it("suggests the fewest deterministic negative additions", () => {
     const suggestions = findExactKordBreachSuggestions(["juice-time"]);
     expect(suggestions.map((match) => match.map((item) => item.name))).toEqual([
+      ["Chronic Fatigue Syndrome"],
       ["Hemophilia"],
       ["Personality Vacuum"],
-      ["Well That Hurt!"],
     ]);
   });
 
   it("suggests positive additions when points remain", () => {
     const suggestions = findExactKordBreachSuggestions(["hemophilia"]);
     expect(suggestions.map((match) => match.map((item) => item.name))).toEqual([
+      ["Diet"],
       ["Hypodipsia"],
       ["Juice Time"],
-      ["Polyphagia"],
     ]);
   });
 

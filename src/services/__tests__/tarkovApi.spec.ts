@@ -12,7 +12,6 @@ import {
   API_CACHE_TTL_MS,
   SHARED_CACHE_KEY,
   sanitizeTaskRewardData,
-  removeDeprecatedCollectorItems,
   normalizeCollectorItems,
   buildEventTasksFromOverlay,
 } from "../tarkovApi";
@@ -269,6 +268,8 @@ describe("fetchCombinedData", () => {
       id: "a1",
       name: "Achievement One",
       description: "Achievement description",
+      playersCompletedPercent: 1,
+      adjustedPlayersCompletedPercent: 2,
       rarity: "Common",
     });
     expect(result.hideoutStations.data.hideoutStations[0]).toMatchObject({
@@ -666,29 +667,36 @@ describe("fetchCombinedData", () => {
     ]);
   });
 
-  it("removes Collector items that were removed from the live game before the API updates", () => {
-    const result = removeDeprecatedCollectorItems({
+  it("preserves the latest API Collector items and appends configured additions", () => {
+    const result = normalizeCollectorItems({
       id: "5c51aac186f77432ea65c552",
       objectives: [
         {
           items: [
             { id: "5bc9bc53d4351e00367fbcee", name: "Golden rooster figurine" },
-            { id: "5bc9b156d4351e00367fbce9", name: "Jar of DevilDog mayo" },
-            { id: "5bd073c986f7747f627e796c", name: "Kotton beanie" },
-            { id: "5bc9c377d4351e3bac12251b", name: "Old firesteel" },
-            { id: "5bc9c29cd4351e003562b8a3", name: "Can of sprats" },
             { id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" },
           ],
         },
       ],
     });
 
-    expect(result.objectives.flatMap((objective) => objective.items)).toEqual([
-      { id: "69398e94ca94fd2877039504", name: "Nut Sack balaclava" },
-    ]);
+    const itemNames = result.objectives.flatMap((objective) =>
+      objective.items.map((item) => item.name),
+    );
+
+    expect(itemNames).toEqual(
+      expect.arrayContaining([
+        "Golden rooster figurine",
+        "Nut Sack balaclava",
+        "Bottle of YXMC water",
+        "Can of GigaBeef meat",
+        "French bakery baguette",
+        "LM KC-130 model aircraft",
+      ]),
+    );
   });
 
-  it("normalizes Collector items to the current live-game total while the API lags", () => {
+  it("uses the latest API Collector items and appends new items", () => {
     const apiCollectorItems = [
       { id: "5bc9c377d4351e3bac12251b", name: "Old firesteel" },
       { id: "5bc9bc53d4351e00367fbcee", name: "Golden rooster figurine" },
@@ -743,15 +751,16 @@ describe("fetchCombinedData", () => {
       objective.items.map((item) => item.name),
     );
 
-    expect(itemNames).toHaveLength(41);
+    expect(itemNames).toHaveLength(47);
     expect(itemNames).toEqual(
       expect.arrayContaining([
-        "DesmondPilak CD",
-        "Dunduk floppy disk",
-        "SheefGG piggy bank",
+        "Bottle of YXMC water",
+        "Can of GigaBeef meat",
+        "French bakery baguette",
+        "LM KC-130 model aircraft",
       ]),
     );
-    expect(itemNames).not.toEqual(
+    expect(itemNames).toEqual(
       expect.arrayContaining([
         "Golden rooster figurine",
         "Jar of DevilDog mayo",
@@ -1268,19 +1277,37 @@ describe("Cache functionality", () => {
     const regularPayload = {
       tasks: { data: { tasks: [{ id: "regular-task" }] } },
       collectorItems: { data: { task: { id: "test", objectives: [] } } },
-      achievements: { data: { achievements: [] } },
+      achievements: {
+        data: {
+          achievements: [
+            { id: "shared-achievement", playersCompletedPercent: 1 },
+          ],
+        },
+      },
       hideoutStations: { data: { hideoutStations: [] } },
     };
     const pvePayload = {
       tasks: { data: { tasks: [{ id: "pve-task" }] } },
       collectorItems: { data: { task: { id: "test", objectives: [] } } },
-      achievements: { data: { achievements: [] } },
+      achievements: {
+        data: {
+          achievements: [
+            { id: "shared-achievement", playersCompletedPercent: 2 },
+          ],
+        },
+      },
       hideoutStations: { data: { hideoutStations: [] } },
     };
     const seasonalPayload = {
       tasks: { data: { tasks: [{ id: "seasonal-task" }] } },
       collectorItems: { data: { task: { id: "test", objectives: [] } } },
-      achievements: { data: { achievements: [] } },
+      achievements: {
+        data: {
+          achievements: [
+            { id: "shared-achievement", playersCompletedPercent: 3 },
+          ],
+        },
+      },
       hideoutStations: { data: { hideoutStations: [] } },
     };
 
@@ -1304,6 +1331,18 @@ describe("Cache functionality", () => {
     expect(loadCombinedCache("pvp-season")?.tasks.data.tasks[0].id).toBe(
       "seasonal-task",
     );
+    expect(
+      loadCombinedCache("regular")?.achievements.data.achievements[0]
+        .playersCompletedPercent,
+    ).toBe(1);
+    expect(
+      loadCombinedCache("pve")?.achievements.data.achievements[0]
+        .playersCompletedPercent,
+    ).toBe(2);
+    expect(
+      loadCombinedCache("pvp-season")?.achievements.data.achievements[0]
+        .playersCompletedPercent,
+    ).toBe(3);
   });
 
   it("should isolate task cache by language", async () => {
@@ -1374,7 +1413,7 @@ describe("Cache functionality", () => {
     expect(isCombinedCacheFresh("pve")).toBe(false);
   });
 
-  it("should use legacy split cache as English fallback only", () => {
+  it("should reject legacy split cache without mode-specific achievements", () => {
     const sharedCache = {
       updatedAt: Date.now(),
       collectorItems: { data: { task: { id: "collector-en", objectives: [] } } },
@@ -1392,13 +1431,8 @@ describe("Cache functionality", () => {
       JSON.stringify(taskCache),
     );
 
-    expect(loadCombinedCache("regular", "en")?.tasks.data.tasks[0].id).toBe(
-      "legacy-split-task",
-    );
-    expect(loadCombinedCache("regular", "en")?.collectorItems.data.task.id).toBe(
-      "collector-en",
-    );
-    expect(isCombinedCacheFresh("regular", "en")).toBe(true);
+    expect(loadCombinedCache("regular", "en")).toBeNull();
+    expect(isCombinedCacheFresh("regular", "en")).toBe(false);
     expect(loadCombinedCache("regular", "de")).toBeNull();
     expect(isCombinedCacheFresh("regular", "de")).toBe(false);
   });
@@ -1471,12 +1505,14 @@ describe("Cache functionality", () => {
     const sharedCache = {
       updatedAt: Date.now() - API_CACHE_TTL_MS - 1000,
       collectorItems: { data: { task: { objectives: [] } } },
-      achievements: { data: { achievements: [] } },
       hideoutStations: { data: { hideoutStations: [] } },
     };
     const taskCache = {
       updatedAt: Date.now() - API_CACHE_TTL_MS - 1000,
-      payload: { tasks: { data: { tasks: [] } } },
+      payload: {
+        tasks: { data: { tasks: [] } },
+        achievements: { data: { achievements: [] } },
+      },
     };
 
     localStorage.setItem(`${SHARED_CACHE_KEY}::en`, JSON.stringify(sharedCache));

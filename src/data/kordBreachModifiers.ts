@@ -64,15 +64,22 @@ export const KORD_BREACH_POSITIVE_MODIFIERS = [
     name: "Marathon Runner",
     category: "positive",
     points: -3,
-    effects: ["Arm and leg stamina is consumed 15% slower."],
+    effects: ["Arm and leg stamina is consumed 20% slower."],
+  },
+  {
+    id: "lucky",
+    name: "Lucky",
+    category: "positive",
+    points: -1,
+    effects: ["Audentes fortuna iuvat!"],
   },
   {
     id: "safecracker",
     name: "Safecracker",
     category: "positive",
-    points: -6,
+    points: -5,
     effects: [
-      "Mechanical keys have a 20% chance not to lose durability when used.",
+      "Mechanical keys have a 25% chance not to lose durability when used.",
     ],
   },
   {
@@ -81,7 +88,7 @@ export const KORD_BREACH_POSITIVE_MODIFIERS = [
     category: "positive",
     points: -5,
     effects: [
-      "Walking in vegetation generates 50% less noise and movement slowdown.",
+      "Walking in vegetation generates 75% less noise and movement slowdown.",
     ],
   },
   {
@@ -99,14 +106,14 @@ export const KORD_BREACH_POSITIVE_MODIFIERS = [
     category: "positive",
     points: -2,
     effects: [
-      "Consuming canned fish grants Health Regeneration (+2) for 10 seconds.",
+      "Consuming canned fish grants the Health Regeneration (+2) effect for 30 seconds.",
     ],
   },
   {
     id: "youth",
     name: "Youth",
     category: "positive",
-    points: -3,
+    points: -5,
     effects: [
       "Energy is consumed 20% slower.",
       "Arm and leg stamina is increased by 10.",
@@ -123,31 +130,31 @@ export const KORD_BREACH_POSITIVE_MODIFIERS = [
     id: "the-tarkov-shooter",
     name: "The Tarkov Shooter",
     category: "positive",
-    points: -3,
+    points: -2,
     effects: [
       "Bolt-action Rifles skill leveling speed is increased by 100%.",
-      "Bolt-action Rifles skill starts at level 10.",
+      "Bolt-action Rifles skill starts at level 25.",
     ],
   },
   {
     id: "diet",
     name: "Diet",
     category: "positive",
-    points: -1,
+    points: -2,
     effects: ["All provisions consume 50% less resource."],
   },
   {
     id: "hercules",
     name: "Hercules",
     category: "positive",
-    points: -3,
+    points: -5,
     effects: ["Strength and Endurance skills start at level 15."],
   },
   {
     id: "sprinter",
     name: "Sprinter",
     category: "positive",
-    points: -2,
+    points: -3,
     effects: ["Running speed is increased by 5%."],
   },
   {
@@ -162,14 +169,14 @@ export const KORD_BREACH_POSITIVE_MODIFIERS = [
     name: "Hypodipsia",
     category: "positive",
     points: -2,
-    effects: ["Hydration is consumed 15% slower."],
+    effects: ["Hydration is consumed 20% slower."],
   },
   {
     id: "polyphagia",
     name: "Polyphagia",
     category: "positive",
     points: -2,
-    effects: ["Energy is consumed 15% slower."],
+    effects: ["Energy is consumed 20% slower."],
   },
   {
     id: "sturdy-bones",
@@ -177,24 +184,24 @@ export const KORD_BREACH_POSITIVE_MODIFIERS = [
     category: "positive",
     points: -3,
     effects: [
-      "Limb fracture chance is decreased by 15%.",
-      "Falling from heights deals 15% less damage.",
+      "Limb fracture chance is decreased by 25%.",
+      "Falling from heights deals 20% less damage.",
     ],
   },
   {
     id: "average",
     name: "Average",
     category: "positive",
-    points: -10,
+    points: -12,
     effects: [
-      "All character skills start at level 25 but cannot be increased further, excluding Crafting.",
+      "All character skills are set to level 25 but cannot be leveled further (Excluding Crafting).",
     ],
   },
   {
     id: "kappa-protocol",
     name: "Kappa Protocol",
     category: "positive",
-    points: -21,
+    points: -12,
     effects: ["Immediately receive Secure container Kappa."],
   },
 ] as const satisfies readonly KordBreachModifier[];
@@ -213,8 +220,8 @@ export const KORD_BREACH_NEGATIVE_MODIFIERS = [
     category: "negative",
     points: 3,
     effects: [
-      "Limb fracture chance is increased by 15%.",
-      "Falling from heights deals 15% more damage.",
+      "Limb fracture chance is increased by 25%.",
+      "Falling from heights deals 20% more damage.",
     ],
   },
   {
@@ -238,25 +245,25 @@ export const KORD_BREACH_NEGATIVE_MODIFIERS = [
     id: "incompetent",
     name: "Incompetent",
     category: "negative",
-    points: 4,
+    points: 10,
     effects: [
       "All character skills level 25% slower, excluding Bolt-action Rifles.",
-      "All character skills are capped at level 30, excluding Crafting.",
+      "All character skills can only be increased up to level 30 (Excluding Crafting).",
     ],
   },
   {
     id: "polydipsia",
     name: "Polydipsia",
     category: "negative",
-    points: 1,
+    points: 2,
     effects: ["Hydration is consumed 15% faster."],
   },
   {
     id: "chronic-fatigue-syndrome",
     name: "Chronic Fatigue Syndrome",
     category: "negative",
-    points: 1,
-    effects: ["Energy is consumed 15% faster."],
+    points: 2,
+    effects: ["Energy is consumed 20% faster."],
   },
   {
     id: "personality-vacuum",
@@ -283,23 +290,23 @@ export const KORD_BREACH_NEGATIVE_MODIFIERS = [
     category: "negative",
     points: 3,
     effects: [
-      "Become allergic to 2 random items from the Provisions or Medication category.",
+      "Become allergic to 3 random items from the Provisions or Medication category.",
     ],
   },
   {
     id: "broken-secure-container",
     name: "Broken Secure Container",
     category: "negative",
-    points: 4,
+    points: 6,
     effects: [
-      "Secure container is restricted to cash, keys, dogtags, special equipment, and certain containers.",
+      "Secure container can only be filled with cash, keys, dogtags, special equipment, certain containers and Battle Pass documents.",
     ],
   },
   {
     id: "no-flea-market",
     name: "No Flea Market",
     category: "negative",
-    points: 6,
+    points: 10,
     effects: ["Trading with players on the Flea Market is disabled."],
   },
   {
