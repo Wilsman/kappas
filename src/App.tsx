@@ -101,6 +101,7 @@ import {
   normalizeKappaLl4Traders,
   type KappaLl4Trader,
 } from "@/utils/kappaProgress";
+import { getEditionDefaultHideoutLevelKeys } from "@/utils/hideoutProgress";
 import {
   fetchCombinedData,
   fetchOverlay,
@@ -795,6 +796,13 @@ function App() {
     Set<string>
   >(new Set());
   const [hideoutStations, setHideoutStations] = useState<HideoutStation[]>([]);
+  const activeEdition = activeProfileEdition
+    ? overlay?.editions?.[activeProfileEdition]
+    : undefined;
+  const editionDefaultBuiltLevels = useMemo(
+    () => getEditionDefaultHideoutLevelKeys(hideoutStations, activeEdition),
+    [activeEdition, hideoutStations],
+  );
   const buildRefreshErrorDialogState = useCallback(
     ({
       source,
@@ -4071,6 +4079,9 @@ function App() {
                           hideoutStations={hideoutStations}
                           completedHideoutItems={completedHideoutItems}
                           hideoutItemQuantities={hideoutItemQuantities}
+                          editionDefaultBuiltLevels={
+                            editionDefaultBuiltLevels
+                          }
                           onSetHideoutItems={handleSetHideoutItems}
                           onUpdateHideoutItemQuantity={
                             handleUpdateHideoutItemQuantity
@@ -4103,6 +4114,10 @@ function App() {
                           onUpdateHideoutItemQuantity={
                             handleUpdateHideoutItemQuantity
                           }
+                          editionDefaultBuiltLevels={
+                            editionDefaultBuiltLevels
+                          }
+                          editionTitle={activeEdition?.title}
                         />
                       ) : viewMode === "prestiges" ? (
                         <PrestigesView />
@@ -4150,6 +4165,9 @@ function App() {
                           hideoutStations={hideoutStations}
                           completedHideoutItems={completedHideoutItems}
                           hideoutItemQuantities={hideoutItemQuantities}
+                          editionDefaultBuiltLevels={
+                            editionDefaultBuiltLevels
+                          }
                           onSetHideoutItems={handleSetHideoutItems}
                           onUpdateHideoutItemQuantity={
                             handleUpdateHideoutItemQuantity
@@ -4208,6 +4226,9 @@ function App() {
                             handleUpdateTaskObjectiveItemProgress
                           }
                           hideoutItemQuantities={hideoutItemQuantities}
+                          editionDefaultBuiltLevels={
+                            editionDefaultBuiltLevels
+                          }
                           onUpdateHideoutItemQuantity={
                             handleUpdateHideoutItemQuantity
                           }

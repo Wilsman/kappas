@@ -215,6 +215,8 @@ export interface HideoutStationLevel {
 }
 
 export interface HideoutStation {
+  id?: string;
+  normalizedName?: string;
   name: string;
   imageLink?: string;
   levels: HideoutStationLevel[];

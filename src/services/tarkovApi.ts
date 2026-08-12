@@ -771,6 +771,7 @@ type JsonAchievement = {
 type JsonHideoutStation = {
   id?: string;
   name?: string;
+  normalizedName?: string;
   imageLink?: string;
   levels?: Array<{
     level?: number;
@@ -1588,6 +1589,8 @@ const normalizeJsonHideoutStations = (
   itemTranslations: JsonTranslationMap,
 ): HideoutStationsData["hideoutStations"] =>
   Object.values(stationsById).map((station) => ({
+    id: station.id,
+    normalizedName: station.normalizedName,
     name: translate(hideoutTranslations, station.name, station.id ?? ""),
     imageLink: station.imageLink,
     levels: (station.levels ?? []).map((level) => ({

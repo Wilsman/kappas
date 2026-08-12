@@ -1,4 +1,5 @@
 import type { HideoutStation, Task } from "@/types";
+import { isEditionDefaultHideoutLevel } from "@/utils/hideoutProgress";
 import {
   buildLegacyTaskObjectiveItemProgressKey,
   buildLegacyTaskObjectiveKey,
@@ -65,6 +66,7 @@ export interface BuildTrackedItemsOptions {
   hideoutStations: HideoutStation[];
   completedHideoutItems: Set<string>;
   hideoutItemQuantities: Record<string, number>;
+  editionDefaultBuiltLevels?: ReadonlySet<string>;
   playerLevel: number;
 }
 
@@ -215,6 +217,7 @@ const getHighestCompletedHideoutLevels = (
   hideoutStations: HideoutStation[],
   completedHideoutItems: Set<string>,
   hideoutItemQuantities: Record<string, number>,
+  editionDefaultBuiltLevels?: ReadonlySet<string>,
 ) => {
   const highestCompletedLevelByStation = new Map<string, number>();
 
@@ -226,14 +229,20 @@ const getHighestCompletedHideoutLevels = (
       const itemRequirements = level.itemRequirements.filter((requirement) =>
         isNamedItem(requirement.item),
       );
-      const isLevelComplete = itemRequirements.every((requirement) =>
-        isHideoutItemComplete(
-          `${station.name}-${level.level}-${requirement.item.name}`,
-          requirement.count,
-          completedHideoutItems,
-          hideoutItemQuantities,
-        ),
-      );
+      const isLevelComplete =
+        isEditionDefaultHideoutLevel(
+          station.name,
+          level.level,
+          editionDefaultBuiltLevels,
+        ) ||
+        itemRequirements.every((requirement) =>
+          isHideoutItemComplete(
+            `${station.name}-${level.level}-${requirement.item.name}`,
+            requirement.count,
+            completedHideoutItems,
+            hideoutItemQuantities,
+          ),
+        );
 
       if (!isLevelComplete) {
         break;
@@ -252,6 +261,7 @@ const getFirstIncompleteHideoutLevels = (
   hideoutStations: HideoutStation[],
   completedHideoutItems: Set<string>,
   hideoutItemQuantities: Record<string, number>,
+  editionDefaultBuiltLevels?: ReadonlySet<string>,
 ) => {
   const firstIncompleteLevelByStation = new Map<string, number | null>();
 
@@ -259,6 +269,15 @@ const getFirstIncompleteHideoutLevels = (
     const sortedLevels = [...station.levels].sort((a, b) => a.level - b.level);
     const firstIncompleteLevel =
       sortedLevels.find((level) => {
+        if (
+          isEditionDefaultHideoutLevel(
+            station.name,
+            level.level,
+            editionDefaultBuiltLevels,
+          )
+        ) {
+          return false;
+        }
         const itemRequirements = level.itemRequirements.filter((requirement) =>
           isNamedItem(requirement.item),
         );
@@ -288,6 +307,7 @@ export function buildTrackedItems({
   hideoutStations,
   completedHideoutItems,
   hideoutItemQuantities,
+  editionDefaultBuiltLevels,
   playerLevel,
 }: BuildTrackedItemsOptions): TrackedItem[] {
   const itemsByKey = new Map<string, TrackedItem>();
@@ -607,15 +627,26 @@ export function buildTrackedItems({
     hideoutStations,
     completedHideoutItems,
     hideoutItemQuantities,
+    editionDefaultBuiltLevels,
   );
   const firstIncompleteLevelByStation = getFirstIncompleteHideoutLevels(
     hideoutStations,
     completedHideoutItems,
     hideoutItemQuantities,
+    editionDefaultBuiltLevels,
   );
 
   hideoutStations.forEach((station) => {
     station.levels.forEach((level) => {
+      if (
+        isEditionDefaultHideoutLevel(
+          station.name,
+          level.level,
+          editionDefaultBuiltLevels,
+        )
+      ) {
+        return;
+      }
       const itemRequirements = level.itemRequirements.filter((requirement) =>
         isNamedItem(requirement.item),
       );

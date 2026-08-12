@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { HideoutStation, HideoutStationLevel } from "@/types";
 import {
+  getEditionDefaultHideoutLevelKeys,
   filterHideoutStations,
   getHideoutItemKey,
+  getHideoutLevelKey,
   getHideoutLevelProgress,
   getHideoutSkillRequirementKey,
   getHideoutStationProgress,
@@ -30,9 +32,112 @@ const emptyState = (): HideoutProgressState => ({
   completedItems: new Set(),
   itemQuantities: {},
   completedRequirements: new Set(),
+  editionDefaultBuiltLevels: new Set(),
 });
 
+const editionStations: HideoutStation[] = [
+  {
+    id: "5d484fc0654e76006657e0ab",
+    normalizedName: "stash",
+    name: "Stash",
+    levels: [1, 2, 3, 4].map((stationLevel) => ({
+      ...level,
+      level: stationLevel,
+    })),
+  },
+  {
+    id: "667298e75ea6b4493c08f266",
+    normalizedName: "cultist-circle",
+    name: "Cultist Circle",
+    levels: [{ ...level, level: 1 }],
+  },
+];
+
 describe("hideout progress", () => {
+  it.each([
+    ["Standard", 1, 0, ["Stash-1"]],
+    ["Left Behind", 2, 0, ["Stash-1", "Stash-2"]],
+    ["Prepare for Escape", 3, 0, ["Stash-1", "Stash-2", "Stash-3"]],
+    [
+      "Edge of Darkness",
+      4,
+      0,
+      ["Stash-1", "Stash-2", "Stash-3", "Stash-4"],
+    ],
+    [
+      "The Unheard",
+      5,
+      3,
+      [
+        "Stash-1",
+        "Stash-2",
+        "Stash-3",
+        "Stash-4",
+        "Cultist Circle-1",
+      ],
+    ],
+    [
+      "Edge of Darkness + The Unheard",
+      5,
+      3,
+      [
+        "Stash-1",
+        "Stash-2",
+        "Stash-3",
+        "Stash-4",
+        "Cultist Circle-1",
+      ],
+    ],
+  ])(
+    "derives %s edition defaults from available hideout levels",
+    (_title, defaultStashLevel, defaultCultistCircleLevel, expected) => {
+      const defaults = getEditionDefaultHideoutLevelKeys(editionStations, {
+        defaultStashLevel,
+        defaultCultistCircleLevel,
+      });
+
+      expect(defaults).toEqual(new Set(expected));
+    },
+  );
+
+  it("treats any positive Cultist Circle default as its single level", () => {
+    const defaults = getEditionDefaultHideoutLevelKeys(editionStations, {
+      defaultStashLevel: 0,
+      defaultCultistCircleLevel: 99,
+    });
+
+    expect(defaults).toEqual(new Set(["Cultist Circle-1"]));
+    expect(
+      getEditionDefaultHideoutLevelKeys(editionStations, undefined),
+    ).toEqual(new Set());
+  });
+
+  it("keeps edition-default levels built and read-only", () => {
+    const state = emptyState();
+    state.editionDefaultBuiltLevels = new Set([
+      getHideoutLevelKey("Workbench", level.level),
+    ]);
+
+    expect(getHideoutLevelProgress("Workbench", level, state)).toEqual({
+      completed: 4,
+      total: 4,
+      isBuilt: true,
+    });
+
+    const cleared = setHideoutLevelBuilt("Workbench", level, false, state);
+    expect(cleared.completedItems).toEqual(new Set());
+    expect(cleared.itemQuantities).toEqual({});
+    expect(cleared.completedRequirements).toEqual(new Set());
+    expect(
+      filterHideoutStations(
+        [{ name: "Workbench", levels: [level] }],
+        "",
+        true,
+        state,
+      ),
+    ).toEqual([]);
+  });
+
   it("counts item quantities and manually completed requirements", () => {
     const state = emptyState();
     state.itemQuantities[getHideoutItemKey("Workbench", 2, "Bolts")] = 2;

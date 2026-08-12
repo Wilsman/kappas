@@ -102,6 +102,7 @@ interface CurrentlyWorkingOnViewProps {
   ) => void;
   hideoutItemQuantities: Record<string, number>;
   onUpdateHideoutItemQuantity: (itemKey: string, count: number) => void;
+  editionDefaultBuiltLevels?: ReadonlySet<string>;
 }
 
 export function CurrentlyWorkingOnView({
@@ -131,6 +132,7 @@ export function CurrentlyWorkingOnView({
   onUpdateTaskObjectiveItemProgress,
   hideoutItemQuantities,
   onUpdateHideoutItemQuantity,
+  editionDefaultBuiltLevels = new Set(),
 }: CurrentlyWorkingOnViewProps) {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [expandedHideout, setExpandedHideout] = useState<Set<string>>(
@@ -519,6 +521,7 @@ export function CurrentlyWorkingOnView({
   // Filter hideout stations that are marked as working on
   const activeHideoutStations = useMemo(() => {
     return Array.from(workingOnHideoutStations)
+      .filter((key) => !editionDefaultBuiltLevels.has(key))
       .map((key) => {
         // Key format: "stationName-levelIndex"
         const [stationName, levelIndex] = key.split("-");
@@ -531,7 +534,7 @@ export function CurrentlyWorkingOnView({
         return { station, level, key };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
-  }, [workingOnHideoutStations, hideoutStations]);
+  }, [editionDefaultBuiltLevels, workingOnHideoutStations, hideoutStations]);
 
   const totalItems =
     activeTasks.length +

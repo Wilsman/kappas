@@ -194,6 +194,7 @@ describe("fetchCombinedData", () => {
         station1: {
           id: "station1",
           name: "station1 Name",
+          normalizedName: "workbench",
           imageLink: "station.png",
           levels: [
             {
@@ -325,6 +326,8 @@ describe("fetchCombinedData", () => {
       rarity: "Common",
     });
     expect(result.hideoutStations.data.hideoutStations[0]).toMatchObject({
+      id: "station1",
+      normalizedName: "workbench",
       name: "Workbench",
       levels: [
         {

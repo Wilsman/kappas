@@ -62,6 +62,7 @@ interface TrackedItemsViewProps {
   onSetHideoutItems: (items: Set<string>) => void;
   onUpdateHideoutItemQuantity: (itemKey: string, count: number) => void;
   playerLevel: number;
+  editionDefaultBuiltLevels?: ReadonlySet<string>;
 }
 
 const FILTER_LABELS: Record<TrackedItemsFilter, string> = {
@@ -171,6 +172,7 @@ export function TrackedItemsView({
   onSetHideoutItems,
   onUpdateHideoutItemQuantity,
   playerLevel,
+  editionDefaultBuiltLevels = new Set(),
 }: TrackedItemsViewProps) {
   const [filter, setFilter] = useState<TrackedItemsFilter>("all");
   const [sortMode, setSortMode] = useState<TrackedItemsSort>("progression");
@@ -191,6 +193,7 @@ export function TrackedItemsView({
         hideoutStations,
         completedHideoutItems,
         hideoutItemQuantities,
+        editionDefaultBuiltLevels,
         playerLevel,
       }),
     [
@@ -201,6 +204,7 @@ export function TrackedItemsView({
       hideoutStations,
       completedHideoutItems,
       hideoutItemQuantities,
+      editionDefaultBuiltLevels,
       playerLevel,
     ],
   );

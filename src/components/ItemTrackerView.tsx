@@ -38,6 +38,7 @@ import { HideoutStation } from "@/types";
 import {
   filterHideoutStations,
   getHideoutLevelProgress,
+  isEditionDefaultHideoutLevel,
   getHideoutSkillRequirementKey,
   getHideoutStationProgress,
   getHideoutStationRequirementKey,
@@ -65,6 +66,8 @@ interface CollectorViewProps {
   hideoutItemQuantities?: Record<string, number>;
   onSetHideoutItemQuantities?: (quantities: Record<string, number>) => void;
   onUpdateHideoutItemQuantity?: (itemKey: string, count: number) => void;
+  editionDefaultBuiltLevels?: ReadonlySet<string>;
+  editionTitle?: string;
 }
 
 type GroupBy = "collector" | "hideout-stations";
@@ -105,6 +108,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   hideoutItemQuantities = {},
   onSetHideoutItemQuantities,
   onUpdateHideoutItemQuantity,
+  editionDefaultBuiltLevels = new Set(),
+  editionTitle,
 }) => {
   const [searchTerm, setSearchTerm] = useQueryState("itemsSearch", {
     defaultValue: "",
@@ -223,10 +228,12 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       completedItems: completedHideoutItems,
       itemQuantities: hideoutItemQuantities,
       completedRequirements: completedHideoutRequirements,
+      editionDefaultBuiltLevels,
     }),
     [
       completedHideoutItems,
       completedHideoutRequirements,
+      editionDefaultBuiltLevels,
       hideoutItemQuantities,
     ],
   );
@@ -556,6 +563,12 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                   <AccordionContent className="p-4 border-t">
                     <div className="space-y-4">
                       {station.levels.map((level) => {
+                        const isEditionDefault =
+                          isEditionDefaultHideoutLevel(
+                            station.name,
+                            level.level,
+                            editionDefaultBuiltLevels,
+                          );
                         const itemRequirements =
                           level.itemRequirements.filter((req) =>
                             hasNamedRequirementItem(req.item),
@@ -583,7 +596,8 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                 Level {level.level}
                               </h4>
                               <div className="flex flex-wrap items-center justify-end gap-2">
-                                {onToggleWorkingOnHideoutStation && (
+                                {onToggleWorkingOnHideoutStation &&
+                                  !isEditionDefault && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -622,7 +636,12 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                 )}
                                 <label
                                   htmlFor={`built-${station.name}-${level.level}`}
-                                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted/60"
+                                  className={cn(
+                                    "flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium",
+                                    isEditionDefault
+                                      ? "cursor-default"
+                                      : "cursor-pointer hover:bg-muted/60",
+                                  )}
                                 >
                                   <Checkbox
                                     id={`built-${station.name}-${level.level}`}
@@ -634,9 +653,22 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                         Boolean(checked),
                                       )
                                     }
+                                    disabled={isEditionDefault}
                                     aria-label={`Mark ${station.name} level ${level.level} built`}
                                   />
                                   <span>Built</span>
+                                  {isEditionDefault && (
+                                    <span
+                                      className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300"
+                                      title={
+                                        editionTitle
+                                          ? `Included with ${editionTitle}`
+                                          : "Included with this edition"
+                                      }
+                                    >
+                                      Edition default
+                                    </span>
+                                  )}
                                 </label>
                                 <span className="text-sm text-muted-foreground">
                                   {levelCompletion.completed} /{" "}
@@ -664,6 +696,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                         req,
                                       );
                                     const isCompleted =
+                                      isEditionDefault ||
                                       completedHideoutRequirements.has(
                                         requirementKey,
                                       );
@@ -678,6 +711,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                       >
                                         <Checkbox
                                           checked={isCompleted}
+                                          disabled={isEditionDefault}
                                           onCheckedChange={(checked) =>
                                             handleToggleRequirement(
                                               requirementKey,
@@ -712,6 +746,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                           req,
                                         );
                                       const isCompleted =
+                                        isEditionDefault ||
                                         completedHideoutRequirements.has(
                                           requirementKey,
                                         );
@@ -726,6 +761,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                         >
                                           <Checkbox
                                             checked={isCompleted}
+                                            disabled={isEditionDefault}
                                             onCheckedChange={(checked) =>
                                               handleToggleRequirement(
                                                 requirementKey,
@@ -757,9 +793,11 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                   const isCurrency = isCurrencyItem(
                                     req.item.name,
                                   );
-                                  const currentQty =
-                                    hideoutItemQuantities[itemKey] || 0;
+                                  const currentQty = isEditionDefault
+                                    ? req.count
+                                    : hideoutItemQuantities[itemKey] || 0;
                                   const isCompleted =
+                                    isEditionDefault ||
                                     completedHideoutItems.has(itemKey) ||
                                     (!isCurrency && currentQty >= req.count);
                                   const progressText = isCurrency
@@ -786,6 +824,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                         <Checkbox
                                           id={`${station.name}-${level.level}-${req.item.name}`}
                                           checked={isCompleted}
+                                          disabled={isEditionDefault}
                                           onCheckedChange={(checked) => {
                                             const isChecked = Boolean(checked);
                                             if (onUpdateHideoutItemQuantity) {

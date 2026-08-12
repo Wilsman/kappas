@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HideoutStation, Task } from "@/types";
 import { buildTaskObjectiveItemProgressKey, buildTaskObjectiveKeys } from "@/utils/taskObjectives";
 import { buildTrackedItems } from "@/utils/trackedItems";
+import { getHideoutLevelKey } from "@/utils/hideoutProgress";
 
 const makeTask = (overrides: Partial<Task>): Task =>
   ({
@@ -23,6 +24,38 @@ const makeTask = (overrides: Partial<Task>): Task =>
   }) as Task;
 
 describe("buildTrackedItems", () => {
+  it("excludes item requirements from edition-default hideout levels", () => {
+    const hideoutStations: HideoutStation[] = [
+      {
+        name: "Stash",
+        levels: [
+          {
+            level: 2,
+            skillRequirements: [],
+            stationLevelRequirements: [],
+            itemRequirements: [{ count: 10, item: { name: "Wires" } }],
+          },
+        ],
+      },
+    ];
+
+    expect(
+      buildTrackedItems({
+        tasks: [],
+        completedTasks: new Set(),
+        completedTaskObjectives: new Set(),
+        taskObjectiveItemProgress: {},
+        hideoutStations,
+        completedHideoutItems: new Set(),
+        hideoutItemQuantities: {},
+        editionDefaultBuiltLevels: new Set([
+          getHideoutLevelKey("Stash", 2),
+        ]),
+        playerLevel: 1,
+      }),
+    ).toEqual([]);
+  });
+
   it("aggregates task and hideout requirements under one item with source breakdown", () => {
     const tasks: Task[] = [
       makeTask({

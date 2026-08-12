@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { HideoutStation } from "@/types";
 import { cn } from "@/lib/utils";
 import { taskStorage } from "@/utils/indexedDB";
+import { isEditionDefaultHideoutLevel } from "@/utils/hideoutProgress";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
@@ -28,6 +29,7 @@ interface HideoutRequirementsViewProps {
   onSetHideoutItems: (items: Set<string>) => void;
   onUpdateHideoutItemQuantity: (itemKey: string, count: number) => void;
   onNavigateToStation?: (stationName: string) => void;
+  editionDefaultBuiltLevels?: ReadonlySet<string>;
 }
 
 interface RequirementItem {
@@ -70,6 +72,7 @@ export const HideoutRequirementsView: React.FC<
   onSetHideoutItems,
   onUpdateHideoutItemQuantity,
   onNavigateToStation,
+  editionDefaultBuiltLevels = new Set(),
 }) => {
   const [viewMode, setViewMode] = useState<RequirementViewMode>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -131,6 +134,15 @@ export const HideoutRequirementsView: React.FC<
 
     hideoutStations.forEach((station) => {
       station.levels.forEach((level) => {
+        if (
+          isEditionDefaultHideoutLevel(
+            station.name,
+            level.level,
+            editionDefaultBuiltLevels,
+          )
+        ) {
+          return;
+        }
         level.itemRequirements.forEach((req) => {
           if (!hasNamedRequirementItem(req.item)) {
             return;
@@ -202,7 +214,7 @@ export const HideoutRequirementsView: React.FC<
     return Array.from(itemMap.values()).sort(
       (a, b) => b.totalCount - a.totalCount,
     );
-  }, [hideoutStations]);
+  }, [editionDefaultBuiltLevels, hideoutStations]);
 
   const firLevels = useMemo(() => {
     return Array.from(

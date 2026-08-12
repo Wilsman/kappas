@@ -1,4 +1,5 @@
 import type {
+  Edition,
   HideoutStation,
   HideoutStationLevel,
   HideoutStationLevelRequirement,
@@ -9,6 +10,7 @@ export interface HideoutProgressState {
   completedItems: Set<string>;
   itemQuantities: Record<string, number>;
   completedRequirements: Set<string>;
+  editionDefaultBuiltLevels?: ReadonlySet<string>;
 }
 
 export interface HideoutLevelProgress {
@@ -26,6 +28,68 @@ const hasNamedRequirementItem = (
 
 const buildRequirementKey = (kind: string, parts: Array<string | number>) =>
   `hideout-${kind}:${JSON.stringify(parts)}`;
+
+const STASH_STATION_ID = "5d484fc0654e76006657e0ab";
+const CULTIST_CIRCLE_STATION_ID = "667298e75ea6b4493c08f266";
+
+type EditionHideoutDefaults = Pick<
+  Edition,
+  "defaultStashLevel" | "defaultCultistCircleLevel"
+>;
+
+export const getHideoutLevelKey = (stationName: string, level: number) =>
+  `${stationName}-${level}`;
+
+const getEditionStationKind = (
+  station: HideoutStation,
+): "stash" | "cultist-circle" | null => {
+  const normalizedName = station.normalizedName?.trim().toLowerCase();
+  if (station.id === STASH_STATION_ID || normalizedName === "stash") {
+    return "stash";
+  }
+  if (
+    station.id === CULTIST_CIRCLE_STATION_ID ||
+    normalizedName === "cultist-circle"
+  ) {
+    return "cultist-circle";
+  }
+
+  const imageLink = station.imageLink?.toLowerCase() ?? "";
+  if (imageLink.includes("station-stash")) return "stash";
+  if (imageLink.includes("station-cultist-circle")) return "cultist-circle";
+  return null;
+};
+
+export const getEditionDefaultHideoutLevelKeys = (
+  stations: HideoutStation[],
+  edition: EditionHideoutDefaults | null | undefined,
+): Set<string> => {
+  const defaults = new Set<string>();
+  if (!edition) return defaults;
+
+  stations.forEach((station) => {
+    const stationKind = getEditionStationKind(station);
+    if (!stationKind) return;
+
+    station.levels.forEach((level) => {
+      const isDefault =
+        stationKind === "stash"
+          ? level.level <= edition.defaultStashLevel
+          : edition.defaultCultistCircleLevel > 0 && level.level === 1;
+      if (isDefault) {
+        defaults.add(getHideoutLevelKey(station.name, level.level));
+      }
+    });
+  });
+
+  return defaults;
+};
+
+export const isEditionDefaultHideoutLevel = (
+  stationName: string,
+  level: number,
+  defaultBuiltLevels?: ReadonlySet<string>,
+) => defaultBuiltLevels?.has(getHideoutLevelKey(stationName, level)) ?? false;
 
 export const getHideoutItemKey = (
   stationName: string,
@@ -92,6 +156,17 @@ export const getHideoutLevelProgress = (
     level.skillRequirements.length +
     level.stationLevelRequirements.length;
 
+  if (
+    isEditionDefaultHideoutLevel(
+      stationName,
+      level.level,
+      state.editionDefaultBuiltLevels,
+    )
+  ) {
+    const total = Math.max(1, realRequirementCount);
+    return { completed: total, total, isBuilt: true };
+  }
+
   if (realRequirementCount === 0) {
     const isBuilt = state.completedRequirements.has(
       getRequirementFreeLevelKey(stationName, level.level),
@@ -153,6 +228,20 @@ export const setHideoutLevelBuilt = (
   built: boolean,
   state: HideoutProgressState,
 ): HideoutLevelProgressUpdate => {
+  if (
+    isEditionDefaultHideoutLevel(
+      stationName,
+      level.level,
+      state.editionDefaultBuiltLevels,
+    )
+  ) {
+    return {
+      completedItems: new Set(state.completedItems),
+      itemQuantities: { ...state.itemQuantities },
+      completedRequirements: new Set(state.completedRequirements),
+    };
+  }
+
   const completedItems = new Set(state.completedItems);
   const itemQuantities = { ...state.itemQuantities };
   const completedRequirements = new Set(state.completedRequirements);
