@@ -7,12 +7,13 @@ import {
 } from "@/utils/language";
 
 const DB_BASE_NAME = "TarkovQuests";
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 const TASKS_STORE = "completedTasks";
 const COLLECTOR_STORE = "completedCollectorItems";
 const PRESTIGE_STORE = "prestigeProgress";
 const ACHIEVEMENTS_STORE = "completedAchievements";
 const HIDEOUT_ITEMS_STORE = "completedHideoutItems";
+const HIDEOUT_REQUIREMENTS_STORE = "completedHideoutRequirements";
 const HIDEOUT_ITEM_QUANTITIES_STORE = "hideoutItemQuantities";
 const STORYLINE_OBJECTIVES_STORE = "completedStorylineObjectives";
 const STORYLINE_MAP_NODES_STORE = "completedStorylineMapNodes";
@@ -160,6 +161,9 @@ export class TaskStorage {
         }
         if (!db.objectStoreNames.contains(HIDEOUT_ITEMS_STORE)) {
           db.createObjectStore(HIDEOUT_ITEMS_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(HIDEOUT_REQUIREMENTS_STORE)) {
+          db.createObjectStore(HIDEOUT_REQUIREMENTS_STORE, { keyPath: "id" });
         }
         if (!db.objectStoreNames.contains(STORYLINE_OBJECTIVES_STORE)) {
           db.createObjectStore(STORYLINE_OBJECTIVES_STORE, { keyPath: "id" });
@@ -379,6 +383,44 @@ export class TaskStorage {
           `[Storage] Loaded ${completed.size} hideout items from profile ${this.profileId}`,
         );
         resolve(completed);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async saveCompletedHideoutRequirements(
+    completedRequirements: Set<string>,
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    const tx = this.db!.transaction(
+      [HIDEOUT_REQUIREMENTS_STORE],
+      "readwrite",
+    );
+    const store = tx.objectStore(HIDEOUT_REQUIREMENTS_STORE);
+    await store.clear();
+    for (const id of completedRequirements) {
+      await store.add({ id, completed: true });
+    }
+  }
+
+  async loadCompletedHideoutRequirements(): Promise<Set<string>> {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction(
+        [HIDEOUT_REQUIREMENTS_STORE],
+        "readonly",
+      );
+      const store = tx.objectStore(HIDEOUT_REQUIREMENTS_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        resolve(
+          new Set(
+            req.result
+              .map((item: { id?: unknown }) => item.id)
+              .filter((id): id is string => typeof id === "string"),
+          ),
+        );
       };
       req.onerror = () => reject(req.error);
     });
@@ -797,6 +839,7 @@ export interface ExportData {
   completedTaskObjectives?: string[];
   completedCollectorItems: string[];
   completedHideoutItems: string[];
+  completedHideoutRequirements?: string[];
   completedAchievements: string[];
   completedStorylineObjectives: string[];
   completedStorylineMapNodes: string[];
@@ -841,6 +884,7 @@ export class ExportImportService {
       completedTaskObjectives,
       completedCollectorItems,
       completedHideoutItems,
+      completedHideoutRequirements,
       completedAchievements,
       completedStorylineObjectives,
       completedStorylineMapNodes,
@@ -853,6 +897,7 @@ export class ExportImportService {
       taskStorage.loadCompletedTaskObjectives(),
       taskStorage.loadCompletedCollectorItems(),
       taskStorage.loadCompletedHideoutItems(),
+      taskStorage.loadCompletedHideoutRequirements(),
       taskStorage.loadCompletedAchievements(),
       taskStorage.loadCompletedStorylineObjectives(),
       taskStorage.loadCompletedStorylineMapNodes(),
@@ -880,6 +925,7 @@ export class ExportImportService {
       completedTaskObjectives: Array.from(completedTaskObjectives),
       completedCollectorItems: Array.from(completedCollectorItems),
       completedHideoutItems: Array.from(completedHideoutItems),
+      completedHideoutRequirements: Array.from(completedHideoutRequirements),
       completedAchievements: Array.from(completedAchievements),
       completedStorylineObjectives: Array.from(completedStorylineObjectives),
       completedStorylineMapNodes: Array.from(completedStorylineMapNodes),
@@ -926,6 +972,9 @@ export class ExportImportService {
       ),
       taskStorage.saveCompletedHideoutItems(
         new Set(data.completedHideoutItems || []),
+      ),
+      taskStorage.saveCompletedHideoutRequirements(
+        new Set(data.completedHideoutRequirements || []),
       ),
       taskStorage.saveCompletedAchievements(
         new Set(data.completedAchievements || []),

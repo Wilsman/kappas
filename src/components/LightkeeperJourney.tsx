@@ -329,7 +329,7 @@ export function LightkeeperJourney({
               Unlock Network Provider - Part 1
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Reach +1 Scav karma, then complete any one of the three routes.
+              Reach +2 Scav karma, then complete any one of the three routes.
               Progress in every route is retained.
             </p>
 
@@ -374,7 +374,7 @@ export function LightkeeperJourney({
                 </div>
                 {!progress.karmaComplete && (
                   <p className="mt-2 text-xs text-muted-foreground sm:text-right">
-                    Requires +1.00 or higher
+                    Requires +2.00 or higher
                   </p>
                 )}
               </div>

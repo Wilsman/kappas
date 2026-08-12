@@ -253,29 +253,29 @@ export function getKordBreachStatus(
   if (balance.selectedCount === 0) {
     return {
       kind: "empty",
-      title: "No personal modifiers selected",
-      detail: "A clean 0-point start is valid.",
+      title: "Acceptable",
+      detail: "No personal modifiers selected. Your total is 0 points.",
     };
   }
   if (balance.balance === 0) {
     return {
       kind: "balanced",
-      title: "Balanced — ready for Kord Breach",
-      detail: "Your selected positives and negatives finish exactly on 0.",
+      title: "Acceptable",
+      detail: "Your selected modifiers meet the 0-point minimum.",
     };
   }
   if (balance.balance > 0) {
     return {
       kind: "surplus",
-      title: `${balance.balance} point${balance.balance === 1 ? "" : "s"} unused`,
-      detail: "This build is valid, but you can still spend the remaining balance.",
+      title: "Acceptable",
+      detail: `Your total is ${balance.balance} point${balance.balance === 1 ? "" : "s"} above the minimum.`,
     };
   }
   const missing = Math.abs(balance.balance);
   return {
     kind: "deficit",
-    title: `Need ${missing} more negative point${missing === 1 ? "" : "s"}`,
-    detail: "Add drawbacks or remove positive modifiers before locking in.",
+    title: "Not acceptable",
+    detail: `Grant ${missing} more point${missing === 1 ? "" : "s"} or remove cost modifiers before creating the character.`,
   };
 }
 

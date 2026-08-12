@@ -30,11 +30,11 @@ const announcements: AppAnnouncement[] = [
 ];
 
 describe("announcement filtering", () => {
-  it("warns players that the August 4 update may temporarily stale game data", () => {
+  it("warns players that the August 3rd update may temporarily stale game data", () => {
     expect(APP_ANNOUNCEMENTS).toContainEqual(
       expect.objectContaining({
         id: "major-game-update-2026-08-04",
-        title: "Major update on August 4",
+        title: "EFT Patch 1.1.0.0 [Kord Breach] update on August 3rd",
         tone: "warning",
         active: true,
       }),

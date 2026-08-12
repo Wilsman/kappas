@@ -24,9 +24,9 @@ import {
 describe("Kord Breach modifier data", () => {
   it("contains the announced global and personal modifier counts", () => {
     expect(KORD_BREACH_GLOBAL_MODIFIERS).toHaveLength(6);
-    expect(KORD_BREACH_POSITIVE_MODIFIERS).toHaveLength(18);
-    expect(KORD_BREACH_NEGATIVE_MODIFIERS).toHaveLength(13);
-    expect(KORD_BREACH_ALL_MODIFIERS).toHaveLength(37);
+    expect(KORD_BREACH_POSITIVE_MODIFIERS).toHaveLength(19);
+    expect(KORD_BREACH_NEGATIVE_MODIFIERS).toHaveLength(14);
+    expect(KORD_BREACH_ALL_MODIFIERS).toHaveLength(39);
   });
 
   it("uses unique ids and correctly signed personal values", () => {
@@ -55,6 +55,33 @@ describe("Kord Breach modifier data", () => {
         (modifier) => modifier.id === "no-flea-market",
       )?.points,
     ).toBe(10);
+    expect(
+      KORD_BREACH_PERSONAL_MODIFIERS.find(
+        (modifier) => modifier.id === "prodigy",
+      ),
+    ).toMatchObject({
+      points: -5,
+      effects: ["Skill experience gain is increased by 30%"],
+    });
+    expect(
+      KORD_BREACH_PERSONAL_MODIFIERS.find(
+        (modifier) => modifier.id === "unlucky",
+      ),
+    ).toMatchObject({
+      points: 1,
+      effects: ["Your bad luck can sometimes have dire consequences"],
+    });
+    expect(
+      KORD_BREACH_PERSONAL_MODIFIERS.find(
+        (modifier) => modifier.id === "exhaustion",
+      ),
+    ).toMatchObject({
+      points: 5,
+      effects: [
+        "Arm and leg stamina recovers 20% slower",
+        "Arm and leg stamina is reduced by 10",
+      ],
+    });
   });
 });
 
@@ -62,6 +89,7 @@ describe("Kord Breach balance", () => {
   it("distinguishes empty, balanced, surplus, and deficit builds", () => {
     const empty = calculateKordBreachBalance([]);
     expect(getKordBreachStatus(empty).kind).toBe("empty");
+    expect(getKordBreachStatus(empty).title).toBe("Acceptable");
 
     const balanced = calculateKordBreachBalance(
       getKordBreachSelectedModifiers(["street-tax", "third-leg"]),
@@ -74,12 +102,14 @@ describe("Kord Breach balance", () => {
     );
     expect(surplus.balance).toBe(1);
     expect(getKordBreachStatus(surplus).kind).toBe("surplus");
+    expect(getKordBreachStatus(surplus).title).toBe("Acceptable");
 
     const deficit = calculateKordBreachBalance(
       getKordBreachSelectedModifiers(["kappa-protocol"]),
     );
     expect(deficit.balance).toBe(-12);
     expect(getKordBreachStatus(deficit).kind).toBe("deficit");
+    expect(getKordBreachStatus(deficit).title).toBe("Not acceptable");
   });
 });
 

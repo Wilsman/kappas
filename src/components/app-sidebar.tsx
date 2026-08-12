@@ -17,6 +17,9 @@ import {
   Scale,
   TowerControl,
   Award,
+  Compass,
+  Boxes,
+  Trophy,
 } from "lucide-react";
 
 import {
@@ -87,6 +90,42 @@ import {
 } from "@/components/SelectiveResetDialog";
 import type { Task } from "@/types";
 import type { EftLogImportScanSummary } from "@/utils/eftLogImport";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
+function NavigationStatus({
+  children,
+  tone = "amber",
+}: {
+  children: React.ReactNode;
+  tone?: "amber" | "green";
+}) {
+  return (
+    <span
+      className={
+        tone === "green"
+          ? "ml-auto rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-400/90"
+          : "ml-auto rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-amber-400/90"
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function NavigationSectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <li
+      aria-hidden="true"
+      className="px-2 pb-1 pt-3 text-[9px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/40 first:pt-1 group-data-[collapsible=icon]:hidden"
+    >
+      {children}
+    </li>
+  );
+}
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   viewMode:
@@ -201,6 +240,19 @@ export function AppSidebar({
   const [exportImportOpen, setExportImportOpen] = React.useState(false);
   const [eftLogImportOpen, setEftLogImportOpen] = React.useState(false);
   const [perMapOpen, setPerMapOpen] = React.useState(false);
+  const [questsOpen, setQuestsOpen] = React.useState(
+    viewMode === "grouped" ||
+      viewMode === "tree" ||
+      viewMode === "flow" ||
+      viewMode === "desk",
+  );
+  const [hideoutOpen, setHideoutOpen] = React.useState(
+    (viewMode === "collector" && collectorGroupBy === "hideout-stations") ||
+      viewMode === "hideout-requirements",
+  );
+  const [storylineOpen, setStorylineOpen] = React.useState(
+    viewMode === "storyline" || viewMode === "storyline-map",
+  );
   const [nameModalOpen, setNameModalOpen] = React.useState<null | {
     mode: "create" | "rename";
   }>(null);
@@ -221,6 +273,24 @@ export function AppSidebar({
   }, []);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [resetOpen, setResetOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const questsAreActive =
+      viewMode === "grouped" ||
+      viewMode === "tree" ||
+      viewMode === "flow" ||
+      viewMode === "desk";
+    const hideoutIsActive =
+      (viewMode === "collector" && collectorGroupBy === "hideout-stations") ||
+      viewMode === "hideout-requirements";
+    const storylineIsActive =
+      viewMode === "storyline" || viewMode === "storyline-map";
+
+    setQuestsOpen(questsAreActive);
+    setHideoutOpen(hideoutIsActive);
+    setStorylineOpen(storylineIsActive);
+  }, [collectorGroupBy, viewMode]);
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -593,267 +663,324 @@ export function AppSidebar({
       <SidebarSeparator />
       <SidebarContent>
         {/* Navigate */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/60">
+        <SidebarGroup className="pb-1">
+          <SidebarGroupLabel className="gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/55">
+            <Compass className="h-3.5 w-3.5" />
             Navigate
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {/* Currently Working On */}
-              <SidebarMenuItem>
+            <SidebarMenu className="gap-0.5">
+              <SidebarMenuItem className="mb-1 group-data-[collapsible=icon]:mb-0">
                 <SidebarMenuButton
                   isActive={viewMode === "current"}
                   onClick={() => onSetViewMode("current")}
+                  tooltip="Currently Working On"
+                  size="lg"
+                  className="h-11 rounded-lg border border-sidebar-border/50 bg-sidebar-accent/20 px-2.5 shadow-sm transition-colors hover:border-sidebar-border hover:bg-sidebar-accent/50 data-[active=true]:border-amber-500/30 data-[active=true]:bg-amber-500/10 data-[active=true]:text-sidebar-foreground"
                 >
-                  <Target />
-                  <span>Currently Working On</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Kord Breach modifier planner */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={viewMode === "kord-breach"}
-                  onClick={() => onSetViewMode("kord-breach")}
-                >
-                  <Scale />
-                  <span>Kord Breach</span>
-                  <span className="ml-auto rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-400">
-                    NEW
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-background/60 text-amber-400 group-data-[collapsible=icon]:h-auto group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:bg-transparent">
+                    <Target className="h-4 w-4" />
                   </span>
+                  <span className="flex min-w-0 flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-xs font-semibold">
+                      Current work
+                    </span>
+                    <span className="truncate text-[10px] font-normal text-sidebar-foreground/45">
+                      Pick up where you left off
+                    </span>
+                  </span>
+                  <ChevronRight className="ml-auto h-3.5 w-3.5 text-sidebar-foreground/30 group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Kappa unlock journey */}
+              <NavigationSectionLabel>Plan</NavigationSectionLabel>
+
+              <Collapsible
+                asChild
+                open={questsOpen}
+                onOpenChange={setQuestsOpen}
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip="Quests"
+                      isActive={
+                        viewMode === "grouped" ||
+                        viewMode === "tree" ||
+                        viewMode === "flow" ||
+                        viewMode === "desk"
+                      }
+                      onClick={() => {
+                        if (!questsOpen) {
+                          onSetViewMode("grouped");
+                          onSetFocus("all");
+                        }
+                      }}
+                      className="data-[active=true]:bg-sidebar-accent/70"
+                    >
+                      <ListChecks />
+                      <span>Quests</span>
+                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/menu-item:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub className="mx-2 my-1 border-sidebar-border/60 px-2 py-0">
+                      <li>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={
+                            viewMode === "grouped" && focusMode === "all"
+                          }
+                        >
+                          <button
+                            type="button"
+                            className="w-full cursor-pointer"
+                            onClick={() => {
+                              onSetViewMode("grouped");
+                              onSetFocus("all");
+                            }}
+                          >
+                            <ListTodo />
+                            <span>All tasks</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </li>
+                      <li>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={
+                            viewMode === "grouped" && focusMode === "kappa"
+                          }
+                        >
+                          <button
+                            type="button"
+                            className="w-full cursor-pointer"
+                            onClick={() => {
+                              onSetViewMode("grouped");
+                              onSetFocus("kappa");
+                            }}
+                          >
+                            <Award />
+                            <span>Kappa tasks</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </li>
+                      <li>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={viewMode === "desk"}
+                        >
+                          <button
+                            type="button"
+                            className="w-full cursor-pointer"
+                            onClick={() => onSetViewMode("desk")}
+                          >
+                            <ListChecks />
+                            <span>Kanban board</span>
+                            <NavigationStatus tone="green">New</NavigationStatus>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </li>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  tooltip="Item tracker"
+                  isActive={viewMode === "tracked-items"}
+                  onClick={() => onSetViewMode("tracked-items")}
+                >
+                  <Boxes />
+                  <span>Item tracker</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Collector items"
+                  isActive={
+                    viewMode === "collector" &&
+                    collectorGroupBy === "collector"
+                  }
+                  onClick={() => {
+                    onSetCollectorGroupBy("collector");
+                    onSetViewMode("collector");
+                  }}
+                >
+                  <Package />
+                  <span>Collector items</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <Collapsible
+                asChild
+                open={hideoutOpen}
+                onOpenChange={setHideoutOpen}
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip="Hideout"
+                      isActive={
+                        (viewMode === "collector" &&
+                          collectorGroupBy === "hideout-stations") ||
+                        viewMode === "hideout-requirements"
+                      }
+                      onClick={() => {
+                        if (!hideoutOpen) {
+                          onSetCollectorGroupBy("hideout-stations");
+                          onSetViewMode("collector");
+                        }
+                      }}
+                      className="data-[active=true]:bg-sidebar-accent/70"
+                    >
+                      <Home />
+                      <span>Hideout</span>
+                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/menu-item:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub className="mx-2 my-1 border-sidebar-border/60 px-2 py-0">
+                      <li>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={
+                            viewMode === "collector" &&
+                            collectorGroupBy === "hideout-stations"
+                          }
+                        >
+                          <button
+                            type="button"
+                            className="w-full cursor-pointer"
+                            onClick={() => {
+                              onSetCollectorGroupBy("hideout-stations");
+                              onSetViewMode("collector");
+                            }}
+                          >
+                            <Database />
+                            <span>Stations</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </li>
+                      <li>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={viewMode === "hideout-requirements"}
+                        >
+                          <button
+                            type="button"
+                            className="w-full cursor-pointer"
+                            onClick={() =>
+                              onSetViewMode("hideout-requirements")
+                            }
+                          >
+                            <Home />
+                            <span>Requirements</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </li>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
+              <NavigationSectionLabel>Journeys</NavigationSectionLabel>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Kappa journey"
                   isActive={viewMode === "kappa"}
                   onClick={() => onSetViewMode("kappa")}
                 >
                   <Award />
-                  <span>Kappa</span>
-                  <span className="ml-auto rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-amber-400">
-                    NEW
-                  </span>
+                  <span>Kappa journey</span>
+                  <NavigationStatus>New</NavigationStatus>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {/* Lightkeeper access journey */}
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  tooltip="Lightkeeper access"
                   isActive={viewMode === "lightkeeper"}
                   onClick={() => onSetViewMode("lightkeeper")}
                 >
                   <TowerControl />
-                  <span>Lightkeeper Access</span>
-                  <span className="ml-auto rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-amber-400">
-                    NEW
-                  </span>
+                  <span>Lightkeeper access</span>
+                  <NavigationStatus>New</NavigationStatus>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* 1.0 Storyline */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={
-                    viewMode === "storyline" || viewMode === "storyline-map"
-                  }
-                  onClick={() => onSetViewMode("storyline")}
-                >
-                  <Package />
-                  <span>1.0 Storyline</span>
-                  <span className="ml-auto rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-amber-400">
-                    WIP
-                  </span>
-                </SidebarMenuButton>
-                <SidebarMenuSub className="mt-1">
-                  <li>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={viewMode === "storyline"}
-                    >
-                      <a
-                        className="cursor-pointer"
-                        onClick={() => onSetViewMode("storyline")}
-                      >
-                        <ListTodo />
-                        <span>Quest Objectives</span>
-                      </a>
-                    </SidebarMenuSubButton>
-                  </li>
-                  <li>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={viewMode === "storyline-map"}
-                    >
-                      <a
-                        className="cursor-pointer"
-                        onClick={onOpenStorylineMap}
-                      >
-                        <Map />
-                        <span>Decision Map</span>
-                      </a>
-                    </SidebarMenuSubButton>
-                  </li>
-                </SidebarMenuSub>
-              </SidebarMenuItem>
-
-              {/* Regular Quests */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={
-                    viewMode === "grouped" ||
-                    viewMode === "tree" ||
-                    viewMode === "flow"
-                  }
-                  onClick={() => onSetViewMode("grouped")}
-                >
-                  <ListChecks />
-                  <span>Quests</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuSub className="mt-1">
-                {/* Checklist view */}
-                <li>
-                  <SidebarMenuSubButton
-                    asChild
-                    isActive={viewMode === "grouped" && focusMode === "all"}
-                  >
-                    <a
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSetViewMode("grouped");
-                        onSetFocus("all");
-                      }}
-                    >
-                      <ListTodo />
-                      <span>All Tasks</span>
-                    </a>
-                  </SidebarMenuSubButton>
-                </li>
-                {/* Kappa focus (Checklist + Kappa filter) */}
-                <li>
-                  <SidebarMenuSubButton
-                    asChild
-                    isActive={viewMode === "grouped" && focusMode === "kappa"}
-                  >
-                    <a
-                      className="cursor-pointer"
-                      onClick={() => {
-                        onSetViewMode("grouped");
-                        onSetFocus("kappa");
-                      }}
-                    >
-                      <ListTodo />
-                      <span>Kappa</span>
-                    </a>
-                  </SidebarMenuSubButton>
-                </li>
-                {/* Grouping controls moved into CheckListView header */}
-              </SidebarMenuSub>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={viewMode === "desk"}
-                  onClick={() => onSetViewMode("desk")}
-                >
-                  <ListTodo />
-                  <span>Kanban</span>
-                  <span className="ml-auto rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-emerald-400">
-                    NEW
-                  </span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={
-                    viewMode === "collector" ||
-                    viewMode === "tracked-items" ||
-                    viewMode === "hideout-requirements"
-                  }
-                  onClick={() => onSetViewMode("tracked-items")}
-                >
-                  <Package />
-                  <span>Items</span>
-                </SidebarMenuButton>
-                <SidebarMenuSub className="mt-1">
-                  <li>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={viewMode === "tracked-items"}
-                    >
-                      <a
-                        className="cursor-pointer"
-                        onClick={() => onSetViewMode("tracked-items")}
-                      >
-                        <ListTodo />
-                        <span>Item Tracker</span>
-                      </a>
-                    </SidebarMenuSubButton>
-                  </li>
-                  <li>
-                    <SidebarMenuSubButton
-                      asChild
+              <Collapsible
+                asChild
+                open={storylineOpen}
+                onOpenChange={setStorylineOpen}
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip="1.0 Storyline"
                       isActive={
-                        viewMode === "collector" &&
-                        collectorGroupBy === "collector"
+                        viewMode === "storyline" ||
+                        viewMode === "storyline-map"
                       }
+                      onClick={() => {
+                        if (!storylineOpen) onSetViewMode("storyline");
+                      }}
+                      className="data-[active=true]:bg-sidebar-accent/70"
                     >
-                      <a
-                        className="cursor-pointer"
-                        onClick={() => {
-                          onSetCollectorGroupBy("collector");
-                          onSetViewMode("collector");
-                        }}
-                      >
-                        <Package />
-                        <span>Collector Items</span>
-                      </a>
-                    </SidebarMenuSubButton>
-                  </li>
-                  <li>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={
-                        viewMode === "collector" &&
-                        collectorGroupBy === "hideout-stations"
-                      }
-                    >
-                      <a
-                        className="cursor-pointer"
-                        onClick={() => {
-                          onSetCollectorGroupBy("hideout-stations");
-                          onSetViewMode("collector");
-                        }}
-                      >
-                        <Database />
-                        <span>Hideout Stations</span>
-                      </a>
-                    </SidebarMenuSubButton>
-                  </li>
-                  <li>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={viewMode === "hideout-requirements"}
-                    >
-                      <a
-                        className="cursor-pointer"
-                        onClick={() => onSetViewMode("hideout-requirements")}
-                      >
-                        <Home />
-                        <span>Hideout Requirements</span>
-                      </a>
-                    </SidebarMenuSubButton>
-                  </li>
-                </SidebarMenuSub>
-              </SidebarMenuItem>
+                      <Package />
+                      <span>1.0 Storyline</span>
+                      <NavigationStatus>WIP</NavigationStatus>
+                      <ChevronRight className="transition-transform duration-200 group-data-[state=open]/menu-item:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub className="mx-2 my-1 border-sidebar-border/60 px-2 py-0">
+                      <li>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={viewMode === "storyline"}
+                        >
+                          <button
+                            type="button"
+                            className="w-full cursor-pointer"
+                            onClick={() => onSetViewMode("storyline")}
+                          >
+                            <ListTodo />
+                            <span>Quest objectives</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </li>
+                      <li>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={viewMode === "storyline-map"}
+                        >
+                          <button
+                            type="button"
+                            className="w-full cursor-pointer"
+                            onClick={onOpenStorylineMap}
+                          >
+                            <Map />
+                            <span>Decision map</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </li>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
+              <NavigationSectionLabel>Records</NavigationSectionLabel>
+
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={viewMode === "prestiges"}
                   onClick={() => onSetViewMode("prestiges")}
+                  tooltip="Prestiges"
                 >
-                  <Medal />
+                  <Trophy />
                   <span>Prestiges</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -861,9 +988,24 @@ export function AppSidebar({
                 <SidebarMenuButton
                   isActive={viewMode === "achievements"}
                   onClick={() => onSetViewMode("achievements")}
+                  tooltip="Achievements"
                 >
                   <Medal />
                   <span>Achievements</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <NavigationSectionLabel>Tools</NavigationSectionLabel>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={viewMode === "kord-breach"}
+                  onClick={() => onSetViewMode("kord-breach")}
+                  tooltip="Kord Breach planner"
+                >
+                  <Scale />
+                  <span>Kord Breach planner</span>
+                  <NavigationStatus tone="green">New</NavigationStatus>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

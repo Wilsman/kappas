@@ -158,7 +158,7 @@ export function SelectiveResetDialog({
                 }
               />
               <Label htmlFor="hideout" className="text-sm cursor-pointer">
-                Hideout Items
+                Hideout Progress
               </Label>
             </div>
 

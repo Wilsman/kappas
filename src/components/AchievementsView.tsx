@@ -41,6 +41,18 @@ function AchievementTextContent({ achievement }: Pick<AchievementCardProps, 'ach
   );
 }
 
+function AchievementDetailsContent({ achievement }: Pick<AchievementCardProps, 'achievement'>): JSX.Element {
+  return (
+    <>
+      <p className="text-sm text-muted-foreground line-clamp-2">{achievement.description}</p>
+      <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+        <span>Side: {achievement.side}</span>
+        <span>Players: {achievement.playersCompletedPercent}%</span>
+      </div>
+    </>
+  );
+}
+
 function AchievementCardContent({ achievement, isDone, onToggle }: AchievementCardProps): JSX.Element {
   return (
     <div className="flex items-start gap-3">
@@ -70,9 +82,13 @@ function HiddenAchievementCard(props: AchievementCardProps): JSX.Element {
     >
       <img src={props.achievement.imageLink} alt="Hidden achievement" className="w-12 h-12 shrink-0 rounded-md object-contain bg-muted/30" loading="lazy" />
       <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2">
+          <p className="truncate font-medium">{props.achievement.name}</p>
+          <span className="text-xs text-muted-foreground">(Hidden)</span>
+        </div>
         {isRevealing ? (
           <DecryptReveal
-            className="h-[84px] overflow-hidden rounded-sm"
+            className="h-[60px] overflow-hidden rounded-sm"
             radius={320}
             softness={0.72}
             cell={8}
@@ -80,14 +96,13 @@ function HiddenAchievementCard(props: AchievementCardProps): JSX.Element {
             color="#f59e0b"
             background="#111418"
           >
-            <AchievementTextContent achievement={props.achievement} />
+            <AchievementDetailsContent achievement={props.achievement} />
           </DecryptReveal>
         ) : (
-          <div className="relative h-[84px] overflow-hidden font-mono text-xs text-amber-500/80" aria-hidden>
+          <div className="relative h-[60px] overflow-hidden font-mono text-xs text-amber-500/80" aria-hidden>
             <div className="absolute inset-0 opacity-70 [mask-image:linear-gradient(to_right,black,transparent)]">
               <p>7F3A · A91C · E4D2 · CLASSIFIED</p>
-              <p className="mt-2 tracking-[0.28em]">▓▒░▓▓░▒▓░▓▒░▓▓▒░</p>
-              <p className="mt-2 text-muted-foreground">Hover to decrypt achievement</p>
+              <p className="mt-2 text-muted-foreground">Hover to decrypt achievement details</p>
             </div>
           </div>
         )}

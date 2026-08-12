@@ -291,8 +291,10 @@ export function ExportImportDialog({
         count: data.completedCollectorItems?.length || 0,
       },
       {
-        label: "Hideout Items",
-        count: data.completedHideoutItems?.length || 0,
+        label: "Hideout Progress",
+        count:
+          (data.completedHideoutItems?.length || 0) +
+          (data.completedHideoutRequirements?.length || 0),
       },
       { label: "Achievements", count: data.completedAchievements?.length || 0 },
       {

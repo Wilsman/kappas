@@ -27,14 +27,14 @@ describe("calculateLightkeeperProgress", () => {
 
     expect(
       calculateLightkeeperProgress({
-        scavKarma: 0.99,
+        scavKarma: 1.99,
         ...emptyProgress(),
         completedStorylineObjectives,
       }).stageOneReady,
     ).toBe(false);
 
     const progress = calculateLightkeeperProgress({
-      scavKarma: 1,
+      scavKarma: 2,
       ...emptyProgress(),
       completedStorylineObjectives,
     });
@@ -79,7 +79,7 @@ describe("calculateLightkeeperProgress", () => {
       }),
     );
     const progress = calculateLightkeeperProgress({
-      scavKarma: 1.2,
+      scavKarma: 2.2,
       ...emptyProgress(),
       completedStorylineObjectives,
     });

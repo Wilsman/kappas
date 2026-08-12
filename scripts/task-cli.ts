@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Developer CLI for inspecting Tarkov task data from both APIs
+ * Developer CLI for inspecting Tarkov JSON task data and the data overlay
  * 
  * Usage:
  *   npx tsx scripts/task-cli.ts [command] [options]
@@ -10,15 +10,15 @@
  *   search-id <id>           - Search for a task by ID
  *   search-name <name>       - Search for a task by name (fuzzy)
  *   list-all                 - List all tasks (names and IDs)
- *   tarkov-dev               - Fetch and display raw tasks from Tarkov Dev API
+ *   tarkov-dev               - Fetch and display tasks from the Tarkov Dev JSON API
  *   overlay                  - Fetch and display overlay data
- *   compare                  - Compare task counts between APIs
+ *   compare                  - Compare JSON task data with the overlay
  */
 
-const TARKOV_API_URL = 'https://api.tarkov.dev/graphql';
+const TARKOV_JSON_API_BASE_URL = 'https://json.tarkov.dev';
 const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json';
-type GameMode = 'regular' | 'pve';
-const GAME_MODES = new Set<GameMode>(['regular', 'pve']);
+type GameMode = 'regular' | 'pve' | 'pvp-season';
+const GAME_MODES = new Set<GameMode>(['regular', 'pve', 'pvp-season']);
 let selectedGameMode: GameMode = 'regular';
 
 // Colors for terminal output
@@ -55,6 +55,24 @@ interface TarkovTask {
     }[];
 }
 
+interface JsonTask {
+    id?: string;
+    name?: string;
+    minPlayerLevel?: number;
+    wikiLink?: string;
+    kappaRequired?: boolean;
+    lightkeeperRequired?: boolean;
+    factionName?: string | null;
+    trader?: string;
+    objectives?: Record<string, {
+        description?: string;
+        maps?: string[];
+    }>;
+    taskRequirements?: Array<{ task?: string }>;
+}
+
+type TranslationMap = Record<string, string>;
+
 interface OverlayData {
     tasks?: Record<string, unknown>;
     tasksAdd?: Record<string, { id: string; name: string;[key: string]: unknown }>;
@@ -69,44 +87,64 @@ interface OverlayData {
 // ============================================================================
 
 async function fetchTarkovDevTasks(): Promise<TarkovTask[]> {
-    console.log(`${colors.cyan}⏳ Fetching ${selectedGameMode} tasks from Tarkov Dev API...${colors.reset}`);
+    console.log(`${colors.cyan}⏳ Fetching ${selectedGameMode} tasks from the Tarkov Dev JSON API...${colors.reset}`);
 
-    const query = `{
-    tasks(lang: en, gameMode: ${selectedGameMode}) {
-      id
-      name
-      minPlayerLevel
-      wikiLink
-      kappaRequired
-      lightkeeperRequired
-      factionName
-      trader { name }
-      objectives {
-        description
-        maps { name }
-      }
-      taskRequirements {
-        task { id name }
-      }
+    const modeUrl = `${TARKOV_JSON_API_BASE_URL}/${selectedGameMode}`;
+    const responses = await Promise.all([
+        fetch(`${modeUrl}/tasks`),
+        fetch(`${modeUrl}/tasks_en`),
+        fetch(`${modeUrl}/traders_en`),
+        fetch(`${modeUrl}/maps_en`),
+    ]);
+    const failedResponse = responses.find(response => !response.ok);
+    if (failedResponse) {
+        throw new Error(`HTTP error: ${failedResponse.status}`);
     }
-  }`;
 
-    const response = await fetch(TARKOV_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+    const [tasksPayload, taskTranslationsPayload, traderTranslationsPayload, mapTranslationsPayload] =
+        await Promise.all(responses.map(response => response.json()));
+    const tasks = (tasksPayload.data?.tasks ?? {}) as Record<string, JsonTask>;
+    const taskTranslations = (taskTranslationsPayload.data ?? {}) as TranslationMap;
+    const traderTranslations = (traderTranslationsPayload.data ?? {}) as TranslationMap;
+    const mapTranslations = (mapTranslationsPayload.data ?? {}) as TranslationMap;
+    const translateIdName = (translations: TranslationMap, id?: string) =>
+        id ? translations[`${id} Name`] ?? translations[id] ?? id : '';
+    const taskName = (taskId?: string) => {
+        const task = taskId ? tasks[taskId] : undefined;
+        return taskId
+            ? taskTranslations[task?.name ?? ''] ?? translateIdName(taskTranslations, taskId)
+            : '';
+    };
+
+    return Object.values(tasks).flatMap((task): TarkovTask[] => {
+        if (!task.id) return [];
+        const objectives = Object.values(task.objectives ?? {}).map(objective => ({
+            description: taskTranslations[objective.description ?? ''] ?? objective.description,
+            maps: (objective.maps ?? []).map(mapId => ({
+                name: translateIdName(mapTranslations, mapId),
+            })),
+        }));
+        return [{
+            id: task.id,
+            name: taskTranslations[task.name ?? ''] ?? translateIdName(taskTranslations, task.id),
+            minPlayerLevel: task.minPlayerLevel ?? 1,
+            wikiLink: task.wikiLink ?? '',
+            kappaRequired: task.kappaRequired,
+            lightkeeperRequired: task.lightkeeperRequired,
+            factionName: task.factionName,
+            trader: {
+                name: task.trader
+                    ? traderTranslations[`${task.trader} Nickname`] ?? translateIdName(traderTranslations, task.trader)
+                    : 'Unknown',
+            },
+            objectives,
+            taskRequirements: (task.taskRequirements ?? []).flatMap(requirement =>
+                requirement.task
+                    ? [{ task: { id: requirement.task, name: taskName(requirement.task) } }]
+                    : []
+            ),
+        }];
     });
-
-    if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    if (result.errors) {
-        throw new Error(`GraphQL error: ${result.errors.map((e: { message: string }) => e.message).join(', ')}`);
-    }
-
-    return result.data.tasks;
 }
 
 async function fetchOverlay(): Promise<OverlayData> {
@@ -177,7 +215,7 @@ async function countTasks() {
     const overlayAddedTasks = overlay.tasksAdd ? Object.keys(overlay.tasksAdd).length : 0;
     const overlayModifiedTasks = overlay.tasks ? Object.keys(overlay.tasks).length : 0;
 
-    console.log(`${colors.green}✓${colors.reset} Tarkov Dev API Tasks: ${colors.bright}${tasks.length}${colors.reset}`);
+    console.log(`${colors.green}✓${colors.reset} Tarkov Dev JSON API Tasks: ${colors.bright}${tasks.length}${colors.reset}`);
     console.log(`${colors.green}✓${colors.reset} Overlay Modified Tasks: ${colors.bright}${overlayModifiedTasks}${colors.reset}`);
     console.log(`${colors.green}✓${colors.reset} Overlay Added Tasks: ${colors.bright}${overlayAddedTasks}${colors.reset}`);
     console.log('');
@@ -205,7 +243,7 @@ async function searchById(id: string) {
     const partialMatches = tasks.filter(t => t.id.toLowerCase().includes(id.toLowerCase()) && t.id !== id);
 
     if (exactMatch) {
-        console.log(`${colors.green}✓ Exact match found in Tarkov Dev API:${colors.reset}\n`);
+        console.log(`${colors.green}✓ Exact match found in Tarkov Dev JSON API:${colors.reset}\n`);
         printTask(exactMatch);
     }
 
@@ -247,7 +285,7 @@ async function searchByName(name: string) {
     const matches = tasks.filter(t => t.name.toLowerCase().includes(searchTerm));
 
     if (matches.length > 0) {
-        console.log(`${colors.green}✓ Found ${matches.length} match(es) in Tarkov Dev API:${colors.reset}\n`);
+        console.log(`${colors.green}✓ Found ${matches.length} match(es) in Tarkov Dev JSON API:${colors.reset}\n`);
         matches.slice(0, 10).forEach((t, i) => printTask(t, i));
         if (matches.length > 10) {
             console.log(`${colors.dim}  ...and ${matches.length - 10} more${colors.reset}`);
@@ -298,7 +336,7 @@ async function listAll() {
 }
 
 async function showTarkovDev() {
-    printHeader('Tarkov Dev API - Raw Tasks');
+    printHeader('Tarkov Dev JSON API - Tasks');
 
     const tasks = await fetchTarkovDevTasks();
 
@@ -341,7 +379,7 @@ async function showOverlay() {
 }
 
 async function compare() {
-    printHeader('API Comparison');
+    printHeader('JSON API and Overlay Comparison');
 
     const [tasks, overlay] = await Promise.all([
         fetchTarkovDevTasks(),
@@ -350,7 +388,7 @@ async function compare() {
 
     console.log(`${colors.bright}Source Comparison:${colors.reset}\n`);
     console.log(`┌─────────────────────────────────────────────┐`);
-    console.log(`│ Tarkov Dev API Tasks:      ${String(tasks.length).padStart(6)}          │`);
+    console.log(`│ Tarkov Dev JSON Tasks:     ${String(tasks.length).padStart(6)}          │`);
     console.log(`├─────────────────────────────────────────────┤`);
     console.log(`│ Overlay Modifications:     ${String(Object.keys(overlay.tasks || {}).length).padStart(6)}          │`);
     console.log(`│ Overlay Additions:         ${String(Object.keys(overlay.tasksAdd || {}).length).padStart(6)}          │`);
@@ -374,22 +412,22 @@ async function compare() {
 function showHelp() {
     console.log(`
 ${colors.bright}${colors.cyan}Tarkov Task CLI${colors.reset}
-${colors.dim}Developer tool for inspecting task data from Tarkov Dev API and overlay${colors.reset}
+${colors.dim}Developer tool for inspecting Tarkov Dev JSON task data and overlay${colors.reset}
 
 ${colors.bright}Usage:${colors.reset}
   npx tsx scripts/task-cli.ts [command] [options]
 
 ${colors.bright}Options:${colors.reset}
-  ${colors.green}--mode <regular|pve>${colors.reset}     Select Tarkov game mode (defaults to MODE env var or regular)
+  ${colors.green}--mode <regular|pve|pvp-season>${colors.reset} Select Tarkov game mode (defaults to MODE env var or regular)
 
 ${colors.bright}Commands:${colors.reset}
   ${colors.green}count${colors.reset}                  Show total number of tasks from all sources
   ${colors.green}search-id <id>${colors.reset}         Search for a task by ID (exact or partial)
   ${colors.green}search-name <name>${colors.reset}     Search for a task by name (fuzzy match)
   ${colors.green}list-all${colors.reset}               List all tasks grouped by trader
-  ${colors.green}tarkov-dev${colors.reset}             Fetch and display tasks from Tarkov Dev API
+  ${colors.green}tarkov-dev${colors.reset}             Fetch and display tasks from the Tarkov Dev JSON API
   ${colors.green}overlay${colors.reset}                Fetch and display overlay data
-  ${colors.green}compare${colors.reset}                Compare task data between APIs
+  ${colors.green}compare${colors.reset}                Compare JSON task data with the overlay
 
 ${colors.bright}Examples:${colors.reset}
   npx tsx scripts/task-cli.ts count
@@ -413,11 +451,11 @@ async function main() {
             ? rawArgs.filter((_, index) => index !== modeIndex && index !== modeIndex + 1)
             : rawArgs;
     if (modeIndex >= 0 && !modeValue) {
-        throw new Error('Missing value for --mode. Use "regular" or "pve".');
+        throw new Error('Missing value for --mode. Use "regular", "pve", or "pvp-season".');
     }
     if (modeValue) {
         if (!GAME_MODES.has(modeValue as GameMode)) {
-            throw new Error(`Invalid mode "${modeValue}". Use "regular" or "pve".`);
+            throw new Error(`Invalid mode "${modeValue}". Use "regular", "pve", or "pvp-season".`);
         }
         selectedGameMode = modeValue as GameMode;
     }

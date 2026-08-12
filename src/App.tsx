@@ -107,7 +107,8 @@ import {
   loadCombinedCache,
   isCombinedCacheFresh,
   getCombinedCacheDebugInfo,
-  getTarkovApiUrl,
+  getTarkovJsonRequestBaseUrl,
+  TARKOV_JSON_API_BASE_URL,
   OVERLAY_URL,
   buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
@@ -347,17 +348,14 @@ function getErrorCause(error: unknown): { name: string | null; message: string }
 
 function classifyRefreshError(message: string): string {
   const normalized = message.toLowerCase();
-  if (normalized.includes("tarkov api request failed")) {
-    return "tarkov-api-network-or-proxy-failure";
+  if (normalized.includes("tarkov json api request failed")) {
+    return "tarkov-json-api-network-failure";
   }
   if (normalized.includes("failed to fetch")) {
     return "network-or-cors-fetch-failure";
   }
   if (normalized.includes("http error")) {
     return "upstream-http-error";
-  }
-  if (normalized.includes("graphql error")) {
-    return "graphql-response-error";
   }
   if (
     normalized.includes("cannot read properties") ||
@@ -372,10 +370,8 @@ function classifyRefreshError(message: string): string {
 function isTarkovApiOutageError(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
-    normalized.includes("api.tarkov.dev") ||
-    normalized.includes("tarkov api upstream error") ||
-    normalized.includes("worker exceeded resource limits") ||
-    normalized.includes("error code: 1102") ||
+    normalized.includes("json.tarkov.dev") ||
+    normalized.includes("tarkov json api request failed") ||
     normalized.includes("status: 503") ||
     normalized.includes("status 503")
   );
@@ -600,6 +596,8 @@ function App() {
   const [completedHideoutItems, setCompletedHideoutItems] = useState<
     Set<string>
   >(new Set());
+  const [completedHideoutRequirements, setCompletedHideoutRequirements] =
+    useState<Set<string>>(new Set());
   const [completedStorylineObjectives, setCompletedStorylineObjectives] =
     useState<Set<string>>(new Set());
   const [completedStorylineMapNodes, setCompletedStorylineMapNodes] = useState<
@@ -815,12 +813,7 @@ function App() {
       hasCachedData: boolean;
       details?: string;
     }): RefreshErrorDialogState => {
-      const apiUrl = getTarkovApiUrl();
-      const apiTransport = apiUrl.startsWith("/")
-        ? "same-origin-proxy"
-        : apiUrl.includes("api.tarkov.dev")
-          ? "direct-tarkov-api"
-          : "configured-override";
+      const tarkovJsonRequestBaseUrl = getTarkovJsonRequestBaseUrl();
       const cache = getCombinedCacheDebugInfo(
         activeProfileGameMode,
         apiLanguage,
@@ -841,8 +834,11 @@ function App() {
           cause: errorCause ?? null,
         },
         api: {
-          tarkovApiUrl: apiUrl,
-          transport: apiTransport,
+          tarkovJsonApiRequestBaseUrl: tarkovJsonRequestBaseUrl,
+          tarkovJsonApiUpstreamBaseUrl: TARKOV_JSON_API_BASE_URL,
+          transport: tarkovJsonRequestBaseUrl.startsWith("/")
+            ? "same-origin-dev-proxy"
+            : "direct-json-api",
           overlayUrl: OVERLAY_URL,
         },
         build: {
@@ -850,8 +846,6 @@ function App() {
           dev: import.meta.env.DEV,
           prod: import.meta.env.PROD,
           baseUrl: import.meta.env.BASE_URL,
-          configuredTarkovApiUrl:
-            import.meta.env.VITE_TARKOV_API_URL?.trim() || null,
         },
         runtime: {
           online:
@@ -1023,7 +1017,7 @@ function App() {
           source: options.source ?? "manual-refresh",
           errorMessage:
             options.message ??
-            "GraphQL error: Manually triggered support dialog preview",
+            "Tarkov JSON API error: Manually triggered support dialog preview",
           errorStack: null,
           hasCachedData: options.hasCachedData ?? allTasks.length > 0,
           details:
@@ -1557,6 +1551,7 @@ function App() {
           loadWithRetry(() => taskStorage.loadCompletedTasks()),
           loadWithRetry(() => taskStorage.loadCompletedCollectorItems()),
           loadWithRetry(() => taskStorage.loadCompletedHideoutItems()),
+          loadWithRetry(() => taskStorage.loadCompletedHideoutRequirements()),
           loadWithRetry(() => taskStorage.loadCompletedAchievements()),
           loadWithRetry(() => taskStorage.loadCompletedStorylineObjectives()),
           loadWithRetry(() => taskStorage.loadCompletedStorylineMapNodes()),
@@ -1570,6 +1565,7 @@ function App() {
           savedTasksResult,
           savedCollectorItemsResult,
           savedHideoutItemsResult,
+          savedHideoutRequirementsResult,
           savedAchievementsResult,
           savedStorylineObjectivesResult,
           savedStorylineMapNodesResult,
@@ -1590,6 +1586,10 @@ function App() {
         const savedHideoutItems =
           savedHideoutItemsResult.status === "fulfilled"
             ? savedHideoutItemsResult.value
+            : new Set<string>();
+        const savedHideoutRequirements =
+          savedHideoutRequirementsResult.status === "fulfilled"
+            ? savedHideoutRequirementsResult.value
             : new Set<string>();
         const savedAchievements =
           savedAchievementsResult.status === "fulfilled"
@@ -1628,6 +1628,7 @@ function App() {
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedHideoutItems(savedHideoutItems);
+        setCompletedHideoutRequirements(savedHideoutRequirements);
         setCompletedAchievements(savedAchievements);
         setCompletedStorylineObjectives(savedStorylineObjectives);
         setCompletedStorylineMapNodes(savedStorylineMapNodes);
@@ -1845,6 +1846,11 @@ function App() {
             100,
           ),
           loadWithRetry(() => taskStorage.loadCompletedHideoutItems(), 3, 100),
+          loadWithRetry(
+            () => taskStorage.loadCompletedHideoutRequirements(),
+            3,
+            100,
+          ),
           loadWithRetry(() => taskStorage.loadCompletedAchievements(), 3, 100),
           loadWithRetry(
             () => taskStorage.loadCompletedStorylineObjectives(),
@@ -1875,6 +1881,7 @@ function App() {
           savedTasksResult,
           savedCollectorItemsResult,
           savedHideoutItemsResult,
+          savedHideoutRequirementsResult,
           savedAchievementsResult,
           savedStorylineObjectivesResult,
           savedStorylineMapNodesResult,
@@ -1914,6 +1921,17 @@ function App() {
           console.error(
             "[Init] Failed to load hideout items:",
             savedHideoutItemsResult.reason,
+          );
+        }
+
+        const savedHideoutRequirements =
+          savedHideoutRequirementsResult.status === "fulfilled"
+            ? savedHideoutRequirementsResult.value
+            : new Set<string>();
+        if (savedHideoutRequirementsResult.status === "rejected") {
+          console.error(
+            "[Init] Failed to load completed hideout requirements:",
+            savedHideoutRequirementsResult.reason,
           );
         }
 
@@ -2002,6 +2020,7 @@ function App() {
         setCompletedTasks(savedTasks);
         setCompletedCollectorItems(savedCollectorItems);
         setCompletedHideoutItems(savedHideoutItems);
+        setCompletedHideoutRequirements(savedHideoutRequirements);
         setCompletedAchievements(savedAchievements);
         setCompletedStorylineObjectives(savedStorylineObjectives);
         setCompletedStorylineMapNodes(savedStorylineMapNodes);
@@ -2597,6 +2616,21 @@ function App() {
     [activeProfileId],
   );
 
+  const handleSetHideoutRequirements = useCallback(
+    async (requirements: Set<string>) => {
+      if (!activeProfileId) return;
+      setCompletedHideoutRequirements(requirements);
+      try {
+        taskStorage.setProfile(activeProfileId);
+        await taskStorage.init();
+        await taskStorage.saveCompletedHideoutRequirements(requirements);
+      } catch (err) {
+        console.error("Save hideout requirements error", err);
+      }
+    },
+    [activeProfileId],
+  );
+
   const syncTaskCompletionFromObjectives = useCallback(
     (
       taskId: string,
@@ -2844,6 +2878,21 @@ function App() {
     [activeProfileId],
   );
 
+  const handleSetHideoutItemQuantities = useCallback(
+    (quantities: Record<string, number>) => {
+      if (!activeProfileId) return;
+      setHideoutItemQuantities(quantities);
+      taskStorage.setProfile(activeProfileId);
+      taskStorage
+        .init()
+        .then(() => taskStorage.saveHideoutItemQuantities(quantities))
+        .catch((err) => {
+          console.error("Save hideout item quantities error", err);
+        });
+    },
+    [activeProfileId],
+  );
+
   // Working on toggle handlers
   const handleToggleWorkingOnTask = useCallback(
     async (taskId: string) => {
@@ -2993,7 +3042,10 @@ function App() {
           setTaskObjectiveItemProgress({});
         if (resetCollectorItems || resetTrackedItems)
           setCompletedCollectorItems(new Set());
-        if (resetHideoutItems) setCompletedHideoutItems(new Set());
+        if (resetHideoutItems) {
+          setCompletedHideoutItems(new Set());
+          setCompletedHideoutRequirements(new Set());
+        }
         if (resetHideoutItems || resetTrackedItems)
           setHideoutItemQuantities({});
         if (resetTrackedItems) setCompletedTaskObjectives(new Set());
@@ -3018,8 +3070,10 @@ function App() {
           await taskStorage.saveTaskObjectiveItemProgress({});
         if (resetCollectorItems || resetTrackedItems)
           await taskStorage.saveCompletedCollectorItems(new Set());
-        if (resetHideoutItems)
+        if (resetHideoutItems) {
           await taskStorage.saveCompletedHideoutItems(new Set());
+          await taskStorage.saveCompletedHideoutRequirements(new Set());
+        }
         if (resetHideoutItems || resetTrackedItems)
           await taskStorage.saveHideoutItemQuantities({});
         if (resetTrackedItems)
@@ -3086,22 +3140,26 @@ function App() {
         taskStorage.loadCompletedTasks(),
         taskStorage.loadCompletedCollectorItems(),
         taskStorage.loadCompletedHideoutItems(),
+        taskStorage.loadCompletedHideoutRequirements(),
         taskStorage.loadCompletedAchievements(),
         taskStorage.loadCompletedStorylineObjectives(),
         taskStorage.loadCompletedStorylineMapNodes(),
         taskStorage.loadCompletedTaskObjectives(),
         taskStorage.loadTaskObjectiveItemProgress(),
+        taskStorage.loadHideoutItemQuantities(),
       ]);
 
       const [
         savedTasksResult,
         savedCollectorItemsResult,
         savedHideoutItemsResult,
+        savedHideoutRequirementsResult,
         savedAchievementsResult,
         savedStorylineObjectivesResult,
         savedStorylineMapNodesResult,
         savedTaskObjectivesResult,
         savedTaskObjectiveItemProgressResult,
+        savedHideoutItemQuantitiesResult,
       ] = loadResults;
 
       const savedTasks =
@@ -3115,6 +3173,10 @@ function App() {
       const savedHideoutItems =
         savedHideoutItemsResult.status === "fulfilled"
           ? savedHideoutItemsResult.value
+          : new Set<string>();
+      const savedHideoutRequirements =
+        savedHideoutRequirementsResult.status === "fulfilled"
+          ? savedHideoutRequirementsResult.value
           : new Set<string>();
       const savedAchievements =
         savedAchievementsResult.status === "fulfilled"
@@ -3136,15 +3198,21 @@ function App() {
         savedTaskObjectiveItemProgressResult.status === "fulfilled"
           ? savedTaskObjectiveItemProgressResult.value
           : {};
+      const savedHideoutItemQuantities =
+        savedHideoutItemQuantitiesResult.status === "fulfilled"
+          ? savedHideoutItemQuantitiesResult.value
+          : {};
 
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
       setCompletedHideoutItems(savedHideoutItems);
+      setCompletedHideoutRequirements(savedHideoutRequirements);
       setCompletedAchievements(savedAchievements);
       setCompletedStorylineObjectives(savedStorylineObjectives);
       setCompletedStorylineMapNodes(savedStorylineMapNodes);
       setCompletedTaskObjectives(savedTaskObjectives);
       setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+      setHideoutItemQuantities(savedHideoutItemQuantities);
       const savedPrefs = await taskStorage.loadUserPreferences();
       setScavKarma(
         typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
@@ -3256,22 +3324,26 @@ function App() {
         taskStorage.loadCompletedTasks(),
         taskStorage.loadCompletedCollectorItems(),
         taskStorage.loadCompletedHideoutItems(),
+        taskStorage.loadCompletedHideoutRequirements(),
         taskStorage.loadCompletedAchievements(),
         taskStorage.loadCompletedStorylineObjectives(),
         taskStorage.loadCompletedStorylineMapNodes(),
         taskStorage.loadCompletedTaskObjectives(),
         taskStorage.loadTaskObjectiveItemProgress(),
+        taskStorage.loadHideoutItemQuantities(),
       ]);
 
       const [
         savedTasksResult,
         savedCollectorItemsResult,
         savedHideoutItemsResult,
+        savedHideoutRequirementsResult,
         savedAchievementsResult,
         savedStorylineObjectivesResult,
         savedStorylineMapNodesResult,
         savedTaskObjectivesResult,
         savedTaskObjectiveItemProgressResult,
+        savedHideoutItemQuantitiesResult,
       ] = loadResults;
 
       const savedTasks =
@@ -3285,6 +3357,10 @@ function App() {
       const savedHideoutItems =
         savedHideoutItemsResult.status === "fulfilled"
           ? savedHideoutItemsResult.value
+          : new Set<string>();
+      const savedHideoutRequirements =
+        savedHideoutRequirementsResult.status === "fulfilled"
+          ? savedHideoutRequirementsResult.value
           : new Set<string>();
       const savedAchievements =
         savedAchievementsResult.status === "fulfilled"
@@ -3306,15 +3382,21 @@ function App() {
         savedTaskObjectiveItemProgressResult.status === "fulfilled"
           ? savedTaskObjectiveItemProgressResult.value
           : {};
+      const savedHideoutItemQuantities =
+        savedHideoutItemQuantitiesResult.status === "fulfilled"
+          ? savedHideoutItemQuantitiesResult.value
+          : {};
 
       setCompletedTasks(savedTasks);
       setCompletedCollectorItems(savedCollectorItems);
       setCompletedHideoutItems(savedHideoutItems);
+      setCompletedHideoutRequirements(savedHideoutRequirements);
       setCompletedAchievements(savedAchievements);
       setCompletedStorylineObjectives(savedStorylineObjectives);
       setCompletedStorylineMapNodes(savedStorylineMapNodes);
       setCompletedTaskObjectives(savedTaskObjectives);
       setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+      setHideoutItemQuantities(savedHideoutItemQuantities);
       const savedPrefs = await taskStorage.loadUserPreferences();
       setScavKarma(
         typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
@@ -3381,6 +3463,8 @@ function App() {
             await taskStorage.loadCompletedCollectorItems();
           const savedHideoutItems =
             await taskStorage.loadCompletedHideoutItems();
+          const savedHideoutRequirements =
+            await taskStorage.loadCompletedHideoutRequirements();
           const savedAchievements =
             await taskStorage.loadCompletedAchievements();
           const savedStorylineObjectives =
@@ -3391,14 +3475,18 @@ function App() {
             await taskStorage.loadCompletedTaskObjectives();
           const savedTaskObjectiveItemProgress =
             await taskStorage.loadTaskObjectiveItemProgress();
+          const savedHideoutItemQuantities =
+            await taskStorage.loadHideoutItemQuantities();
           setCompletedTasks(savedTasks);
           setCompletedCollectorItems(savedCollectorItems);
           setCompletedHideoutItems(savedHideoutItems);
+          setCompletedHideoutRequirements(savedHideoutRequirements);
           setCompletedAchievements(savedAchievements);
           setCompletedStorylineObjectives(savedStorylineObjectives);
           setCompletedStorylineMapNodes(savedStorylineMapNodes);
           setCompletedTaskObjectives(savedTaskObjectives);
           setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
+          setHideoutItemQuantities(savedHideoutItemQuantities);
           const savedPrefs = await taskStorage.loadUserPreferences();
           setScavKarma(
             typeof savedPrefs.scavKarma === "number"
@@ -3996,6 +4084,12 @@ function App() {
                           onToggleCollectorItem={handleToggleCollectorItem}
                           completedHideoutItems={completedHideoutItems}
                           onSetHideoutItems={handleSetHideoutItems}
+                          completedHideoutRequirements={
+                            completedHideoutRequirements
+                          }
+                          onSetHideoutRequirements={
+                            handleSetHideoutRequirements
+                          }
                           groupBy={collectorGroupBy}
                           hideoutStations={hideoutStations}
                           workingOnHideoutStations={workingOnHideoutStations}
@@ -4003,6 +4097,9 @@ function App() {
                             handleToggleWorkingOnHideoutStation
                           }
                           hideoutItemQuantities={hideoutItemQuantities}
+                          onSetHideoutItemQuantities={
+                            handleSetHideoutItemQuantities
+                          }
                           onUpdateHideoutItemQuantity={
                             handleUpdateHideoutItemQuantity
                           }

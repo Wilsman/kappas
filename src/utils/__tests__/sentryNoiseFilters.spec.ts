@@ -21,7 +21,7 @@ describe("sentry noise filters", () => {
       ),
     ).toBe(true);
 
-    expect(isStaleAssetError(new Error("GraphQL error"))).toBe(false);
+    expect(isStaleAssetError(new Error("Tarkov JSON API error"))).toBe(false);
   });
 
   it("detects known React DOM mutation recoverable errors", () => {
@@ -60,7 +60,7 @@ describe("sentry noise filters", () => {
 
     expect(
       isExternalAssetLoadError(new TypeError("Load failed"), {
-        request: { url: "https://api.tarkov.dev/graphql" },
+        request: { url: "https://json.tarkov.dev/regular/tasks" },
       }),
     ).toBe(false);
 

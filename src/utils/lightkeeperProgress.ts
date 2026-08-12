@@ -529,7 +529,7 @@ export function calculateLightkeeperProgress({
     completedTasks.has(task.id),
   );
   const stageOneReached = completedStageTwoTasks.length > 0;
-  const karmaComplete = typeof scavKarma === "number" && scavKarma >= 1;
+  const karmaComplete = typeof scavKarma === "number" && scavKarma >= 2;
   const routeComplete = Object.values(routes).some((route) => route.isComplete);
   const stageOneReady = (karmaComplete && routeComplete) || stageOneReached;
 

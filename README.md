@@ -38,54 +38,10 @@ A comprehensive quest and progression tracker for Escape from Tarkov, featuring 
 
 ## Tarkov.dev API
 
-Data is fetched from [tarkov.dev](https://tarkov.dev/) GraphQL API in a single combined query:
-
-```graphql
-{
-  tasks(lang: en) {
-    id
-    minPlayerLevel
-    kappaRequired
-    lightkeeperRequired
-    map { name }
-    taskRequirements { task { id name } }
-    trader { name imageLink }
-    wikiLink
-    name
-    startRewards { items { item { name iconLink } count } }
-    finishRewards { items { item { name iconLink } count } }
-    objectives {
-      maps { name }
-      description
-      ... on TaskObjectiveItem { items { id name iconLink } count }
-      ... on TaskObjectivePlayerLevel { playerLevel }
-    }
-  }
-  task(id: "5c51aac186f77432ea65c552") {
-    objectives { ... on TaskObjectiveItem { items { id name iconLink } } }
-  }
-  achievements {
-    id
-    imageLink
-    name
-    description
-    hidden
-    playersCompletedPercent
-    side
-    rarity
-  }
-  hideoutStations {
-    name
-    imageLink
-    levels {
-      level
-      skillRequirements { name skill { name } level }
-      stationLevelRequirements { station { name } level }
-      itemRequirements { count item { name iconLink } }
-    }
-  }
-}
-```
+Data is fetched from the [Tarkov.dev JSON API](https://json.tarkov.dev/) using
+mode-specific task, hideout, item, trader, and map endpoints. The app supports
+`regular`, `pve`, and `pvp-season` datasets and combines the raw records with
+the matching localized translation payloads.
 
 API responses are cached in localStorage for 30 minutes.
 

@@ -147,6 +147,25 @@ describe("TaskStorage - Hideout Items", () => {
     expect(loaded.has("hideout-item-1")).toBe(true);
     expect(loaded.has("hideout-item-2")).toBe(true);
   });
+
+  it("should save hideout requirements per profile", async () => {
+    await storage.saveCompletedHideoutRequirements(
+      new Set(["skill-requirement", "station-requirement"]),
+    );
+
+    const loaded = await storage.loadCompletedHideoutRequirements();
+    expect(Array.from(loaded)).toEqual([
+      "skill-requirement",
+      "station-requirement",
+    ]);
+
+    const otherProfile = new TaskStorage();
+    otherProfile.setProfile("other-hideout-profile");
+    await otherProfile.init();
+    expect(await otherProfile.loadCompletedHideoutRequirements()).toEqual(
+      new Set(),
+    );
+  });
 });
 
 describe("TaskStorage - Storyline Objectives", () => {
@@ -555,6 +574,9 @@ describe("ExportImportService - Single Profile", () => {
     await taskStorage.saveCompletedTasks(new Set(["task-1", "task-2"]));
     await taskStorage.saveCompletedCollectorItems(new Set(["item-1"]));
     await taskStorage.saveCompletedHideoutItems(new Set(["hideout-1"]));
+    await taskStorage.saveCompletedHideoutRequirements(
+      new Set(["hideout-skill-1"]),
+    );
     await taskStorage.saveCompletedAchievements(new Set(["ach-1"]));
     await taskStorage.saveCompletedStorylineObjectives(new Set(["obj-1"]));
     await taskStorage.saveTaskObjectiveItemProgress({
@@ -575,6 +597,7 @@ describe("ExportImportService - Single Profile", () => {
     expect(exported.completedTasks).toContain("task-2");
     expect(exported.completedCollectorItems).toContain("item-1");
     expect(exported.completedHideoutItems).toContain("hideout-1");
+    expect(exported.completedHideoutRequirements).toContain("hideout-skill-1");
     expect(exported.completedAchievements).toContain("ach-1");
     expect(exported.completedStorylineObjectives).toContain("obj-1");
     expect(exported.taskObjectiveItemProgress?.["task-1::0::item-a"]).toBe(2);
@@ -590,6 +613,7 @@ describe("ExportImportService - Single Profile", () => {
       completedTasks: ["task-a", "task-b"],
       completedCollectorItems: ["item-a"],
       completedHideoutItems: ["hideout-a"],
+      completedHideoutRequirements: ["hideout-requirement-a"],
       completedAchievements: ["ach-a"],
       completedStorylineObjectives: ["obj-a"],
       completedStorylineMapNodes: ["node-a"],
@@ -610,12 +634,15 @@ describe("ExportImportService - Single Profile", () => {
     const tasks = await taskStorage.loadCompletedTasks();
     const items = await taskStorage.loadCompletedCollectorItems();
     const progress = await taskStorage.loadTaskObjectiveItemProgress();
+    const hideoutRequirements =
+      await taskStorage.loadCompletedHideoutRequirements();
     const prefs = await taskStorage.loadUserPreferences();
     const prestige = await taskStorage.loadPrestigeProgress("prestige-2");
 
     expect(tasks.has("task-a")).toBe(true);
     expect(tasks.has("task-b")).toBe(true);
     expect(items.has("item-a")).toBe(true);
+    expect(hideoutRequirements.has("hideout-requirement-a")).toBe(true);
     expect(progress["task-b::1::item-c"]).toBe(1);
     expect(progress["task-b::1::progress"]).toBe(8);
     expect(prefs.notes).toBe("Imported notes");
@@ -643,8 +670,11 @@ describe("ExportImportService - Single Profile", () => {
     ).resolves.not.toThrow();
 
     const tasks = await taskStorage.loadCompletedTasks();
+    const hideoutRequirements =
+      await taskStorage.loadCompletedHideoutRequirements();
     expect(tasks.size).toBe(1);
     expect(tasks.has("task-x")).toBe(true);
+    expect(hideoutRequirements.size).toBe(0);
   });
 
   it("should throw on invalid export data", async () => {

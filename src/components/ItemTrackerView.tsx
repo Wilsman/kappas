@@ -30,12 +30,19 @@ import {
   EyeOff,
   Minus,
   Plus,
-  CheckCheck,
   Target,
   CheckCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HideoutStation } from "@/types";
+import {
+  filterHideoutStations,
+  getHideoutLevelProgress,
+  getHideoutSkillRequirementKey,
+  getHideoutStationProgress,
+  getHideoutStationRequirementKey,
+  setHideoutLevelBuilt,
+} from "@/utils/hideoutProgress";
 
 interface CollectorItem {
   name: string;
@@ -49,11 +56,14 @@ interface CollectorViewProps {
   onToggleCollectorItem: (itemName: string) => void;
   completedHideoutItems: Set<string>;
   onSetHideoutItems: (items: Set<string>) => void;
+  completedHideoutRequirements: Set<string>;
+  onSetHideoutRequirements: (requirements: Set<string>) => void;
   groupBy: GroupBy;
   hideoutStations: HideoutStation[];
   workingOnHideoutStations?: Set<string>;
   onToggleWorkingOnHideoutStation?: (stationKey: string) => void;
   hideoutItemQuantities?: Record<string, number>;
+  onSetHideoutItemQuantities?: (quantities: Record<string, number>) => void;
   onUpdateHideoutItemQuantity?: (itemKey: string, count: number) => void;
 }
 
@@ -67,6 +77,7 @@ type CollectorSortMode =
 const COLLECTOR_SORT_STORAGE_KEY = "taskTracker_collectorSort_v1";
 const COLLECTOR_HIDE_COMPLETED_STORAGE_KEY =
   "taskTracker_collectorHideCompleted_v1";
+const HIDEOUT_HIDE_BUILT_STORAGE_KEY = "taskTracker_hideoutHideBuilt_v1";
 const COLLECTOR_SORT_MODES: CollectorSortMode[] = [
   "name-asc",
   "name-desc",
@@ -85,11 +96,14 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
   onToggleCollectorItem,
   completedHideoutItems,
   onSetHideoutItems,
+  completedHideoutRequirements,
+  onSetHideoutRequirements,
   groupBy,
   hideoutStations,
   workingOnHideoutStations = new Set(),
   onToggleWorkingOnHideoutStation,
   hideoutItemQuantities = {},
+  onSetHideoutItemQuantities,
   onUpdateHideoutItemQuantity,
 }) => {
   const [searchTerm, setSearchTerm] = useQueryState("itemsSearch", {
@@ -106,6 +120,7 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     setHasLoadedHideCompletedPreference,
   ] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [hideBuiltHideoutLevels, setHideBuiltHideoutLevels] = useState(false);
 
   useEffect(() => {
     const savedSort = localStorage.getItem(COLLECTOR_SORT_STORAGE_KEY);
@@ -135,6 +150,19 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
       String(hideCompletedCollectorItems),
     );
   }, [hideCompletedCollectorItems, hasLoadedHideCompletedPreference]);
+
+  useEffect(() => {
+    setHideBuiltHideoutLevels(
+      localStorage.getItem(HIDEOUT_HIDE_BUILT_STORAGE_KEY) === "true",
+    );
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      HIDEOUT_HIDE_BUILT_STORAGE_KEY,
+      String(hideBuiltHideoutLevels),
+    );
+  }, [hideBuiltHideoutLevels]);
 
   // Filter items based on search
   const filteredItems = useMemo(() => {
@@ -190,42 +218,34 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     sortedCollectorItems,
   ]);
 
-  // Filter hideout stations based on search
-  const filteredHideoutStations = useMemo(() => {
-    if (!searchTerm.trim()) return hideoutStations;
-    const term = searchTerm.toLowerCase();
-    return hideoutStations
-      .map((station) => {
-        // Check if station name matches
-        const stationMatches = station.name.toLowerCase().includes(term);
+  const hideoutProgressState = useMemo(
+    () => ({
+      completedItems: completedHideoutItems,
+      itemQuantities: hideoutItemQuantities,
+      completedRequirements: completedHideoutRequirements,
+    }),
+    [
+      completedHideoutItems,
+      completedHideoutRequirements,
+      hideoutItemQuantities,
+    ],
+  );
 
-        // Filter levels that have matching items
-        const filteredLevels = station.levels.filter((level) => {
-          const hasMatchingItems = level.itemRequirements.some(
-            (req) =>
-              hasNamedRequirementItem(req.item) &&
-              req.item.name.toLowerCase().includes(term),
-          );
-          const hasMatchingSkills = level.skillRequirements.some((req) =>
-            req.skill.name.toLowerCase().includes(term),
-          );
-          const hasMatchingStations = level.stationLevelRequirements.some(
-            (req) => req.station.name.toLowerCase().includes(term),
-          );
-          return hasMatchingItems || hasMatchingSkills || hasMatchingStations;
-        });
-
-        // Include station if name matches or if it has matching levels
-        if (stationMatches || filteredLevels.length > 0) {
-          return {
-            ...station,
-            levels: stationMatches ? station.levels : filteredLevels,
-          };
-        }
-        return null;
-      })
-      .filter(Boolean) as HideoutStation[];
-  }, [hideoutStations, searchTerm]);
+  const filteredHideoutStations = useMemo(
+    () =>
+      filterHideoutStations(
+        hideoutStations,
+        searchTerm,
+        hideBuiltHideoutLevels,
+        hideoutProgressState,
+      ),
+    [
+      hideBuiltHideoutLevels,
+      hideoutProgressState,
+      hideoutStations,
+      searchTerm,
+    ],
+  );
   // Handle quantity changes for items
   const handleQuantityChange = (
     itemKey: string,
@@ -252,41 +272,37 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     return /(Roubles|Euros|Dollars)$/i.test(itemName);
   };
 
-  // Mark all items in a level as complete
-  const handleMarkLevelComplete = (
+  const handleSetLevelBuilt = (
     stationName: string,
-    levelNum: number,
-    level: { itemRequirements: { count: number; item: { name: string } }[] },
+    level: HideoutStation["levels"][number],
+    built: boolean,
   ) => {
-    const next = new Set(completedHideoutItems);
-    const itemRequirements =
-      level.itemRequirements.filter((req) =>
-        hasNamedRequirementItem(req.item),
-      );
-    const levelItemKeys = itemRequirements.map(
-      (req) => `${stationName}-${levelNum}-${req.item.name}`,
+    const next = setHideoutLevelBuilt(
+      stationName,
+      level,
+      built,
+      hideoutProgressState,
     );
-    const isLevelComplete = levelItemKeys.every((key) => next.has(key));
-
-    if (isLevelComplete) {
-      itemRequirements.forEach((req) => {
-        const itemKey = `${stationName}-${levelNum}-${req.item.name}`;
-        next.delete(itemKey);
-        if (onUpdateHideoutItemQuantity) {
-          onUpdateHideoutItemQuantity(itemKey, 0);
-        }
-      });
-    } else {
-      itemRequirements.forEach((req) => {
-        const itemKey = `${stationName}-${levelNum}-${req.item.name}`;
-        next.add(itemKey);
-        if (onUpdateHideoutItemQuantity) {
-          onUpdateHideoutItemQuantity(itemKey, req.count);
-        }
+    onSetHideoutItems(next.completedItems);
+    onSetHideoutRequirements(next.completedRequirements);
+    if (onSetHideoutItemQuantities) {
+      onSetHideoutItemQuantities(next.itemQuantities);
+    } else if (onUpdateHideoutItemQuantity) {
+      level.itemRequirements.forEach((requirement) => {
+        if (!hasNamedRequirementItem(requirement.item)) return;
+        onUpdateHideoutItemQuantity(
+          `${stationName}-${level.level}-${requirement.item.name}`,
+          built ? requirement.count : 0,
+        );
       });
     }
+  };
 
-    onSetHideoutItems(next);
+  const handleToggleRequirement = (requirementKey: string, checked: boolean) => {
+    const next = new Set(completedHideoutRequirements);
+    if (checked) next.add(requirementKey);
+    else next.delete(requirementKey);
+    onSetHideoutRequirements(next);
   };
 
   // Group items based on the current view mode
@@ -316,7 +332,9 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
     return sortedGroups.map(([name]) => name);
   }, [groupBy, filteredHideoutStations, sortedGroups]);
 
-  const areAllExpanded = expandedGroups.length === allGroupNames.length;
+  const areAllExpanded =
+    allGroupNames.length > 0 &&
+    allGroupNames.every((groupName) => expandedGroups.includes(groupName));
 
   // Start with Collector Items expanded by default, track initialization
   const [initializedGroupBy, setInitializedGroupBy] = useState<GroupBy | null>(
@@ -427,6 +445,24 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                 {hideCompletedCollectorItems ? "Show complete" : "Hide complete"}
               </Button>
             )}
+            {groupBy === "hideout-stations" && (
+              <Button
+                variant={hideBuiltHideoutLevels ? "secondary" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setHideBuiltHideoutLevels((current) => !current)
+                }
+                className="flex h-9 items-center gap-2"
+                aria-pressed={hideBuiltHideoutLevels}
+              >
+                {hideBuiltHideoutLevels ? (
+                  <Eye className="h-4 w-4" />
+                ) : (
+                  <EyeOff className="h-4 w-4" />
+                )}
+                {hideBuiltHideoutLevels ? "Show built" : "Hide built"}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -457,39 +493,28 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
             value={expandedGroups}
             onValueChange={setExpandedGroups}
           >
-            {filteredHideoutStations.length === 0 && searchTerm.trim() && (
+            {filteredHideoutStations.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                No stations or items found matching "{searchTerm}"
+                {searchTerm.trim()
+                  ? `No remaining stations or requirements found matching "${searchTerm}"`
+                  : hideBuiltHideoutLevels
+                    ? "All hideout stations and levels are built."
+                    : "No hideout stations are available."}
               </div>
             )}
             {filteredHideoutStations.map((station) => {
-              // Calculate total completion for this station
-              const totalStationItems = station.levels.reduce(
-                (sum, level) =>
-                  sum +
-                  level.itemRequirements.filter((req) =>
-                    hasNamedRequirementItem(req.item),
-                  ).length,
-                0,
-              );
-              const completedStationItems = station.levels.reduce(
-                (sum, level) => {
-                  return (
-                    sum +
-                    level.itemRequirements.filter(
-                      (req) =>
-                        hasNamedRequirementItem(req.item) &&
-                        completedHideoutItems.has(
-                          `${station.name}-${level.level}-${req.item.name}`,
-                        ),
-                    ).length
-                  );
-                },
-                0,
+              const originalStation =
+                hideoutStations.find((entry) => entry.name === station.name) ??
+                station;
+              const stationCompletion = getHideoutStationProgress(
+                originalStation,
+                hideoutProgressState,
               );
               const stationProgress =
-                totalStationItems > 0
-                  ? (completedStationItems / totalStationItems) * 100
+                stationCompletion.totalLevels > 0
+                  ? (stationCompletion.builtLevels /
+                      stationCompletion.totalLevels) *
+                    100
                   : 0;
 
               return (
@@ -499,26 +524,27 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                   className="border rounded-lg bg-card"
                 >
                   <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-4">
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                         {station.imageLink && (
                           <img
                             src={station.imageLink}
                             alt={station.name}
-                            className="h-16 w-16 object-contain"
+                            className="h-12 w-12 shrink-0 object-contain sm:h-16 sm:w-16"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.style.display = "none";
                             }}
                           />
                         )}
-                        <h3 className="text-lg font-semibold">
+                        <h3 className="min-w-0 truncate text-base font-semibold sm:text-lg">
                           {station.name}
                         </h3>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-end gap-3 sm:gap-4">
                         <span className="text-sm text-muted-foreground">
-                          {completedStationItems} / {totalStationItems}
+                          {stationCompletion.builtLevels} /{" "}
+                          {stationCompletion.totalLevels} levels
                         </span>
                         <Progress
                           value={stationProgress}
@@ -534,17 +560,16 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                           level.itemRequirements.filter((req) =>
                             hasNamedRequirementItem(req.item),
                           );
-                        // Calculate completion for this level
-                        const totalItems = itemRequirements.length;
-                        const completedItems = itemRequirements.filter(
-                          (req) => {
-                            const itemKey = `${station.name}-${level.level}-${req.item.name}`;
-                            return completedHideoutItems.has(itemKey);
-                          },
-                        ).length;
+                        const levelCompletion = getHideoutLevelProgress(
+                          station.name,
+                          level,
+                          hideoutProgressState,
+                        );
                         const progress =
-                          totalItems > 0
-                            ? (completedItems / totalItems) * 100
+                          levelCompletion.total > 0
+                            ? (levelCompletion.completed /
+                                levelCompletion.total) *
+                              100
                             : 0;
 
                         return (
@@ -553,11 +578,11 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                             className="border rounded-lg p-4 space-y-4"
                           >
                             {/* Level Header with Progress */}
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <h4 className="font-medium text-base">
                                 Level {level.level}
                               </h4>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
                                 {onToggleWorkingOnHideoutStation && (
                                   <button
                                     onClick={(e) => {
@@ -595,29 +620,27 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                     />
                                   </button>
                                 )}
-                                {totalItems > 0 && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleMarkLevelComplete(
+                                <label
+                                  htmlFor={`built-${station.name}-${level.level}`}
+                                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted/60"
+                                >
+                                  <Checkbox
+                                    id={`built-${station.name}-${level.level}`}
+                                    checked={levelCompletion.isBuilt}
+                                    onCheckedChange={(checked) =>
+                                      handleSetLevelBuilt(
                                         station.name,
-                                        level.level,
                                         level,
+                                        Boolean(checked),
                                       )
                                     }
-                                    className="h-7 gap-1.5 text-xs"
-                                  >
-                                    <CheckCheck className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">
-                                      {completedItems === totalItems
-                                        ? "Reset All"
-                                        : "Mark All"}
-                                    </span>
-                                  </Button>
-                                )}
+                                    aria-label={`Mark ${station.name} level ${level.level} built`}
+                                  />
+                                  <span>Built</span>
+                                </label>
                                 <span className="text-sm text-muted-foreground">
-                                  {completedItems} / {totalItems}
+                                  {levelCompletion.completed} /{" "}
+                                  {levelCompletion.total}
                                 </span>
                                 <Progress
                                   value={progress}
@@ -632,15 +655,43 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                 <h5 className="text-sm font-medium mb-2 text-muted-foreground">
                                   Skill Requirements
                                 </h5>
-                                <div className="space-y-1">
-                                  {level.skillRequirements.map((req, idx) => (
-                                    <div
-                                      key={`skill-${station.name}-${level.level}-${idx}`}
-                                      className="text-sm"
-                                    >
-                                      • {req.skill.name} Level {req.level}
-                                    </div>
-                                  ))}
+                                <div className="space-y-2">
+                                  {level.skillRequirements.map((req) => {
+                                    const requirementKey =
+                                      getHideoutSkillRequirementKey(
+                                        station.name,
+                                        level.level,
+                                        req,
+                                      );
+                                    const isCompleted =
+                                      completedHideoutRequirements.has(
+                                        requirementKey,
+                                      );
+                                    return (
+                                      <label
+                                        key={requirementKey}
+                                        className={cn(
+                                          "flex cursor-pointer items-center gap-2 text-sm",
+                                          isCompleted &&
+                                            "text-muted-foreground line-through",
+                                        )}
+                                      >
+                                        <Checkbox
+                                          checked={isCompleted}
+                                          onCheckedChange={(checked) =>
+                                            handleToggleRequirement(
+                                              requirementKey,
+                                              Boolean(checked),
+                                            )
+                                          }
+                                          aria-label={`Mark ${req.skill.name} level ${req.level} complete`}
+                                        />
+                                        <span>
+                                          {req.skill.name} Level {req.level}
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}
@@ -651,28 +702,57 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                 <h5 className="text-sm font-medium mb-2 text-muted-foreground">
                                   Station Requirements
                                 </h5>
-                                <div className="space-y-1">
+                                <div className="space-y-2">
                                   {level.stationLevelRequirements.map(
-                                    (req, idx) => (
-                                      <div
-                                        key={`station-req-${station.name}-${level.level}-${idx}`}
-                                        className="text-sm"
-                                      >
-                                        • {req.station.name} Level {req.level}
-                                      </div>
-                                    ),
+                                    (req) => {
+                                      const requirementKey =
+                                        getHideoutStationRequirementKey(
+                                          station.name,
+                                          level.level,
+                                          req,
+                                        );
+                                      const isCompleted =
+                                        completedHideoutRequirements.has(
+                                          requirementKey,
+                                        );
+                                      return (
+                                        <label
+                                          key={requirementKey}
+                                          className={cn(
+                                            "flex cursor-pointer items-center gap-2 text-sm",
+                                            isCompleted &&
+                                              "text-muted-foreground line-through",
+                                          )}
+                                        >
+                                          <Checkbox
+                                            checked={isCompleted}
+                                            onCheckedChange={(checked) =>
+                                              handleToggleRequirement(
+                                                requirementKey,
+                                                Boolean(checked),
+                                              )
+                                            }
+                                            aria-label={`Mark ${req.station.name} level ${req.level} complete`}
+                                          />
+                                          <span>
+                                            {req.station.name} Level {req.level}
+                                          </span>
+                                        </label>
+                                      );
+                                    },
                                   )}
                                 </div>
                               </div>
                             )}
 
                             {/* Item Requirements */}
-                            <div className="space-y-3">
-                              <h5 className="text-sm font-medium text-muted-foreground">
-                                Required Items
-                              </h5>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {itemRequirements.map((req, idx) => {
+                            {itemRequirements.length > 0 && (
+                              <div className="space-y-3">
+                                <h5 className="text-sm font-medium text-muted-foreground">
+                                  Required Items
+                                </h5>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                  {itemRequirements.map((req, idx) => {
                                   const itemKey = `${station.name}-${level.level}-${req.item.name}`;
                                   const isCurrency = isCurrencyItem(
                                     req.item.name,
@@ -816,9 +896,10 @@ export const CollectorView: React.FC<CollectorViewProps> = ({
                                       </div>
                                     </div>
                                   );
-                                })}
+                                  })}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         );
                       })}

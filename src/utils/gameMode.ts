@@ -1,7 +1,5 @@
 export type GameMode = "regular" | "pve" | "pvp-season";
 
-export type GraphqlGameMode = Exclude<GameMode, "pvp-season">;
-
 export const DEFAULT_GAME_MODE: GameMode = "regular";
 
 export const GAME_MODE_LABELS: Record<GameMode, string> = {

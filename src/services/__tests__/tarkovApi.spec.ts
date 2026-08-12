@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Mock } from "vitest";
 import {
   fetchCombinedData,
-  getTarkovApiUrl,
+  getTarkovJsonRequestBaseUrl,
   getCombinedCacheDebugInfo,
   loadCombinedCache,
   saveCombinedCache,
@@ -16,23 +16,31 @@ import {
   buildEventTasksFromOverlay,
 } from "../tarkovApi";
 
+describe("getTarkovJsonRequestBaseUrl", () => {
+  it("uses the same-origin proxy during local development", () => {
+    expect(
+      getTarkovJsonRequestBaseUrl({ DEV: true, MODE: "development" }),
+    ).toBe("/api/tarkov-json");
+  });
+
+  it("uses the direct JSON API in tests", () => {
+    expect(getTarkovJsonRequestBaseUrl({ DEV: true, MODE: "test" })).toBe(
+      "https://json.tarkov.dev",
+    );
+  });
+
+  it("uses the direct JSON API in production", () => {
+    expect(
+      getTarkovJsonRequestBaseUrl({ DEV: false, MODE: "production" }),
+    ).toBe("https://json.tarkov.dev");
+  });
+});
+
 interface MockResponse<T> {
   ok: boolean;
   status: number;
   json: () => Promise<T>;
   text?: () => Promise<string>;
-}
-
-function mockFetchOnce<T>(data: T, ok = true, status = 200) {
-  const mockResponse: MockResponse<T> = {
-    ok,
-    status,
-    json: vi.fn().mockResolvedValue(data),
-  };
-  // Assign a mocked fetch returning our typed response
-  (globalThis as unknown as { fetch: unknown }).fetch = vi
-    .fn()
-    .mockResolvedValue(mockResponse);
 }
 
 function mockJsonResponse<T>(data: T, ok = true, status = 200): MockResponse<T> {
@@ -51,6 +59,42 @@ function mockJsonFetchSequence(...responses: MockResponse<unknown>[]) {
   });
   (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
   return fetchMock;
+}
+
+function mockCombinedJsonApi({
+  tasks,
+  achievements = {},
+  taskTranslations = {},
+  hideout = {},
+  hideoutTranslations = {},
+  itemTranslations = {},
+  traderTranslations = {},
+  mapTranslations = {},
+  overlay = {
+    tasks: {},
+    $meta: { version: "test", generated: "2026-08-12T00:00:00.000Z" },
+  },
+}: {
+  tasks: Record<string, unknown>;
+  achievements?: Record<string, unknown>;
+  taskTranslations?: Record<string, string>;
+  hideout?: Record<string, unknown>;
+  hideoutTranslations?: Record<string, string>;
+  itemTranslations?: Record<string, string>;
+  traderTranslations?: Record<string, string>;
+  mapTranslations?: Record<string, string>;
+  overlay?: Record<string, unknown>;
+}) {
+  return mockJsonFetchSequence(
+    mockJsonResponse({ data: { tasks, achievements } }),
+    mockJsonResponse({ data: taskTranslations }),
+    mockJsonResponse({ data: hideout }),
+    mockJsonResponse({ data: hideoutTranslations }),
+    mockJsonResponse({ data: itemTranslations }),
+    mockJsonResponse({ data: traderTranslations }),
+    mockJsonResponse({ data: mapTranslations }),
+    mockJsonResponse(overlay),
+  );
 }
 
 describe("fetchCombinedData", () => {
@@ -157,7 +201,9 @@ describe("fetchCombinedData", () => {
               skillRequirements: [
                 { name: "hideout_Health", skill: "Health", level: 2 },
               ],
-              stationLevelRequirements: [],
+              stationLevelRequirements: [
+                { station: "station2", level: 1 },
+              ],
               itemRequirements: [
                 {
                   item: "item4",
@@ -168,10 +214,16 @@ describe("fetchCombinedData", () => {
             },
           ],
         },
+        station2: {
+          id: "station2",
+          name: "station2 Name",
+          levels: [],
+        },
       },
     };
     const hideoutTranslations = {
       "station1 Name": "Workbench",
+      "station2 Name": "Generator",
       hideout_Health: "Health",
       Health: "Health",
     };
@@ -290,10 +342,15 @@ describe("fetchCombinedData", () => {
         },
       ],
     });
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "https://api.tarkov.dev/graphql",
-      expect.anything(),
-    );
+    expect(
+      result.hideoutStations.data.hideoutStations[0].levels[0]
+        .stationLevelRequirements,
+    ).toEqual([
+      {
+        station: { id: "station2", name: "Generator" },
+        level: 1,
+      },
+    ]);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "https://json.tarkov.dev/regular/tasks",
       "https://json.tarkov.dev/regular/tasks_en",
@@ -376,7 +433,7 @@ describe("fetchCombinedData", () => {
     ]);
   });
 
-  it("does not fall back to GraphQL when Seasonal JSON data fails", async () => {
+  it("propagates Seasonal JSON data failures", async () => {
     const fetchMock = mockJsonFetchSequence(
       mockJsonResponse({ error: "Seasonal unavailable" }, false, 503),
     );
@@ -445,210 +502,46 @@ describe("fetchCombinedData", () => {
     });
   });
 
-  it("falls back to GraphQL when a JSON endpoint fails after the keyed task payload loads", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const graphResponse = {
-      data: {
-        tasks: [
-          {
-            id: "graph-task",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: null,
-            taskRequirements: [],
-            trader: { name: "Prapor", imageLink: "img" },
-            wikiLink: "link",
-            name: "Graph Task",
-            objectives: [],
-          },
-        ],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
-      },
-    };
-    const overlayResponse = {
-      tasks: {},
-      $meta: { version: "test", generated: "2026-07-06T00:00:00.000Z" },
-    };
-    const fetchMock = mockJsonFetchSequence(
-      mockJsonResponse({ data: { tasks: {}, achievements: {} } }),
-      mockJsonResponse({ error: "failed" }, false, 503),
-      mockJsonResponse({ data: {} }),
-      mockJsonResponse({ data: {} }),
-      mockJsonResponse({ data: {} }),
-      mockJsonResponse({ data: {} }),
-      mockJsonResponse({ data: {} }),
-      mockJsonResponse(graphResponse),
-      mockJsonResponse(overlayResponse),
-    );
-
-    const result = await fetchCombinedData();
-
-    expect(result.tasks.data.tasks[0].id).toBe("graph-task");
-    expect(warnSpy).toHaveBeenCalledWith(
-      "[Tarkov API] JSON data fetch failed; falling back to GraphQL.",
-      expect.any(Error),
-    );
-    expect(
-      fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("https://api.tarkov.dev/graphql"),
-      ),
-    ).toBe(true);
-  });
-
-  it("returns tasks, collectorItems, achievements, and hideoutStations on success", async () => {
-    const apiResponse = {
-      data: {
-        tasks: [
-          {
-            id: "t1",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: { name: "Customs" },
-            taskRequirements: [],
-            trader: { name: "Prapor", imageLink: "img" },
-            wikiLink: "link",
-            name: "Task 1",
-            startRewards: { items: [] },
-            finishRewards: { items: [] },
-            objectives: [],
-          },
-        ],
-        task: {
-          objectives: [
-            {
-              items: [{ id: "i1", name: "Kept item", iconLink: "icon" }],
-            },
-          ],
-        },
-        achievements: [
-          {
-            id: "a1",
-            imageLink: "img",
-            name: "Ach 1",
-            description: "desc",
-            hidden: false,
-            playersCompletedPercent: 1,
-            adjustedPlayersCompletedPercent: 1,
-            side: "All",
-            rarity: "Common",
-          },
-        ],
-        hideoutStations: [
-          {
-            name: "Workbench",
-            imageLink: "img",
-            levels: [
-              {
-                level: 1,
-                skillRequirements: [],
-                stationLevelRequirements: [],
-                itemRequirements: [
-                  { count: 1, item: { name: "Screwdriver", iconLink: "icon" } },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    };
-
-    mockFetchOnce(apiResponse);
-    const result = await fetchCombinedData();
-
-    expect(result.tasks.data.tasks.length).toBe(1);
-    expect(result.collectorItems.data.task.objectives[0].items[0].id).toBe(
-      "i1",
-    );
-    expect(result.achievements.data.achievements[0].id).toBe("a1");
-    expect(result.hideoutStations.data.hideoutStations[0].name).toBe(
-      "Workbench",
-    );
-
-    // Ensure correct fetch calls
-    const fetchSpy = globalThis.fetch as unknown as Mock;
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
-    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
-    const graphCall = calls.find((call) =>
-      String(call[0]).includes("https://api.tarkov.dev/graphql"),
-    );
-    const overlayCall = calls.find((call) =>
-      String(call[0]).includes("tarkov-data-overlay"),
-    );
-    expect(graphCall).toBeDefined();
-    expect(overlayCall).toBeDefined();
-    const init = (graphCall?.[1] ?? {}) as { body?: string };
-    const body = JSON.parse(init.body ?? "{}") as { query?: string };
-    expect(body.query).toContain("tasks");
-    expect(body.query).toContain("gameMode: regular");
-    expect(body.query).toContain("achievements");
-    expect(body.query).toContain("hideoutStations");
-    expect(body.query).toContain("experience");
-    expect(body.query).toContain("traderStanding");
-    expect(body.query).toContain("skillLevelReward");
-    expect(body.query).toContain("traderUnlock");
-    expect(body.query).toContain("craftUnlock");
-    expect(body.query).toContain("customization");
-    expect(body.query).toContain("achievement");
-  });
-
   it("rewrites Building Foundations sell-any objectives without item lists", async () => {
-    const manyItems = Array.from({ length: 100 }, (_, index) => ({
-      id: `item-${index}`,
-      name: `Item ${index}`,
-      iconLink: `item-${index}.png`,
-    }));
-    const apiResponse = {
-      data: {
-        tasks: [
-          {
-            id: "673f629c5b555b53460cf827",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: null,
-            taskRequirements: [],
-            trader: { name: "BTR Driver", imageLink: "img" },
-            wikiLink: "link",
-            name: "Building Foundations",
-            startRewards: { items: [] },
-            finishRewards: { items: [] },
-            objectives: [
-              {
-                id: "ragman",
-                description: "Sell any items to Ragman",
-                count: 50,
-                items: manyItems,
-              },
-              {
-                id: "prapor",
-                description: "Sell any items to Prapor",
-                count: 50,
-                items: manyItems,
-              },
-              {
-                id: "peacekeeper",
-                description: "Sell any items to Peacekeeper",
-                count: 50,
-                items: manyItems,
-              },
-            ],
+    const manyItemIds = Array.from(
+      { length: 100 },
+      (_, index) => `item-${index}`,
+    );
+    mockCombinedJsonApi({
+      tasks: {
+        "673f629c5b555b53460cf827": {
+          id: "673f629c5b555b53460cf827",
+          name: "Building Foundations",
+          trader: "btr-driver",
+          minPlayerLevel: 1,
+          objectives: {
+            ragman: {
+              id: "ragman",
+              description: "Sell any items to Ragman",
+              count: 50,
+              items: manyItemIds,
+            },
+            prapor: {
+              id: "prapor",
+              description: "Sell any items to Prapor",
+              count: 50,
+              items: manyItemIds,
+            },
+            peacekeeper: {
+              id: "peacekeeper",
+              description: "Sell any items to Peacekeeper",
+              count: 50,
+              items: manyItemIds,
+            },
           },
-        ],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
+        },
       },
-    };
-
-    mockFetchOnce(apiResponse);
+      traderTranslations: { "btr-driver Nickname": "BTR Driver" },
+    });
     const result = await fetchCombinedData();
     const objectives = result.tasks.data.tasks[0].objectives ?? [];
 
-    expect(objectives).toEqual([
+    expect(objectives).toMatchObject([
       {
         id: "ragman",
         description: "Sell any 50 items to Ragman",
@@ -787,157 +680,36 @@ describe("fetchCombinedData", () => {
           statusText: "Service Unavailable",
           headers: { "Content-Type": "application/json" },
         }),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            error: "Tarkov API upstream error",
-            upstreamStatus: 503,
-            upstreamBody: "error code: 1102\n",
-          }),
-          {
-            status: 503,
-            statusText: "Service Unavailable",
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
       );
 
-    await expect(fetchCombinedData()).rejects.toThrow(/error code: 1102/);
-  });
-
-  it("throws on GraphQL errors array", async () => {
-    const apiResponse: { data: object; errors: { message: string }[] } = {
-      data: {},
-      errors: [{ message: "boom" }],
-    };
-    mockFetchOnce(apiResponse);
-    await expect(fetchCombinedData()).rejects.toThrow(/GraphQL error: boom/);
-  });
-
-  it("requests PvE tasks when pve mode is selected", async () => {
-    mockFetchOnce({
-      data: {
-        tasks: [],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
-      },
-    });
-
-    await fetchCombinedData("pve");
-
-    const fetchSpy = globalThis.fetch as unknown as Mock;
-    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
-    const graphCall = calls.find((call) =>
-      String(call[0]).includes("https://api.tarkov.dev/graphql"),
-    );
-    const init = (graphCall?.[1] ?? {}) as { body?: string };
-    const body = JSON.parse(init.body ?? "{}") as { query?: string };
-    expect(body.query).toContain("gameMode: pve");
-  });
-
-  it("requests localized tasks and collector data when language is selected", async () => {
-    mockFetchOnce({
-      data: {
-        tasks: [],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
-      },
-    });
-
-    await fetchCombinedData("regular", "de");
-
-    const fetchSpy = globalThis.fetch as unknown as Mock;
-    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
-    const graphCall = calls.find((call) =>
-      String(call[0]).includes("https://api.tarkov.dev/graphql"),
-    );
-    const init = (graphCall?.[1] ?? {}) as { body?: string };
-    const body = JSON.parse(init.body ?? "{}") as { query?: string };
-    expect(body.query).toContain("tasks(lang: de, gameMode: regular)");
-    expect(body.query).toContain(
-      'task(id: "5c51aac186f77432ea65c552", lang: de)',
-    );
-  });
-
-  it("uses partial task data when GraphQL returns recoverable field errors", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const apiResponse = {
-      data: {
-        tasks: [
-          {
-            id: "t-partial",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: null,
-            taskRequirements: [],
-            trader: { name: "Prapor", imageLink: "img" },
-            wikiLink: "link",
-            name: "Partial Task",
-            startRewards: { items: [] },
-            finishRewards: {
-              customization: [{ id: "c1", name: null, imageLink: "img" }],
-              items: [],
-            },
-            objectives: [],
-          },
-        ],
-        achievements: [],
-        hideoutStations: [],
-      },
-      errors: [
-        {
-          message: "Missing translation for key 707265736574000000000254 Name",
-        },
-      ],
-    };
-
-    mockFetchOnce(apiResponse);
-    const result = await fetchCombinedData();
-
-    expect(result.tasks.data.tasks[0].id).toBe("t-partial");
-    expect(result.collectorItems.data.task.objectives).toEqual([]);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "[Tarkov API] GraphQL returned partial data; continuing with available task payload.",
-      apiResponse.errors,
-    );
+    await expect(fetchCombinedData()).rejects.toThrow(/JSON API unavailable/);
   });
 
   it("drops task requirement rows with missing task data before applying overrides", async () => {
-    const apiResponse = {
-      data: {
-        tasks: [
-          null,
-          {
-            id: "5c0bd94186f7747a727f09b2",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: null,
-            taskRequirements: [
-              null,
-              { task: null },
-              { task: { id: "5c0d190cd09282029f5390d8", name: "Grenadier" } },
-              { task: { id: "kept-task", name: "Kept Task" } },
-            ],
-            trader: { name: "Prapor", imageLink: "img" },
-            wikiLink: "link",
-            name: "Test Drive - Part 1",
-            startRewards: { items: [] },
-            finishRewards: { items: [] },
-            objectives: [],
-          },
-        ],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
+    mockCombinedJsonApi({
+      tasks: {
+        "5c0bd94186f7747a727f09b2": {
+          id: "5c0bd94186f7747a727f09b2",
+          name: "Test Drive - Part 1",
+          trader: "prapor",
+          taskRequirements: [
+            {},
+            { task: "5c0d190cd09282029f5390d8" },
+            { task: "kept-task" },
+          ],
+        },
+        "5c0d190cd09282029f5390d8": {
+          id: "5c0d190cd09282029f5390d8",
+          name: "Grenadier",
+          trader: "prapor",
+        },
+        "kept-task": {
+          id: "kept-task",
+          name: "Kept Task",
+          trader: "prapor",
+        },
       },
-    };
-
-    mockFetchOnce(apiResponse);
+    });
     const result = await fetchCombinedData();
 
     expect(result.tasks.data.tasks[0].taskRequirements).toEqual([
@@ -946,75 +718,53 @@ describe("fetchCombinedData", () => {
   });
 
   it("handles missing optional fields with defaults", async () => {
-    const partialResponse = {
-      data: {
-        tasks: [
-          {
-            id: "t2",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: { name: "Woods" },
-            taskRequirements: [],
-            trader: { name: "Prapor", imageLink: "img" },
-            wikiLink: "link2",
-            name: "Task 2",
-            startRewards: { items: [] },
-            finishRewards: { items: [] },
-            objectives: [],
-          },
-        ],
-        task: {
-          objectives: [],
+    mockCombinedJsonApi({
+      tasks: {
+        t2: {
+          id: "t2",
+          name: "Task 2",
+          trader: "prapor",
+          map: "woods",
+          wikiLink: "link2",
         },
-        // achievements missing
-        // hideoutStations missing
       },
-    };
-
-    mockFetchOnce(partialResponse);
+      mapTranslations: { "woods Name": "Woods" },
+    });
     const result = await fetchCombinedData();
 
     expect(result.tasks.data.tasks.length).toBe(1);
-    expect(result.collectorItems.data.task.objectives.length).toBe(0);
+    expect(result.collectorItems.data.task.objectives.length).toBe(4);
     // Defaults
     expect(result.achievements.data.achievements).toEqual([]);
     expect(result.hideoutStations.data.hideoutStations).toEqual([]);
   });
 
   it("aggregates maps from task objectives", async () => {
-    const apiResponse = {
-      data: {
-        tasks: [
-          {
-            id: "t1",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: { name: "Customs" },
-            taskRequirements: [],
-            trader: { name: "Prapor", imageLink: "img" },
-            wikiLink: "link",
-            name: "Task 1",
-            objectives: [
-              {
-                maps: [{ name: "Customs" }, { name: "Woods" }],
-                description: "Test",
-              },
-              {
-                maps: [{ name: "Woods" }, { name: "Factory" }],
-                description: "Test2",
-              },
-            ],
+    mockCombinedJsonApi({
+      tasks: {
+        t1: {
+          id: "t1",
+          name: "Task 1",
+          trader: "prapor",
+          map: "customs",
+          objectives: {
+            first: {
+              maps: ["customs", "woods"],
+              description: "Test",
+            },
+            second: {
+              maps: ["woods", "factory"],
+              description: "Test2",
+            },
           },
-        ],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
+        },
       },
-    };
-
-    mockFetchOnce(apiResponse);
+      mapTranslations: {
+        "customs Name": "Customs",
+        "woods Name": "Woods",
+        "factory Name": "Factory",
+      },
+    });
     const result = await fetchCombinedData();
 
     const task = result.tasks.data.tasks[0];
@@ -1024,74 +774,30 @@ describe("fetchCombinedData", () => {
     expect(task.maps.map((m: { name: string }) => m.name)).toContain("Factory");
   });
 
-  it("preserves count for shoot objectives from the GraphQL response", async () => {
-    const apiResponse = {
-      data: {
-        tasks: [
-          {
-            id: "intimidator",
-            minPlayerLevel: 45,
-            kappaRequired: true,
-            lightkeeperRequired: false,
-            map: null,
-            taskRequirements: [],
-            trader: { name: "Prapor", imageLink: "img" },
-            wikiLink: "link",
-            name: "Intimidator",
-            objectives: [
-              {
-                description: "Eliminate Scavs with headshots",
-                count: 40,
-              },
-            ],
-            startRewards: { items: [] },
-            finishRewards: { items: [] },
+  it("preserves count for shoot objectives from the JSON response", async () => {
+    mockCombinedJsonApi({
+      tasks: {
+        intimidator: {
+          id: "intimidator",
+          name: "Intimidator",
+          minPlayerLevel: 45,
+          kappaRequired: true,
+          trader: "prapor",
+          objectives: {
+            shoot: {
+              description: "Eliminate Scavs with headshots",
+              count: 40,
+            },
           },
-        ],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
+        },
       },
-    };
-
-    mockFetchOnce(apiResponse);
+    });
     const result = await fetchCombinedData();
 
     expect(result.tasks.data.tasks[0].objectives?.[0]?.count).toBe(40);
-
-    const fetchSpy = globalThis.fetch as unknown as Mock;
-    const calls = fetchSpy.mock.calls as [input: unknown, init?: unknown][];
-    const graphCall = calls.find((call) =>
-      String(call[0]).includes("https://api.tarkov.dev/graphql"),
-    );
-    const init = (graphCall?.[1] ?? {}) as { body?: string };
-    const body = JSON.parse(init.body ?? "{}") as { query?: string };
-    expect(body.query).toContain("... on TaskObjectiveShoot { count }");
   });
 
   it("applies task wiki link overrides from the fetched overlay", async () => {
-    const apiResponse = {
-      data: {
-        tasks: [
-          {
-            id: "6663148ca9290f9e0806cca1",
-            minPlayerLevel: 1,
-            kappaRequired: false,
-            lightkeeperRequired: false,
-            map: null,
-            taskRequirements: [],
-            trader: { name: "Fence", imageLink: "img" },
-            wikiLink: "https://escapefromtarkov.fandom.com/wiki/Immunity",
-            name: "Immunity",
-            objectives: [],
-          },
-        ],
-        task: { objectives: [] },
-        achievements: [],
-        hideoutStations: [],
-      },
-    };
-
     const overlayResponse = {
       tasks: {
         "6663148ca9290f9e0806cca1": {
@@ -1104,23 +810,17 @@ describe("fetchCombinedData", () => {
       },
     };
 
-    (globalThis as unknown as { fetch: Mock }).fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: vi.fn().mockResolvedValue({ data: { tasks: [], achievements: [] } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: vi.fn().mockResolvedValue(apiResponse),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: vi.fn().mockResolvedValue(overlayResponse),
-      });
+    mockCombinedJsonApi({
+      tasks: {
+        "6663148ca9290f9e0806cca1": {
+          id: "6663148ca9290f9e0806cca1",
+          name: "Immunity",
+          trader: "fence",
+          wikiLink: "https://escapefromtarkov.fandom.com/wiki/Immunity",
+        },
+      },
+      overlay: overlayResponse,
+    });
 
     const result = await fetchCombinedData();
 
@@ -1167,30 +867,6 @@ describe("fetchCombinedData", () => {
       "Streets of Tarkov",
       "Interchange",
     ]);
-  });
-});
-
-describe("getTarkovApiUrl", () => {
-  it("uses the same-origin proxy in production", () => {
-    expect(getTarkovApiUrl({ PROD: true, DEV: false })).toBe(
-      "/api/tarkov/graphql",
-    );
-  });
-
-  it("uses the direct Tarkov API outside production", () => {
-    expect(getTarkovApiUrl({ PROD: false, DEV: true })).toBe(
-      "https://api.tarkov.dev/graphql",
-    );
-  });
-
-  it("uses VITE_TARKOV_API_URL when configured", () => {
-    expect(
-      getTarkovApiUrl({
-        PROD: true,
-        DEV: false,
-        VITE_TARKOV_API_URL: "https://example.test/graphql",
-      }),
-    ).toBe("https://example.test/graphql");
   });
 });
 

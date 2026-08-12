@@ -28,6 +28,19 @@ export default defineConfig({
     headers: {
       "Document-Policy": "js-profiling",
     },
+    proxy: {
+      "/api/tarkov-json": {
+        target: "https://json.tarkov.dev",
+        changeOrigin: true,
+        rewrite: (requestPath) =>
+          requestPath.replace(/^\/api\/tarkov-json/, ""),
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyRequest) => {
+            proxyRequest.removeHeader("origin");
+          });
+        },
+      },
+    },
   },
   resolve: {
     alias: {

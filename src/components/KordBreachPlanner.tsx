@@ -50,8 +50,6 @@ import {
 //   "https://games.gg/escape-from-tarkov/guides/escape-from-tarkov-kord-breach-all-season-one-modifiers-explained/";
 const OFFICIAL_MODIFIER_POST_URL =
   "https://x.com/nikgeneburn/status/2075177627598323906/photo/1";
-const KORD_BREACH_ICON_SOURCE_URL = "https://tarkov-seasonal.vercel.app/";
-
 const KORD_BREACH_ICON_SLUG_OVERRIDES: Readonly<Record<string, string>> = {
   "no-fir-for-hideout": "no-fir-hideout",
   "the-tarkov-shooter": "tarkov-shooter",
@@ -282,14 +280,14 @@ function ModifierCard({
 
 function ModifierColumn({
   title,
-  eyebrow,
+  pointLabel,
   modifiers,
   selectedIds,
   onToggle,
   layout,
 }: {
   title: string;
-  eyebrow: string;
+  pointLabel: string;
   modifiers: readonly KordBreachModifier[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
@@ -313,22 +311,22 @@ function ModifierColumn({
         )}
       >
         <div>
-          <p
-            className={cn(
-              "text-[10px] font-bold uppercase tracking-[0.28em]",
-              isPositive ? "text-lime-400" : "text-red-400",
-            )}
-          >
-            {eyebrow}
-          </p>
           <h2
             id={`${modifiers[0]?.category}-modifiers-title`}
             className={cn(
-              "mt-1 font-black uppercase tracking-[0.12em] text-foreground",
+              "font-black uppercase tracking-[0.12em] text-foreground",
               isCompact ? "text-lg" : "text-xl",
             )}
           >
-            {title}
+            {title}{" "}
+            <span
+              className={cn(
+                "text-[0.55em] tracking-[0.18em]",
+                isPositive ? "text-lime-400" : "text-red-400",
+              )}
+            >
+              ({pointLabel})
+            </span>
           </h2>
         </div>
         <span
@@ -842,10 +840,12 @@ export function KordBreachPlanner() {
   };
 
   const statusTone = {
-    empty: "border-border text-foreground",
+    empty:
+      "border-emerald-500/50 text-emerald-400 shadow-[0_0_28px_rgb(16_185_129_/_0.08)]",
     balanced:
       "border-emerald-500/50 text-emerald-400 shadow-[0_0_28px_rgb(16_185_129_/_0.08)]",
-    surplus: "border-amber-500/50 text-amber-400",
+    surplus:
+      "border-emerald-500/50 text-emerald-400 shadow-[0_0_28px_rgb(16_185_129_/_0.08)]",
     deficit: "border-red-500/50 text-red-400",
   }[status.kind];
 
@@ -876,10 +876,10 @@ export function KordBreachPlanner() {
                 </span>
               </h1>
               <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Build your seasonal character. Positive modifiers spend points;
-                negative modifiers earn them back. Finish on{" "}
-                <strong className="font-bold text-foreground">exactly 0</strong>{" "}
-                for a clean, balanced loadout.
+                Build your seasonal character. Positive modifiers cost points;
+                negative modifiers grant them. Your total must be{" "}
+                <strong className="font-bold text-foreground">0 or higher</strong>{" "}
+                to create the character.
               </p>
             </div>
             <div className="flex flex-wrap items-end justify-center gap-4">
@@ -921,7 +921,7 @@ export function KordBreachPlanner() {
                 rel="noreferrer"
                 className="mb-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground"
               >
-                Official values <ExternalLink className="h-3 w-3" />
+                Original announcement <ExternalLink className="h-3 w-3" />
               </a>
               {/*<a
                 href={GAMES_GG_GUIDE_URL}
@@ -944,16 +944,16 @@ export function KordBreachPlanner() {
               <ShieldAlert className="h-4 w-4 shrink-0 text-slate-300" />
               <span>
                 <span className="block text-xs font-bold uppercase tracking-[0.16em] text-foreground">
-                  Global modifiers — always active
+                  Season modifiers
                 </span>
                 <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                  6 fixed season rules · not part of your point balance
+                  Apply to all seasonal characters automatically
                 </span>
               </span>
             </span>
             <span className="shrink-0 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              <span className="group-open:hidden">View rules</span>
-              <span className="hidden group-open:inline">Hide rules</span>
+              <span className="group-open:hidden">View modifiers</span>
+              <span className="hidden group-open:inline">Hide modifiers</span>
             </span>
           </summary>
           <div className="grid gap-2 border-t border-slate-700/40 bg-black/10 p-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -988,7 +988,22 @@ export function KordBreachPlanner() {
           </div>
         </details>
 
-        <div className="kord-breach-enter kord-breach-enter-delay-2 z-20 -mx-4 mt-5 border-y border-border bg-card/95 px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.2)] backdrop-blur-xl sm:mx-0 sm:border sm:px-5 lg:sticky lg:top-0">
+        <section className="kord-breach-enter kord-breach-enter-delay-2 mt-6 px-1">
+          <h2 className="text-lg font-black uppercase tracking-[0.12em] text-foreground sm:text-xl">
+            Personal modifiers
+          </h2>
+          <p className="mt-1 max-w-4xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+            Positive and negative traits that apply only to your character. Each
+            modifier has a point cost. To create a character, the total points
+            must be 0 or higher.
+          </p>
+          <p className="mt-2 border-l-2 border-amber-400/60 pl-3 text-[11px] leading-relaxed text-amber-200/80">
+            Draft only: kept in this browser and moved to your seasonal PMC once
+            you create one
+          </p>
+        </section>
+
+        <div className="kord-breach-enter kord-breach-enter-delay-2 z-20 -mx-4 mt-3 border-y border-border bg-card/95 px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.2)] backdrop-blur-xl sm:mx-0 sm:border sm:px-5 lg:sticky lg:top-0">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -1007,23 +1022,33 @@ export function KordBreachPlanner() {
                   <div className="flex items-center gap-2">
                     <Scale className="h-4 w-4 text-muted-foreground" />
                     <p className="text-sm font-bold uppercase tracking-[0.1em] text-foreground">
-                      {status.title}
+                      Points balance
                     </p>
+                    <span
+                      className={cn(
+                        "text-[9px] font-bold uppercase tracking-[0.14em]",
+                        status.kind === "deficit"
+                          ? "text-red-400"
+                          : "text-emerald-400",
+                      )}
+                    >
+                      {status.title}
+                    </span>
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {status.detail}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                     <span>
-                      Positives{" "}
-                      <strong className="text-emerald-400">
-                        {balance.positiveCount} / -{balance.pointsSpent}
+                      Grant points{" "}
+                      <strong className="text-red-400">
+                        +{balance.pointsGained}
                       </strong>
                     </span>
                     <span>
-                      Negatives{" "}
-                      <strong className="text-red-400">
-                        {balance.negativeCount} / +{balance.pointsGained}
+                      Cost points{" "}
+                      <strong className="text-lime-400">
+                        −{balance.pointsSpent}
                       </strong>
                     </span>
                   </div>
@@ -1169,16 +1194,16 @@ export function KordBreachPlanner() {
           )}
         >
           <ModifierColumn
-            eyebrow="Spend points"
-            title="Personal positive"
+            pointLabel="Cost points"
+            title="Positive"
             modifiers={KORD_BREACH_POSITIVE_MODIFIERS}
             selectedIds={selectedIds}
             onToggle={toggleModifier}
             layout={layout}
           />
           <ModifierColumn
-            eyebrow="Recover points"
-            title="Personal negative"
+            pointLabel="Grant points"
+            title="Negative"
             modifiers={KORD_BREACH_NEGATIVE_MODIFIERS}
             selectedIds={selectedIds}
             onToggle={toggleModifier}
@@ -1188,22 +1213,10 @@ export function KordBreachPlanner() {
 
         <footer className="mt-8 flex flex-col gap-2 border-t border-border py-5 text-[11px] leading-relaxed text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>
-            Modifier values were announced before Season 1 and may change for
-            balancing reasons. This planner stores selections only in this
-            browser.
+            Modifier values and descriptions match the current in-game list.
           </p>
           <p className="shrink-0">
-            Icons from{" "}
-            <a
-              href={KORD_BREACH_ICON_SOURCE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
-            >
-              Tarkov Seasonal
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-            </a>{" "}
-            · inspired by{" "}
+            Inspired by{" "}
             <a
               href="https://mrsouer.com/eft/modifiers"
               target="_blank"

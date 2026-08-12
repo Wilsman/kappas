@@ -150,20 +150,14 @@ console.log(unheardEdition?.stashLevel); // 5
 ```typescript
 import type { Task, Overlay } from './types';
 
-const TARKOV_DEV_API = 'https://api.tarkov.dev/graphql';
+const TARKOV_DEV_API = 'https://json.tarkov.dev/regular/tasks';
 const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json';
 
 async function fetchTasks(): Promise<Task[]> {
-  // Fetch from tarkov.dev
-  const response = await fetch(TARKOV_DEV_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `{ tasks { id name minPlayerLevel map { id name } objectives { id count ... on TaskObjectiveItem { items { id name } } } } }`
-    })
-  });
+  // Fetch and normalize the keyed Tarkov.dev JSON task records.
+  const response = await fetch(TARKOV_DEV_API);
   const { data } = await response.json();
-  return data.tasks;
+  return Object.values(data.tasks).map(normalizeJsonTask);
 }
 
 async function fetchOverlay(): Promise<Overlay> {

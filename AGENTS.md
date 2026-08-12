@@ -44,7 +44,7 @@
 
 ## Architecture Overview
 - Vite + React + TypeScript; `index.html` mounts `src/App.tsx` via `src/main.tsx`.
-- API layer: `src/services/tarkovApi.ts` calls `https://api.tarkov.dev/graphql` and normalizes results.
+- API layer: `src/services/tarkovApi.ts` calls mode-specific `https://json.tarkov.dev` endpoints and normalizes results.
 - Caching: `localStorage` with TTL (`API_CACHE_KEY`, `API_CACHE_TTL_MS`).
 - Alias: `@` resolves to `src/` for clean imports.
 
@@ -53,4 +53,3 @@
 - Update or add tests when changing `services/`/`utils/`; mock `fetch`.
 - Avoid introducing new tooling without discussion; update this file if conventions change.
 - Use Radix UI patterns with cva for component variants; follow existing UI component structure.
-

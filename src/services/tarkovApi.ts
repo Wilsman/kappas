@@ -18,7 +18,6 @@ import {
   DEFAULT_GAME_MODE,
   normalizeGameMode,
   type GameMode,
-  type GraphqlGameMode,
 } from "@/utils/gameMode";
 import {
   DEFAULT_LANGUAGE,
@@ -26,23 +25,20 @@ import {
   type LanguageCode,
 } from "@/utils/language";
 import { taskStorage } from "@/utils/indexedDB";
-const DIRECT_TARKOV_API_URL = "https://api.tarkov.dev/graphql";
-const PROXIED_TARKOV_API_URL = "/api/tarkov/graphql";
-const TARKOV_JSON_API_BASE_URL = "https://json.tarkov.dev";
+export const TARKOV_JSON_API_BASE_URL = "https://json.tarkov.dev";
+export const TARKOV_JSON_DEV_PROXY_BASE_URL = "/api/tarkov-json";
 
-type TarkovApiEnv = {
+type TarkovJsonApiEnv = {
   DEV?: boolean;
-  PROD?: boolean;
-  VITE_TARKOV_API_URL?: string;
+  MODE?: string;
 };
 
-export const getTarkovApiUrl = (
-  env: TarkovApiEnv = import.meta.env,
-): string => {
-  const configuredUrl = env.VITE_TARKOV_API_URL?.trim();
-  if (configuredUrl) return configuredUrl;
-  return env.PROD ? PROXIED_TARKOV_API_URL : DIRECT_TARKOV_API_URL;
-};
+export const getTarkovJsonRequestBaseUrl = (
+  env: TarkovJsonApiEnv = import.meta.env,
+): string =>
+  env.DEV && env.MODE !== "test"
+    ? TARKOV_JSON_DEV_PROXY_BASE_URL
+    : TARKOV_JSON_API_BASE_URL;
 
 export const OVERLAY_URL =
   "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
@@ -329,7 +325,6 @@ export function applyTaskOverlay<T extends TaskOverlayTarget>(
 
   return result;
 }
-
 // Prefixes that indicate a task is a seasonal/temporary event
 const EVENT_TASK_PREFIXES = [
   "winter_",
@@ -659,19 +654,6 @@ interface CombinedApiData {
     achievements: AchievementsData["data"]["achievements"];
     hideoutStations: HideoutStationsData["hideoutStations"];
   };
-  errors?: { message: string }[];
-}
-
-function formatGraphQLErrors(errors: { message: string }[]): string {
-  return errors.map((e) => e.message).join(", ");
-}
-
-function hasUsableCombinedTaskData(
-  result: CombinedApiData,
-): result is CombinedApiData & {
-  data: CombinedApiData["data"] & { tasks: TaskData["data"]["tasks"] };
-} {
-  return Array.isArray(result.data?.tasks);
 }
 
 // Simple localStorage cache for combined API payload
@@ -798,7 +780,7 @@ type JsonHideoutStation = {
       level?: number;
     }>;
     stationLevelRequirements?: Array<{
-      station?: string | { name?: string };
+      station?: string | { id?: string; name?: string };
       level?: number;
     }>;
     itemRequirements?: Array<{
@@ -1274,7 +1256,7 @@ const buildTarkovJsonUrl = (
   language?: LanguageCode,
 ): string => {
   const suffix = language ? `_${normalizeLanguage(language)}` : "";
-  return `${TARKOV_JSON_API_BASE_URL}/${normalizeGameMode(gameMode)}/${endpoint}${suffix}`;
+  return `${getTarkovJsonRequestBaseUrl()}/${normalizeGameMode(gameMode)}/${endpoint}${suffix}`;
 };
 
 async function fetchJsonEndpoint<T>(url: string): Promise<T> {
@@ -1633,19 +1615,28 @@ const normalizeJsonHideoutStations = (
         level: requirement.level ?? 1,
       })),
       stationLevelRequirements: (level.stationLevelRequirements ?? []).map(
-        (requirement) => ({
-          station: {
-            name:
-              typeof requirement.station === "string"
-                ? translateIdName(hideoutTranslations, requirement.station)
-                : translate(
-                    hideoutTranslations,
-                    requirement.station?.name,
-                    requirement.station?.name ?? "",
-                  ),
-          },
-          level: requirement.level ?? 1,
-        }),
+        (requirement) => {
+          const stationId =
+            typeof requirement.station === "string"
+              ? requirement.station
+              : requirement.station?.id;
+          const stationNameKey = stationId
+            ? stationsById[stationId]?.name
+            : requirement.station && typeof requirement.station !== "string"
+              ? requirement.station.name
+              : undefined;
+          return {
+            station: {
+              id: stationId,
+              name: translate(
+                hideoutTranslations,
+                stationNameKey,
+                stationId ?? stationNameKey ?? "",
+              ),
+            },
+            level: requirement.level ?? 1,
+          };
+        },
       ),
       itemRequirements: (level.itemRequirements ?? []).flatMap((requirement) => {
         const item =
@@ -1747,14 +1738,6 @@ async function fetchCombinedJsonApiData(
   };
 }
 
-async function fetchTarkovApi(init: RequestInit): Promise<Response> {
-  try {
-    return await fetch(getTarkovApiUrl(), init);
-  } catch (err) {
-    throw new TypeError("Tarkov API request failed", { cause: err });
-  }
-}
-
 async function throwTarkovHttpError(response: Response): Promise<never> {
   let bodyPreview: string | null = null;
 
@@ -1781,167 +1764,6 @@ async function throwTarkovHttpError(response: Response): Promise<never> {
   throw new Error(`HTTP error! ${detailParts.join("; ")}`);
 }
 
-export async function fetchAchievements(): Promise<AchievementsData> {
-  const response = await fetchTarkovApi({
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: ACHIEVEMENTS_QUERY }),
-  });
-  if (!response.ok) await throwTarkovHttpError(response);
-  const result = await response.json();
-  if (result.errors) {
-    throw new Error(`GraphQL error: ${formatGraphQLErrors(result.errors)}`);
-  }
-  return { data: { achievements: result.data.achievements ?? [] } };
-}
-
-const HIDEOUT_STATIONS_QUERY = `
-  query HideoutStationsRequirements {
-    hideoutStations {
-      name
-      imageLink
-      levels {
-        level
-        skillRequirements {
-          name
-          skill {
-            name
-          }
-          level
-        }
-        stationLevelRequirements {
-          station {
-            name
-          }
-          level
-        }
-        itemRequirements {
-          count
-          item {
-            name
-            iconLink
-          }
-          attributes {
-            type
-            name
-            value
-          }
-        }
-      }
-    }
-  }`;
-
-const ACHIEVEMENTS_QUERY = `
-  query AchievementsQuery {
-    achievements {
-      id
-      imageLink
-      name
-      description
-      hidden
-      playersCompletedPercent
-      adjustedPlayersCompletedPercent
-      side
-      rarity
-    }
-  }
-`;
-
-const buildCombinedQuery = (
-  gameMode: GraphqlGameMode,
-  language: LanguageCode,
-) => `
-{
-  tasks(lang: ${language}, gameMode: ${gameMode}) {
-    id
-    minPlayerLevel
-    factionName
-    kappaRequired
-    lightkeeperRequired
-    map { name }
-    taskRequirements { task { id name } }
-    trader { name imageLink }
-    wikiLink
-    name
-    experience
-    startRewards { items { item { name iconLink } count } }
-    finishRewards {
-      traderStanding {
-        standing
-        trader { id name imageLink }
-      }
-      skillLevelReward {
-        name
-        level
-        skill { id name }
-      }
-      traderUnlock {
-        id
-        name
-        imageLink
-      }
-      craftUnlock {
-        id
-        level
-        station { name imageLink }
-      }
-      achievement {
-        id
-        name
-        description
-        imageLink
-      }
-      customization {
-        id
-        name
-        customizationType
-        customizationTypeName
-        imageLink
-      }
-      offerUnlock {
-        item { name iconLink }
-        trader { name imageLink }
-        level
-      }
-      items { item { name iconLink } count }
-    }
-      objectives {
-        maps { name }
-        id
-        description
-        ... on TaskObjectiveItem { items { id name iconLink } count foundInRaid }
-      ... on TaskObjectiveShoot { count }
-      ... on TaskObjectivePlayerLevel { playerLevel }
-    }
-  }
-  task(id: "5c51aac186f77432ea65c552", lang: ${language}) {
-    id
-    objectives { ... on TaskObjectiveItem { items { id name iconLink } } }
-  }
-  achievements {
-    id
-    imageLink
-    name
-    description
-    hidden
-    playersCompletedPercent
-    adjustedPlayersCompletedPercent
-    side
-    rarity
-  }
-  hideoutStations {
-    name
-    imageLink
-    levels {
-      level
-      skillRequirements { name skill { name } level }
-      stationLevelRequirements { station { name } level }
-      itemRequirements { count item { name iconLink } attributes { type name value } }
-    }
-  }
-}
-`;
-
 export type FetchStage =
   | "request"
   | "parse"
@@ -1964,77 +1786,14 @@ export async function fetchCombinedData(
   const normalizedGameMode = normalizeGameMode(gameMode);
   const normalizedLanguage = normalizeLanguage(language);
 
-  try {
-    onStage?.("request");
-    const jsonData = await fetchCombinedJsonApiData(
-      normalizedGameMode,
-      normalizedLanguage,
-    );
-    onStage?.("parse");
-    return await finalizeCombinedData(
-      jsonData,
-      normalizedGameMode,
-      normalizedLanguage,
-      onStage,
-    );
-  } catch (err) {
-    if (normalizedGameMode === "pvp-season") {
-      console.warn(
-        "[Tarkov API] Seasonal JSON data fetch failed; GraphQL fallback is unavailable for pvp-season.",
-        err,
-      );
-      throw err;
-    }
-
-    console.warn(
-      "[Tarkov API] JSON data fetch failed; falling back to GraphQL.",
-      err,
-    );
-  }
-
-  return fetchCombinedGraphqlData(
+  onStage?.("request");
+  const jsonData = await fetchCombinedJsonApiData(
     normalizedGameMode,
     normalizedLanguage,
-    onStage,
   );
-}
-
-async function fetchCombinedGraphqlData(
-  normalizedGameMode: GraphqlGameMode,
-  normalizedLanguage: LanguageCode,
-  onStage?: (stage: FetchStage) => void,
-): Promise<CombinedCachePayload & { overlay: Overlay }> {
-  onStage?.("request");
-  const response = await fetchTarkovApi({
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: buildCombinedQuery(normalizedGameMode, normalizedLanguage),
-    }),
-  });
-
-  if (!response.ok) {
-    await throwTarkovHttpError(response);
-  }
-
   onStage?.("parse");
-  const result: CombinedApiData = await response.json();
-
-  if (result.errors) {
-    if (!hasUsableCombinedTaskData(result)) {
-      throw new Error(`GraphQL error: ${formatGraphQLErrors(result.errors)}`);
-    }
-
-    console.warn(
-      "[Tarkov API] GraphQL returned partial data; continuing with available task payload.",
-      result.errors,
-    );
-  }
-
-  return finalizeCombinedData(
-    result.data,
+  return await finalizeCombinedData(
+    jsonData,
     normalizedGameMode,
     normalizedLanguage,
     onStage,
@@ -2120,34 +1879,4 @@ async function finalizeCombinedData(
   await saveCombinedCache(combined, normalizedGameMode, normalizedLanguage);
   onStage?.("done");
   return { ...combined, overlay };
-}
-
-export async function fetchHideoutStations(): Promise<{
-  data: HideoutStationsData;
-}> {
-  const response = await fetchTarkovApi({
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: HIDEOUT_STATIONS_QUERY,
-    }),
-  });
-
-  if (!response.ok) {
-    await throwTarkovHttpError(response);
-  }
-
-  const result = await response.json();
-
-  if (result.errors) {
-    throw new Error(`GraphQL error: ${formatGraphQLErrors(result.errors)}`);
-  }
-
-  return {
-    data: {
-      hideoutStations: result.data.hideoutStations || [],
-    },
-  };
 }

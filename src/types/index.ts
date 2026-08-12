@@ -186,6 +186,7 @@ export interface HideoutStationSkillRequirement {
 
 export interface HideoutStationLevelRequirement {
   station: {
+    id?: string;
     name: string;
   };
   level: number;
