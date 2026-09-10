@@ -215,6 +215,11 @@ export function TaskDetailsContent({
                             FIR
                           </span>
                         )}
+                        {objective.optional && (
+                          <span className="rounded bg-muted/60 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                            Optional
+                          </span>
+                        )}
                       </div>
 
                       {isCountOnly && (

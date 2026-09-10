@@ -1,22 +1,32 @@
 import {
+  AlertTriangle,
   BookOpen,
-  Package,
-  Scroll,
+  CheckCheck,
   ChevronDown,
   ChevronRight,
-  Map,
-  AlertTriangle,
-  CheckCheck,
-  RotateCcw,
-  Target,
+  CircleDollarSign,
+  Clock3,
+  Gift,
+  Map as MapIcon,
+  MessageSquareText,
   Minus,
+  Package,
   Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Target,
+  Trophy,
+  XCircle,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
-import { Progress } from "@/components/ui/progress";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
+import React, { useEffect, useMemo, useState } from "react";
+import { STORYLINE_QUESTS } from "@/data/storylineQuests";
+import type {
+  StorylineChapter,
+  StorylineRequirement,
+  StorylineRewardGroup,
+  StorylineStep,
+} from "@/types/storyline";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,141 +37,110 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
-  STORYLINE_QUESTS,
-  type StorylineObjective,
-} from "@/data/storylineQuests";
+  getStorylineDisplayProgress,
+  getStorylineStepTitle,
+  groupStorylineObjectives,
+  isStorylineObjectiveGroupCompleted,
+  isStorylineObjectiveGroupOptional,
+  isStorylineObjectiveGroupPartiallyCompleted,
+  isStorylineObjectiveGroupWorkingOn,
+  type StorylineObjectiveGroup,
+} from "@/utils/storylinePresentation";
 
-type StorylineItemRequirement = NonNullable<
-  StorylineObjective["itemRequirement"]
->;
+const CHAPTER_METADATA = new Map(
+  STORYLINE_QUESTS.map((chapter) => [
+    chapter.name,
+    {
+      description: chapter.description,
+      icon: chapter.icon,
+      notes: chapter.notes,
+    },
+  ]),
+);
 
-const STORYLINE_TRACKER_ICONS = {
-  dogtags: "https://assets.tarkov.dev/6662e9aca7e0b43baa3d5f74-icon.webp",
-  dollars: "https://assets.tarkov.dev/5696686a4bdc2da3298b456a-icon.webp",
-  roubles: "https://assets.tarkov.dev/5449016a4bdc2d6f028b456f-icon.webp",
-} as const;
+const TRACKABLE_ITEM_TYPES = new Set([
+  "findItem",
+  "giveItem",
+  "haveItem",
+  "plantItem",
+  "studyItems",
+  "findQuestItem",
+  "giveQuestItem",
+  "haveQuestItem",
+  "plantQuestItem",
+]);
 
-const STORYLINE_PATCH_SUMMARY = [
-  {
-    label: "Priest hunt",
-    value: "Reduced to 1 kill",
-  },
-  {
-    label: "Trader waits",
-    value: "Reduced by 40%",
-  },
-  {
-    label: "Tour unlocks",
-    value: "Survive once or visit 3x",
-  },
-  {
-    label: "Hideout crafts",
-    value: "Reduced by 40%",
-  },
-] as const;
-
-const parseRequiredCount = (value: string): number => {
-  const parsed = Number.parseInt(value.replace(/,/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : 0;
+const OBJECTIVE_TYPE_LABELS: Record<string, string> = {
+  dialogue: "Talk to trader",
+  extract: "Extract",
+  findItem: "Find items",
+  giveItem: "Hand over items",
+  findQuestItem: "Find quest item",
+  giveQuestItem: "Hand over quest item",
+  haveQuestItem: "Have quest item",
+  plantQuestItem: "Plant quest item",
+  taskStatus: "Task status",
+  visit: "Visit",
+  shoot: "Combat",
+  traderStanding: "Trader standing",
+  traderLevel: "Trader level",
+  skill: "Skill",
+  hideoutStation: "Hideout",
+  studyItems: "Inspect items",
+  globalVariable: "Story condition",
+  useItem: "Use item",
+  experience: "Experience",
 };
 
-const cleanObjectiveItemName = (value: string): string => {
-  return value
-    .replace(/\(optional\)/gi, "")
-    .replace(/\s+to\s+[A-Za-z'.-]+.*$/i, "")
-    .replace(/\s+found in raid\s+/gi, " ")
-    .replace(/\s+in raid\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
+const formatDuration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours && minutes) return `${hours}h ${minutes}m`;
+  if (hours) return `${hours}h`;
+  return `${Math.max(1, minutes)}m`;
 };
 
-const resolveDefaultIconLink = (itemName: string): string | undefined => {
-  if (/\bdogtags?\b/i.test(itemName)) {
-    return STORYLINE_TRACKER_ICONS.dogtags;
-  }
-  if (/\bdollars?\b/i.test(itemName)) {
-    return STORYLINE_TRACKER_ICONS.dollars;
-  }
-  if (/\broubles?\b/i.test(itemName)) {
-    return STORYLINE_TRACKER_ICONS.roubles;
-  }
-  return undefined;
-};
-
-const getObjectiveItemRequirement = (
-  objective: StorylineObjective,
-): StorylineItemRequirement | null => {
-  if (objective.itemRequirement) {
-    return {
-      ...objective.itemRequirement,
-      iconLink:
-        objective.itemRequirement.iconLink ||
-        resolveDefaultIconLink(objective.itemRequirement.itemName),
-    };
-  }
-
-  const description = objective.description.trim();
-  const foundInRaid = /\bfound in raid\b|\bin raid\b/i.test(description);
-
-  const handOverCashMatch = description.match(
-    /^Hand over\s+cash.*?([\d,]+)\$/i,
-  );
-  if (handOverCashMatch) {
-    const requiredCount = parseRequiredCount(handOverCashMatch[1]);
-    if (requiredCount > 0) {
-      return {
-        itemName: "Dollars",
-        requiredCount,
-        foundInRaid: false,
-        iconLink: resolveDefaultIconLink("Dollars"),
-      };
-    }
-  }
-
-  const objectivePatterns: RegExp[] = [
-    /^Hand over\s+(?:any\s+)?([\d,]+)\s+(.+)$/i,
-    /^Collect\s+(?:the required\s+)?([\d,]+)\s+(.+)$/i,
-    /^Find\s+(?:any\s+)?([\d,]+)\s+(.+)$/i,
-    /^Obtain\s+([\d,]+)\s+(.+)$/i,
-  ];
-
-  for (const pattern of objectivePatterns) {
-    const match = description.match(pattern);
-    if (!match) continue;
-
-    const requiredCount = parseRequiredCount(match[1]);
-    const itemName = cleanObjectiveItemName(match[2]);
-
-    if (requiredCount > 0 && itemName.length > 0) {
-      return {
-        itemName,
-        requiredCount,
-        foundInRaid,
-        iconLink: resolveDefaultIconLink(itemName),
-      };
-    }
-  }
-
-  return null;
-};
+const getObjectiveProgressKey = (objectiveId: string): string =>
+  `storyline-objective::${objectiveId}::items`;
 
 interface StorylineQuestsViewProps {
+  chapters: StorylineChapter[];
+  isLoading: boolean;
+  error: string | null;
+  updatedAt: number | null;
+  source: "network" | "cache" | null;
+  isStale: boolean;
+  onRetry: () => void;
   completedObjectives: Set<string>;
-  onToggleObjective: (id: string) => void;
+  onToggleObjective: (id: string, relatedObjectiveIds?: string[]) => void;
   onSetCompletedObjectives: (objectives: Set<string>) => void;
   onNavigateToMap?: () => void;
   workingOnStorylineObjectives?: Set<string>;
-  onToggleWorkingOnStorylineObjective?: (objectiveId: string) => void;
+  onToggleWorkingOnStorylineObjective?: (
+    objectiveId: string,
+    relatedObjectiveIds?: string[],
+  ) => void;
   taskObjectiveItemProgress?: Record<string, number>;
   onUpdateTaskObjectiveItemProgress?: (
     objectiveItemKey: string,
     count: number,
+    relatedObjectiveItemKeys?: string[],
   ) => void;
 }
 
 export function StorylineQuestsView({
+  chapters,
+  isLoading,
+  error,
+  updatedAt,
+  source,
+  isStale,
+  onRetry,
   completedObjectives,
   onToggleObjective,
   onSetCompletedObjectives,
@@ -171,708 +150,1054 @@ export function StorylineQuestsView({
   taskObjectiveItemProgress = {},
   onUpdateTaskObjectiveItemProgress,
 }: StorylineQuestsViewProps): JSX.Element {
-  const [expandedQuests, setExpandedQuests] = useState<
-    Record<string, { main: boolean; optional: boolean }>
-  >({});
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
+    new Set(),
+  );
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [itemQueries, setItemQueries] = useState<Record<string, string>>({});
   const [dialogState, setDialogState] = useState<{
-    isOpen: boolean;
-    questId: string;
-    questName: string;
+    chapterId: string;
+    chapterName: string;
     action: "complete" | "reset";
-  }>({ isOpen: false, questId: "", questName: "", action: "complete" });
+  } | null>(null);
 
-  const toggleSection = (questId: string, section: "main" | "optional") => {
-    setExpandedQuests((prev) => ({
-      ...prev,
-      [questId]: {
-        ...prev[questId],
-        [section]: !prev[questId]?.[section],
-      },
-    }));
-  };
-
-  const handleCompleteAll = (questId: string) => {
-    const quest = STORYLINE_QUESTS.find((q) => q.id === questId);
-    if (quest?.objectives) {
-      const newCompleted = new Set(completedObjectives);
-      quest.objectives.forEach((objective) => {
-        newCompleted.add(objective.id);
-      });
-      onSetCompletedObjectives(newCompleted);
+  useEffect(() => {
+    const firstChapter = chapters[0];
+    if (!firstChapter) return;
+    setExpandedChapters((current) =>
+      current.size > 0 ? current : new Set([firstChapter.id]),
+    );
+    const firstStep = firstChapter.steps[0];
+    if (firstStep) {
+      setExpandedSteps((current) =>
+        current.size > 0 ? current : new Set([firstStep.id]),
+      );
     }
-  };
+  }, [chapters]);
 
-  const handleResetAll = (questId: string) => {
-    const quest = STORYLINE_QUESTS.find((q) => q.id === questId);
-    if (quest?.objectives) {
-      const newCompleted = new Set(completedObjectives);
-      quest.objectives.forEach((objective) => {
-        newCompleted.delete(objective.id);
-      });
-      onSetCompletedObjectives(newCompleted);
-    }
-  };
+  const displayProgress = useMemo(
+    () => getStorylineDisplayProgress(chapters, completedObjectives),
+    [chapters, completedObjectives],
+  );
+  const progressPercent = displayProgress.total
+    ? Math.round((displayProgress.completed / displayProgress.total) * 100)
+    : 0;
 
-  const openDialog = (
-    questId: string,
-    questName: string,
-    action: "complete" | "reset",
+  const toggleSetValue = (
+    setter: React.Dispatch<React.SetStateAction<Set<string>>>,
+    id: string,
   ) => {
-    setDialogState({ isOpen: true, questId, questName, action });
-  };
-
-  const closeDialog = () => {
-    setDialogState({
-      isOpen: false,
-      questId: "",
-      questName: "",
-      action: "complete",
+    setter((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
-  const handleDialogConfirm = () => {
-    if (dialogState.action === "complete") {
-      handleCompleteAll(dialogState.questId);
-    } else {
-      handleResetAll(dialogState.questId);
-    }
-    closeDialog();
-  };
-
-  // Calculate total objectives
-  const totalObjectives = STORYLINE_QUESTS.reduce((sum, quest) => {
-    return sum + (quest.objectives?.length || 0);
-  }, 0);
-
-  const completedCount = completedObjectives.size;
-  const progressPercent =
-    totalObjectives > 0
-      ? Math.round((completedCount / totalObjectives) * 100)
-      : 0;
-
-  const getStorylineObjectiveItemKey = (
-    objective: StorylineObjective,
-    requirement: StorylineItemRequirement,
-  ) => {
-    const itemKey = requirement.itemId || requirement.itemName;
-    return `storyline-objective::${objective.id}::${itemKey || "item"}`;
-  };
-
-  const handleStorylineObjectiveItemDelta = (
-    objective: StorylineObjective,
-    delta: number,
-  ) => {
-    const requirement = getObjectiveItemRequirement(objective);
-    if (!requirement || !onUpdateTaskObjectiveItemProgress) {
-      return;
-    }
-    const itemKey = getStorylineObjectiveItemKey(objective, requirement);
-    const currentCount = taskObjectiveItemProgress[itemKey] ?? 0;
-    const increment = requirement.increment ?? 1;
-    const nextCount = Math.max(
-      0,
-      Math.min(requirement.requiredCount, currentCount + delta * increment),
+  const applyChapterAction = () => {
+    if (!dialogState) return;
+    const chapter = chapters.find(
+      (candidate) => candidate.id === dialogState.chapterId,
     );
-    onUpdateTaskObjectiveItemProgress(itemKey, nextCount);
+    if (!chapter) return;
+    const next = new Set(completedObjectives);
+    chapter.steps.forEach((step) =>
+      step.objectives.forEach((objective) => {
+        if (dialogState.action === "complete") next.add(objective.id);
+        else next.delete(objective.id);
+      }),
+    );
+    onSetCompletedObjectives(next);
+    setDialogState(null);
   };
+
+  if (isLoading && chapters.length === 0) {
+    return (
+      <div className="h-full overflow-y-auto p-4 sm:p-6">
+        <div className="mx-auto max-w-6xl space-y-4">
+          <div className="h-28 animate-pulse rounded-xl border bg-muted/30" />
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              className="h-32 animate-pulse rounded-xl border bg-muted/20"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error && chapters.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center overflow-y-auto p-6">
+        <div className="w-full max-w-lg rounded-xl border border-destructive/30 bg-card p-6 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-9 w-9 text-destructive" />
+          <h1 className="mt-4 text-xl font-semibold">Storyline data unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The Tarkov.dev development feed could not be loaded and this profile
+            does not have a cached copy yet.
+          </p>
+          <p className="mt-2 break-words text-xs text-muted-foreground/80">
+            {error}
+          </p>
+          <Button onClick={onRetry} className="mt-5">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* WIP Warning Banner */}
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-semibold text-amber-600 dark:text-amber-400">
-                Work in Progress
-              </h4>
-              <p className="text-sm text-amber-700 dark:text-amber-300/80 mt-1">
-                This section is still being developed. Quest data and objectives
-                may be incomplete or inaccurate as the 1.0 storyline is still
-                being documented by the community.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Header */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <BookOpen className="h-8 w-8 text-primary" />
-              <h1 className="text-3xl font-bold">1.0 Storyline Quests</h1>
+    <div className="h-full overflow-y-auto p-4 sm:p-6">
+      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
+        <header className="rounded-xl border bg-card/70 p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <BookOpen className="h-8 w-8 flex-none text-primary" />
+                <div>
+                  <h1 className="text-2xl font-bold sm:text-3xl">
+                    1.0 Storyline Quests
+                  </h1>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Live, mode-specific objectives from the Tarkov.dev development API
+                  </p>
+                </div>
+              </div>
             </div>
             {onNavigateToMap && (
               <Button variant="outline" onClick={onNavigateToMap}>
-                <Map className="h-4 w-4 mr-2" />
+                <MapIcon className="mr-2 h-4 w-4" />
                 Decision Map
               </Button>
             )}
           </div>
-          <p className="text-muted-foreground">
-            Track your progress through the 1.0 storyline quest objectives
-          </p>
-          <Badge variant="outline" className="mt-2">
-            <Package className="h-3 w-3 mr-1" />
-            {completedCount}/{totalObjectives} Objectives ({progressPercent}%)
-          </Badge>
-        </div>
 
-        <div className="rounded-xl border border-border/70 bg-gradient-to-br from-background to-muted/30 p-4 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                March 26, 2026 Patch Sync
-              </p>
-              <p className="text-sm text-foreground/90">
-                Latest storyline adjustments reflected in the checklist and
-                decision map.
-              </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>Overall task progress</span>
+                <span className="tabular-nums">
+                  {displayProgress.completed}/{displayProgress.total} ({progressPercent}%)
+                </span>
+              </div>
+              <Progress value={progressPercent} className="h-2" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">
+                <Package className="mr-1 h-3 w-3" />
+                {chapters.length} chapters
+              </Badge>
+              <Badge
+                variant="outline"
+                className={
+                  isStale
+                    ? "border-amber-500/40 text-amber-600 dark:text-amber-400"
+                    : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                }
+              >
+                {isLoading
+                  ? "Refreshing…"
+                  : isStale
+                    ? "Cached · refresh failed"
+                    : source === "cache"
+                      ? "Cached"
+                      : "Live"}
+              </Badge>
             </div>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {STORYLINE_PATCH_SUMMARY.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-lg border border-border/60 bg-background/80 px-3 py-2"
-              >
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {item.label}
-                </p>
-                <p className="mt-1 text-sm font-medium text-foreground/90">
-                  {item.value}
+
+          <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {updatedAt
+                ? `Updated ${new Date(updatedAt).toLocaleString()}`
+                : "Waiting for Storyline data"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRetry}
+              disabled={isLoading}
+              className="h-7 self-start px-2 sm:self-auto"
+            >
+              <RefreshCw
+                className={`mr-1.5 h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
+              />
+              Refresh data
+            </Button>
+          </div>
+          {error && chapters.length > 0 && (
+            <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+              Fresh Storyline data could not be loaded. The last cached copy is
+              still available.
+            </p>
+          )}
+        </header>
+
+        <div className="space-y-4">
+          {chapters.map((chapter) => (
+            <ChapterCard
+              key={chapter.id}
+              chapter={chapter}
+              expanded={expandedChapters.has(chapter.id)}
+              onToggle={() => toggleSetValue(setExpandedChapters, chapter.id)}
+              expandedSteps={expandedSteps}
+              onToggleStep={(stepId) =>
+                toggleSetValue(setExpandedSteps, stepId)
+              }
+              expandedItems={expandedItems}
+              onToggleItems={(objectiveId) =>
+                toggleSetValue(setExpandedItems, objectiveId)
+              }
+              itemQueries={itemQueries}
+              onItemQueryChange={(objectiveId, value) =>
+                setItemQueries((current) => ({
+                  ...current,
+                  [objectiveId]: value,
+                }))
+              }
+              completedObjectives={completedObjectives}
+              onToggleObjective={onToggleObjective}
+              workingOnObjectives={workingOnStorylineObjectives}
+              onToggleWorkingOnObjective={
+                onToggleWorkingOnStorylineObjective
+              }
+              itemProgress={taskObjectiveItemProgress}
+              onUpdateItemProgress={onUpdateTaskObjectiveItemProgress}
+              onRequestComplete={() =>
+                setDialogState({
+                  chapterId: chapter.id,
+                  chapterName: chapter.name,
+                  action: "complete",
+                })
+              }
+              onRequestReset={() =>
+                setDialogState({
+                  chapterId: chapter.id,
+                  chapterName: chapter.name,
+                  action: "reset",
+                })
+              }
+            />
+          ))}
+        </div>
+      </div>
+
+      <AlertDialog
+        open={dialogState !== null}
+        onOpenChange={(open) => !open && setDialogState(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {dialogState?.action === "complete"
+                ? `Complete ${dialogState.chapterName}?`
+                : `Reset ${dialogState?.chapterName}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {dialogState?.action === "complete"
+                ? "Every required and optional objective in this chapter will be marked complete."
+                : "Every objective in this chapter will be marked incomplete. Decision Map progress is not affected."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={applyChapterAction}>
+              {dialogState?.action === "complete" ? "Complete all" : "Reset all"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+interface ChapterCardProps {
+  chapter: StorylineChapter;
+  expanded: boolean;
+  onToggle: () => void;
+  expandedSteps: Set<string>;
+  onToggleStep: (stepId: string) => void;
+  expandedItems: Set<string>;
+  onToggleItems: (objectiveId: string) => void;
+  itemQueries: Record<string, string>;
+  onItemQueryChange: (objectiveId: string, value: string) => void;
+  completedObjectives: Set<string>;
+  onToggleObjective: (id: string, relatedObjectiveIds?: string[]) => void;
+  workingOnObjectives: Set<string>;
+  onToggleWorkingOnObjective?: (
+    id: string,
+    relatedObjectiveIds?: string[],
+  ) => void;
+  itemProgress: Record<string, number>;
+  onUpdateItemProgress?: (
+    key: string,
+    count: number,
+    relatedKeys?: string[],
+  ) => void;
+  onRequestComplete: () => void;
+  onRequestReset: () => void;
+}
+
+function ChapterCard({
+  chapter,
+  expanded,
+  onToggle,
+  expandedSteps,
+  onToggleStep,
+  expandedItems,
+  onToggleItems,
+  itemQueries,
+  onItemQueryChange,
+  completedObjectives,
+  onToggleObjective,
+  workingOnObjectives,
+  onToggleWorkingOnObjective,
+  itemProgress,
+  onUpdateItemProgress,
+  onRequestComplete,
+  onRequestReset,
+}: ChapterCardProps) {
+  const metadata = CHAPTER_METADATA.get(chapter.name);
+  const objectiveGroups = chapter.steps.flatMap((step) =>
+    groupStorylineObjectives(step.objectives),
+  );
+  const completed = objectiveGroups.filter((group) =>
+    isStorylineObjectiveGroupCompleted(group, completedObjectives),
+  ).length;
+  const percent = objectiveGroups.length
+    ? Math.round((completed / objectiveGroups.length) * 100)
+    : 0;
+
+  return (
+    <section
+      id={`storyline-quest-${chapter.id}`}
+      className="overflow-hidden rounded-xl border bg-card shadow-sm"
+    >
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start gap-3 sm:gap-4">
+          {metadata?.icon ? (
+            <img
+              src={metadata.icon}
+              alt=""
+              className="h-12 w-12 flex-none object-contain sm:h-16 sm:w-16"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-12 w-12 flex-none items-center justify-center rounded-lg border bg-muted/30 sm:h-16 sm:w-16">
+              <BookOpen className="h-6 w-6 text-primary" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="flex w-full items-start justify-between gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-expanded={expanded}
+            >
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold sm:text-xl">
+                  {chapter.name}
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                  {chapter.steps.length} stages · {objectiveGroups.length} tasks
                 </p>
               </div>
-            ))}
+              {expanded ? (
+                <ChevronDown className="mt-1 h-5 w-5 flex-none" />
+              ) : (
+                <ChevronRight className="mt-1 h-5 w-5 flex-none" />
+              )}
+            </button>
+            <div className="mt-3 flex items-center gap-3">
+              <Progress value={percent} className="h-1.5 flex-1" />
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {completed}/{objectiveGroups.length}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Quest Cards */}
-        <div className="grid gap-4">
-          {STORYLINE_QUESTS.map((quest) => {
-            const mainObjectives =
-              quest.objectives?.filter((obj) => obj.type === "main") || [];
-            const optionalObjectives =
-              quest.objectives?.filter((obj) => obj.type === "optional") || [];
-            const isMainExpanded = expandedQuests[quest.id]?.main ?? true;
-            const isOptionalExpanded =
-              expandedQuests[quest.id]?.optional ?? false;
+        {expanded && (
+          <div className="mt-5 space-y-4 border-t pt-4">
+            {metadata?.description && (
+              <p className="text-sm text-muted-foreground">
+                {metadata.description}
+              </p>
+            )}
+            {metadata?.notes && (
+              <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                {metadata.notes}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={onRequestComplete}>
+                <CheckCheck className="mr-1.5 h-3.5 w-3.5" />
+                Complete all
+              </Button>
+              <Button variant="outline" size="sm" onClick={onRequestReset}>
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                Reset all
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {chapter.steps.map((step) => (
+                <StepCard
+                  key={step.id}
+                  step={step}
+                  expanded={expandedSteps.has(step.id)}
+                  onToggle={() => onToggleStep(step.id)}
+                  expandedItems={expandedItems}
+                  onToggleItems={onToggleItems}
+                  itemQueries={itemQueries}
+                  onItemQueryChange={onItemQueryChange}
+                  completedObjectives={completedObjectives}
+                  onToggleObjective={onToggleObjective}
+                  workingOnObjectives={workingOnObjectives}
+                  onToggleWorkingOnObjective={onToggleWorkingOnObjective}
+                  itemProgress={itemProgress}
+                  onUpdateItemProgress={onUpdateItemProgress}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
-            return (
-              <div
-                key={quest.id}
-                id={`storyline-quest-${quest.id}`}
-                className="rounded-lg border bg-card p-5 shadow-sm hover:shadow-md transition-shadow"
+interface StepCardProps {
+  step: StorylineStep;
+  expanded: boolean;
+  onToggle: () => void;
+  expandedItems: Set<string>;
+  onToggleItems: (objectiveId: string) => void;
+  itemQueries: Record<string, string>;
+  onItemQueryChange: (objectiveId: string, value: string) => void;
+  completedObjectives: Set<string>;
+  onToggleObjective: (id: string, relatedObjectiveIds?: string[]) => void;
+  workingOnObjectives: Set<string>;
+  onToggleWorkingOnObjective?: (
+    id: string,
+    relatedObjectiveIds?: string[],
+  ) => void;
+  itemProgress: Record<string, number>;
+  onUpdateItemProgress?: (
+    key: string,
+    count: number,
+    relatedKeys?: string[],
+  ) => void;
+}
+
+function StepCard({
+  step,
+  expanded,
+  onToggle,
+  expandedItems,
+  onToggleItems,
+  itemQueries,
+  onItemQueryChange,
+  completedObjectives,
+  onToggleObjective,
+  workingOnObjectives,
+  onToggleWorkingOnObjective,
+  itemProgress,
+  onUpdateItemProgress,
+}: StepCardProps) {
+  const objectiveGroups = groupStorylineObjectives(step.objectives);
+  const completed = objectiveGroups.filter((group) =>
+    isStorylineObjectiveGroupCompleted(group, completedObjectives),
+  ).length;
+  const hasFailureOutcome = Boolean(step.failureOutcome?.entries.length);
+  const title = getStorylineStepTitle(step, objectiveGroups);
+
+  return (
+    <article className="overflow-hidden rounded-lg border border-border/70 bg-background/35">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:py-3"
+        aria-expanded={expanded}
+      >
+        <div className="mt-0.5 flex h-6 min-w-6 items-center justify-center rounded-full border bg-card text-[11px] font-semibold tabular-nums text-muted-foreground">
+          {step.index}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            {step.trader && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] normal-case tracking-normal">
+                {step.trader}
+              </Badge>
+            )}
+            {step.map && <span>{step.map}</span>}
+            {hasFailureOutcome && (
+              <Badge
+                variant="outline"
+                className="h-5 border-destructive/30 px-1.5 text-[10px] normal-case tracking-normal text-destructive"
               >
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <img
-                    src={quest.icon}
-                    alt={quest.name}
-                    className="w-16 h-16 flex-shrink-0 object-contain"
-                    loading="lazy"
-                  />
+                Branch outcome
+              </Badge>
+            )}
+          </div>
+          <h3 className="mt-1 text-sm font-semibold leading-snug text-foreground">
+            {title}
+          </h3>
+          <div className="mt-1 flex flex-wrap gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
+            <span>
+              {completed}/{objectiveGroups.length} tasks
+            </span>
+            {step.requirements.length > 0 && (
+              <span>{step.requirements.length} required</span>
+            )}
+            {step.delaySecondsMax > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <Clock3 className="h-3 w-3" />
+                {formatDuration(step.delaySecondsMax)} wait
+              </span>
+            )}
+          </div>
+        </div>
+        {expanded ? (
+          <ChevronDown className="mt-1 h-4 w-4 flex-none" />
+        ) : (
+          <ChevronRight className="mt-1 h-4 w-4 flex-none" />
+        )}
+      </button>
 
-                  {/* Content */}
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xl font-semibold flex items-center gap-2">
-                        {quest.name}
-                      </h3>
-                      {/* Bulk Action Buttons */}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            openDialog(quest.id, quest.name, "complete")
-                          }
-                          className="h-8 px-3 text-xs"
-                        >
-                          <CheckCheck className="h-3 w-3 mr-1" />
-                          Complete All
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            openDialog(quest.id, quest.name, "reset")
-                          }
-                          className="h-8 px-3 text-xs"
-                        >
-                          <RotateCcw className="h-3 w-3 mr-1" />
-                          Reset All
-                        </Button>
-                      </div>
+      {expanded && (
+        <div className="space-y-3 border-t px-2.5 py-3 sm:px-3">
+          {(step.minPlayerLevel > 0 || step.factionName) && (
+            <div className="flex flex-wrap gap-1.5">
+              {step.minPlayerLevel > 0 && (
+                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                  Level {step.minPlayerLevel}
+                </Badge>
+              )}
+              {step.factionName && (
+                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                  {step.factionName}
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {step.requirements.length > 0 && (
+            <RequirementSection requirements={step.requirements} />
+          )}
+
+          <div className="space-y-1.5">
+            {objectiveGroups.map((group) => {
+              const progressKeys = group.objectiveIds.map(
+                getObjectiveProgressKey,
+              );
+              const canonicalProgressKey = getObjectiveProgressKey(
+                group.canonicalObjectiveId,
+              );
+              const relatedProgressKeys = progressKeys.filter(
+                (key) => key !== canonicalProgressKey,
+              );
+              const trackedCount = Math.max(
+                0,
+                ...progressKeys.map((key) => itemProgress[key] ?? 0),
+              );
+              return (
+                <ObjectiveRow
+                  key={group.id}
+                  group={group}
+                  completed={isStorylineObjectiveGroupCompleted(
+                    group,
+                    completedObjectives,
+                  )}
+                  partiallyCompleted={isStorylineObjectiveGroupPartiallyCompleted(
+                    group,
+                    completedObjectives,
+                  )}
+                  onToggle={() =>
+                    onToggleObjective(
+                      group.canonicalObjectiveId,
+                      group.objectiveIds,
+                    )
+                  }
+                  workingOn={isStorylineObjectiveGroupWorkingOn(
+                    group,
+                    workingOnObjectives,
+                  )}
+                  onToggleWorkingOn={
+                    onToggleWorkingOnObjective
+                      ? () =>
+                          onToggleWorkingOnObjective(
+                            group.canonicalObjectiveId,
+                            group.objectiveIds,
+                          )
+                      : undefined
+                  }
+                  itemsExpanded={expandedItems.has(group.id)}
+                  onToggleItems={() => onToggleItems(group.id)}
+                  itemQuery={itemQueries[group.id] ?? ""}
+                  onItemQueryChange={(value) =>
+                    onItemQueryChange(group.id, value)
+                  }
+                  trackedCount={trackedCount}
+                  onUpdateTrackedCount={
+                    onUpdateItemProgress
+                      ? (count) =>
+                          onUpdateItemProgress(
+                            canonicalProgressKey,
+                            count,
+                            relatedProgressKeys,
+                          )
+                      : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {step.startRewards && (
+              <RewardSection
+                title="Start rewards"
+                group={step.startRewards}
+                icon={<Gift className="h-4 w-4" />}
+              />
+            )}
+            {step.finishRewards && (
+              <RewardSection
+                title="Completion rewards"
+                group={step.finishRewards}
+                icon={<Trophy className="h-4 w-4" />}
+              />
+            )}
+            {step.failureOutcome && (
+              <RewardSection
+                title="Failure outcome"
+                group={step.failureOutcome}
+                icon={<XCircle className="h-4 w-4" />}
+                destructive
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function RequirementSection({
+  requirements,
+}: {
+  requirements: StorylineRequirement[];
+}) {
+  return (
+    <div className="border-l-2 border-primary/25 py-0.5 pl-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Requires
+      </p>
+      <div className="mt-1 space-y-1">
+        {requirements.map((requirement) => (
+          <div key={requirement.id} className="flex items-start gap-1.5 text-xs">
+            <ChevronRight className="mt-0.5 h-3 w-3 flex-none text-muted-foreground" />
+            <div className="min-w-0">
+              <span>{requirement.label}</span>
+              {requirement.unresolved && requirement.targetId && (
+                <span
+                  className="ml-1 text-xs text-muted-foreground"
+                  title={requirement.targetId}
+                >
+                  (API reference)
+                </span>
+              )}
+              {requirement.items && requirement.items.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {requirement.items.slice(0, 6).map((item) => (
+                    <Badge
+                      key={item.id}
+                      variant="secondary"
+                      className="h-5 px-1.5 text-[10px] font-normal"
+                    >
+                      {item.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface ObjectiveRowProps {
+  group: StorylineObjectiveGroup;
+  completed: boolean;
+  partiallyCompleted: boolean;
+  onToggle: () => void;
+  workingOn: boolean;
+  onToggleWorkingOn?: () => void;
+  itemsExpanded: boolean;
+  onToggleItems: () => void;
+  itemQuery: string;
+  onItemQueryChange: (value: string) => void;
+  trackedCount: number;
+  onUpdateTrackedCount?: (count: number) => void;
+}
+
+function ObjectiveRow({
+  group,
+  completed,
+  partiallyCompleted,
+  onToggle,
+  workingOn,
+  onToggleWorkingOn,
+  itemsExpanded,
+  onToggleItems,
+  itemQuery,
+  onItemQueryChange,
+  trackedCount,
+  onUpdateTrackedCount,
+}: ObjectiveRowProps) {
+  const objective = group.primaryObjective;
+  const targetCount = objective.count ?? 0;
+  const canTrackCount =
+    targetCount > 1 && TRACKABLE_ITEM_TYPES.has(objective.type);
+  const clampedCount = Math.min(targetCount, Math.max(0, trackedCount));
+  const allItems = objective.questItem
+    ? [objective.questItem, ...objective.items]
+    : objective.items;
+  const query = itemQuery.trim().toLocaleLowerCase();
+  const filteredItems = query
+    ? allItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
+    : allItems;
+  const showExpandableItems = allItems.length > 6;
+  const optional = isStorylineObjectiveGroupOptional(group);
+  const foundInRaid = group.objectives.some(
+    (candidate) => candidate.foundInRaid,
+  );
+  const maps = Array.from(
+    new Set(group.objectives.flatMap((candidate) => candidate.maps)),
+  );
+  const details = Array.from(
+    new Set(group.objectives.flatMap((candidate) => candidate.details)),
+  );
+  const checkboxId = `storyline-objective-${group.id}`;
+
+  return (
+    <div
+      className={`rounded-md border px-2.5 py-2.5 transition-colors ${
+        completed
+          ? "border-emerald-500/20 bg-emerald-500/5"
+          : "bg-card/60"
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <Checkbox
+          id={checkboxId}
+          checked={partiallyCompleted ? "indeterminate" : completed}
+          onCheckedChange={onToggle}
+          className="mt-0.5 h-4 w-4"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1">
+            <Badge
+              variant="outline"
+              className={`h-5 px-1.5 text-[10px] font-normal ${
+                objective.type === "dialogue"
+                  ? "border-sky-500/30 text-sky-600 dark:text-sky-400"
+                  : ""
+              }`}
+            >
+              {objective.type === "dialogue" && (
+                <MessageSquareText className="mr-1 h-3 w-3" />
+              )}
+              {group.paired
+                ? "Collect + hand over"
+                : OBJECTIVE_TYPE_LABELS[objective.type] ?? objective.type}
+            </Badge>
+            {optional && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                Optional
+              </Badge>
+            )}
+            {foundInRaid && (
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                Found in raid
+              </Badge>
+            )}
+            {objective.count && objective.count > 1 && (
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                ×{objective.count.toLocaleString()}
+              </Badge>
+            )}
+          </div>
+          <label
+            htmlFor={checkboxId}
+            className={`mt-1.5 block cursor-pointer text-sm font-medium leading-snug ${
+              completed ? "text-muted-foreground line-through" : ""
+            }`}
+          >
+            {objective.description}
+          </label>
+
+          {group.collectionObjective && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground/70">Collect first:</span>
+              <span>{group.collectionObjective.description}</span>
+              {group.collectionObjective.optional && (
+                <span className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                  Optional
+                </span>
+              )}
+              {group.collectionObjective.foundInRaid && (
+                <span className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                  FIR
+                </span>
+              )}
+            </div>
+          )}
+
+          {(maps.length > 0 || details.length > 0) && (
+            <div className="mt-1.5 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
+              {maps.map((mapName) => (
+                <span key={mapName} className="rounded bg-muted px-1.5 py-0.5">
+                  {mapName}
+                </span>
+              ))}
+              {details.map((detail) => (
+                <span key={detail} className="rounded bg-muted px-1.5 py-0.5">
+                  {detail}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {canTrackCount && onUpdateTrackedCount && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
+              <span className="text-[11px] text-muted-foreground">Progress</span>
+              <div className="ml-auto flex items-center gap-1 tabular-nums">
+                <button
+                  type="button"
+                  onClick={() => onUpdateTrackedCount(clampedCount - 1)}
+                  disabled={clampedCount <= 0}
+                  className="h-6 w-6 rounded border hover:bg-muted disabled:opacity-40"
+                  aria-label={`Decrease progress for ${objective.description}`}
+                >
+                  <Minus className="mx-auto h-3.5 w-3.5" />
+                </button>
+                <input
+                  type="number"
+                  min={0}
+                  max={targetCount}
+                  value={clampedCount}
+                  onChange={(event) =>
+                    onUpdateTrackedCount(
+                      Math.min(
+                        targetCount,
+                        Math.max(0, Number(event.target.value) || 0),
+                      ),
+                    )
+                  }
+                  className="h-6 w-20 rounded border bg-background px-1.5 text-center text-xs tabular-nums sm:w-24"
+                  aria-label={`Progress for ${objective.description}`}
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  / {targetCount.toLocaleString()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onUpdateTrackedCount(clampedCount + 1)}
+                  disabled={clampedCount >= targetCount}
+                  className="h-6 w-6 rounded border hover:bg-muted disabled:opacity-40"
+                  aria-label={`Increase progress for ${objective.description}`}
+                >
+                  <Plus className="mx-auto h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {allItems.length > 0 && (
+            <div className="mt-2">
+              {showExpandableItems && (
+                <button
+                  type="button"
+                  onClick={onToggleItems}
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-primary hover:underline"
+                  aria-expanded={itemsExpanded}
+                >
+                  {itemsExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  {itemsExpanded ? "Hide" : "View"} {allItems.length} eligible items
+                </button>
+              )}
+              {!showExpandableItems && (
+                <div className="flex flex-wrap gap-1.5">
+                  {allItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded border bg-background/40 px-1.5 py-1"
+                    >
+                      {item.iconLink ? (
+                        <img
+                          src={item.iconLink}
+                          alt=""
+                          className="h-6 w-6 flex-none object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Package className="h-4 w-4 flex-none text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 truncate text-[11px]" title={item.name}>
+                        {item.name}
+                      </span>
                     </div>
-
-                    <div className="text-sm text-muted-foreground whitespace-pre-line">
-                      {quest.description}
-                    </div>
-
-                    {/* Notes/Warnings */}
-                    {quest.notes && (
-                      <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
-                        <div className="text-xs text-yellow-700 dark:text-yellow-400 whitespace-pre-line">
-                          {quest.notes}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Main Objectives */}
-                    {mainObjectives.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        <button
-                          onClick={() => toggleSection(quest.id, "main")}
-                          className="flex items-center gap-2 text-sm font-semibold text-green-600 dark:text-green-400 hover:underline"
-                        >
-                          {isMainExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                          Main Objectives ({mainObjectives.length})
-                        </button>
-                        {isMainExpanded && (
-                          <div className="space-y-2 pl-6 border-l-2 border-green-500/30">
-                            {mainObjectives.map((objective) => {
-                              const isCompleted = completedObjectives.has(
-                                objective.id,
-                              );
-                              const requirement =
-                                getObjectiveItemRequirement(objective);
-                              const itemKey = requirement
-                                ? getStorylineObjectiveItemKey(
-                                    objective,
-                                    requirement,
-                                  )
-                                : "";
-                              const trackedCount =
-                                requirement && itemKey
-                                  ? (taskObjectiveItemProgress[itemKey] ?? 0)
-                                  : 0;
-                              const clampedTrackedCount = requirement
-                                ? Math.max(
-                                    0,
-                                    Math.min(
-                                      requirement.requiredCount,
-                                      trackedCount,
-                                    ),
-                                  )
-                                : 0;
-                              const remainingCount = requirement
-                                ? Math.max(
-                                    0,
-                                    requirement.requiredCount -
-                                      clampedTrackedCount,
-                                  )
-                                : 0;
-                              const isRequirementComplete = requirement
-                                ? clampedTrackedCount >=
-                                  requirement.requiredCount
-                                : false;
-                              return (
-                                <div key={objective.id} className="space-y-1">
-                                  <div className="flex items-start gap-2 text-sm">
-                                    <Checkbox
-                                      id={objective.id}
-                                      checked={isCompleted}
-                                      onCheckedChange={() =>
-                                        onToggleObjective(objective.id)
-                                      }
-                                      className="mt-0.5"
-                                    />
-                                    {onToggleWorkingOnStorylineObjective && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onToggleWorkingOnStorylineObjective(
-                                            objective.id,
-                                          );
-                                        }}
-                                        className={`p-0.5 rounded-sm transition-colors ${workingOnStorylineObjectives.has(objective.id) ? "text-blue-500 hover:text-blue-600" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
-                                        title={
-                                          workingOnStorylineObjectives.has(
-                                            objective.id,
-                                          )
-                                            ? "Remove from working on"
-                                            : "Mark as working on"
-                                        }
-                                      >
-                                        <Target
-                                          className="h-4 w-4"
-                                          fill={
-                                            workingOnStorylineObjectives.has(
-                                              objective.id,
-                                            )
-                                              ? "currentColor"
-                                              : "none"
-                                          }
-                                        />
-                                      </button>
-                                    )}
-                                    <label
-                                      htmlFor={objective.id}
-                                      className={`flex-1 cursor-pointer ${
-                                        isCompleted
-                                          ? "line-through opacity-60"
-                                          : ""
-                                      }`}
-                                    >
-                                      {objective.description}
-                                    </label>
-                                  </div>
-                                  {requirement && (
-                                    <div className="ml-4">
-                                      <div
-                                        className={`flex items-center gap-2 rounded-md border bg-background/40 p-2 ${isRequirementComplete ? "opacity-60" : ""}`}
-                                      >
-                                        {requirement.iconLink ? (
-                                          <img
-                                            src={requirement.iconLink}
-                                            alt={requirement.itemName}
-                                            className="h-8 w-8 object-contain"
-                                            loading="lazy"
-                                          />
-                                        ) : (
-                                          <div className="h-8 w-8 rounded bg-muted" />
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-xs font-medium text-foreground/90 truncate">
-                                            {requirement.itemName}
-                                          </div>
-                                          <div className="text-[11px] text-muted-foreground">
-                                            {remainingCount === 0
-                                              ? "Complete"
-                                              : `${remainingCount} remaining`}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleStorylineObjectiveItemDelta(
-                                                objective,
-                                                -1,
-                                              );
-                                            }}
-                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled={clampedTrackedCount <= 0}
-                                            aria-label={`Decrease ${requirement.itemName}`}
-                                          >
-                                            <Minus className="h-3 w-3 mx-auto" />
-                                          </button>
-                                          <span className="w-12 text-center text-xs tabular-nums">
-                                            {clampedTrackedCount}/
-                                            {requirement.requiredCount}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleStorylineObjectiveItemDelta(
-                                                objective,
-                                                1,
-                                              );
-                                            }}
-                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled={
-                                              clampedTrackedCount >=
-                                              requirement.requiredCount
-                                            }
-                                            aria-label={`Increase ${requirement.itemName}`}
-                                          >
-                                            <Plus className="h-3 w-3 mx-auto" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                      {requirement.foundInRaid && (
-                                        <div className="text-[11px] text-muted-foreground mt-1">
-                                          Found in raid required
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  {objective.progress && (
-                                    <div className="flex items-center gap-2 ml-4">
-                                      <Progress
-                                        value={
-                                          (objective.progress.current /
-                                            objective.progress.required) *
-                                          100
-                                        }
-                                        className="h-2 flex-1"
-                                      />
-                                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                        {objective.progress.current.toLocaleString()}
-                                        /
-                                        {objective.progress.required.toLocaleString()}
-                                      </span>
-                                    </div>
-                                  )}
-                                  {objective.notes && (
-                                    <div className="ml-4 text-xs text-muted-foreground italic">
-                                      {objective.notes}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                  ))}
+                </div>
+              )}
+              {showExpandableItems && itemsExpanded && (
+                <div className="mt-2 rounded-lg border bg-background/50 p-2.5">
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="search"
+                      value={itemQuery}
+                      onChange={(event) => onItemQueryChange(event.target.value)}
+                      placeholder={`Search ${allItems.length} items`}
+                      className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs"
+                    />
+                  </div>
+                  <div className="grid max-h-64 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex min-w-0 items-center gap-2 rounded border bg-card/70 p-1.5"
+                      >
+                        {item.iconLink ? (
+                          <img
+                            src={item.iconLink}
+                            alt=""
+                            className="h-8 w-8 flex-none object-contain"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Package className="h-6 w-6 flex-none text-muted-foreground" />
                         )}
+                        <span className="min-w-0 truncate text-xs" title={item.name}>
+                          {item.name}
+                        </span>
                       </div>
-                    )}
-
-                    {/* Optional Objectives */}
-                    {optionalObjectives.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        <button
-                          onClick={() => toggleSection(quest.id, "optional")}
-                          className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                          {isOptionalExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                          Optional Objectives ({optionalObjectives.length})
-                        </button>
-                        {isOptionalExpanded && (
-                          <div className="space-y-2 pl-6 border-l-2 border-blue-500/30">
-                            {optionalObjectives.map((objective) => {
-                              const isCompleted = completedObjectives.has(
-                                objective.id,
-                              );
-                              const requirement =
-                                getObjectiveItemRequirement(objective);
-                              const itemKey = requirement
-                                ? getStorylineObjectiveItemKey(
-                                    objective,
-                                    requirement,
-                                  )
-                                : "";
-                              const trackedCount =
-                                requirement && itemKey
-                                  ? (taskObjectiveItemProgress[itemKey] ?? 0)
-                                  : 0;
-                              const clampedTrackedCount = requirement
-                                ? Math.max(
-                                    0,
-                                    Math.min(
-                                      requirement.requiredCount,
-                                      trackedCount,
-                                    ),
-                                  )
-                                : 0;
-                              const remainingCount = requirement
-                                ? Math.max(
-                                    0,
-                                    requirement.requiredCount -
-                                      clampedTrackedCount,
-                                  )
-                                : 0;
-                              const isRequirementComplete = requirement
-                                ? clampedTrackedCount >=
-                                  requirement.requiredCount
-                                : false;
-                              return (
-                                <div key={objective.id} className="space-y-1">
-                                  <div className="flex items-start gap-2 text-sm">
-                                    <Checkbox
-                                      id={objective.id}
-                                      checked={isCompleted}
-                                      onCheckedChange={() =>
-                                        onToggleObjective(objective.id)
-                                      }
-                                      className="mt-0.5"
-                                    />
-                                    <label
-                                      htmlFor={objective.id}
-                                      className={`flex-1 cursor-pointer ${
-                                        isCompleted
-                                          ? "line-through opacity-60"
-                                          : ""
-                                      }`}
-                                    >
-                                      {objective.description}
-                                    </label>
-                                  </div>
-                                  {requirement && (
-                                    <div className="ml-4">
-                                      <div
-                                        className={`flex items-center gap-2 rounded-md border bg-background/40 p-2 ${isRequirementComplete ? "opacity-60" : ""}`}
-                                      >
-                                        {requirement.iconLink ? (
-                                          <img
-                                            src={requirement.iconLink}
-                                            alt={requirement.itemName}
-                                            className="h-8 w-8 object-contain"
-                                            loading="lazy"
-                                          />
-                                        ) : (
-                                          <div className="h-8 w-8 rounded bg-muted" />
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-xs font-medium text-foreground/90 truncate">
-                                            {requirement.itemName}
-                                          </div>
-                                          <div className="text-[11px] text-muted-foreground">
-                                            {remainingCount === 0
-                                              ? "Complete"
-                                              : `${remainingCount} remaining`}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleStorylineObjectiveItemDelta(
-                                                objective,
-                                                -1,
-                                              );
-                                            }}
-                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled={clampedTrackedCount <= 0}
-                                            aria-label={`Decrease ${requirement.itemName}`}
-                                          >
-                                            <Minus className="h-3 w-3 mx-auto" />
-                                          </button>
-                                          <span className="w-12 text-center text-xs tabular-nums">
-                                            {clampedTrackedCount}/
-                                            {requirement.requiredCount}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              handleStorylineObjectiveItemDelta(
-                                                objective,
-                                                1,
-                                              );
-                                            }}
-                                            className="h-6 w-6 rounded-md border bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled={
-                                              clampedTrackedCount >=
-                                              requirement.requiredCount
-                                            }
-                                            aria-label={`Increase ${requirement.itemName}`}
-                                          >
-                                            <Plus className="h-3 w-3 mx-auto" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                      {requirement.foundInRaid && (
-                                        <div className="text-[11px] text-muted-foreground mt-1">
-                                          Found in raid required
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  {objective.progress && (
-                                    <div className="flex items-center gap-2 ml-4">
-                                      <Progress
-                                        value={
-                                          (objective.progress.current /
-                                            objective.progress.required) *
-                                          100
-                                        }
-                                        className="h-2 flex-1"
-                                      />
-                                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                        {objective.progress.current.toLocaleString()}
-                                        /
-                                        {objective.progress.required.toLocaleString()}
-                                      </span>
-                                    </div>
-                                  )}
-                                  {objective.notes && (
-                                    <div className="ml-4 text-xs text-muted-foreground italic">
-                                      {objective.notes}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Rewards */}
-                    {quest.rewards && (
-                      <div className="mt-4 rounded-md border border-purple-500/30 bg-purple-500/10 p-3">
-                        <div className="flex items-start gap-2">
-                          <span className="text-purple-600 dark:text-purple-400 font-semibold text-sm">
-                            💎 Rewards:
-                          </span>
-                          <span className="text-sm text-purple-700 dark:text-purple-300">
-                            {quest.rewards.description}
-                          </span>
-                        </div>
-                      </div>
+                    ))}
+                    {filteredItems.length === 0 && (
+                      <p className="col-span-full py-3 text-center text-xs text-muted-foreground">
+                        No eligible items match “{itemQuery}”.
+                      </p>
                     )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer Note */}
-        <div className="rounded-lg border bg-muted/50 p-4 mt-8">
-          <div className="flex items-start gap-3">
-            <Scroll className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-muted-foreground">
-              <p className="font-medium mb-1">Note:</p>
-              <p>
-                This is an informational page showing how to trigger each
-                storyline quest. Full quest tracking, completion status, and
-                progress integration will be added in a future update.
-              </p>
+              )}
             </div>
-          </div>
+          )}
         </div>
-
-        {/* Confirmation Dialog */}
-        <AlertDialog open={dialogState.isOpen} onOpenChange={closeDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {dialogState.action === "complete"
-                  ? `Complete All Objectives - ${dialogState.questName}`
-                  : `Reset All Objectives - ${dialogState.questName}`}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {dialogState.action === "complete"
-                  ? "This will mark all objectives (both main and optional) for this quest as complete. This action cannot be undone automatically."
-                  : "This will reset all objectives (both main and optional) for this quest to incomplete. This action cannot be undone automatically."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDialogConfirm}
-                className={
-                  dialogState.action === "complete"
-                    ? "bg-green-600 hover:bg-green-700"
-                    : "bg-red-600 hover:bg-red-700"
-                }
-              >
-                {dialogState.action === "complete"
-                  ? "Complete All"
-                  : "Reset All"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {onToggleWorkingOn && (
+          <button
+            type="button"
+            onClick={onToggleWorkingOn}
+            className={`rounded p-0.5 transition-colors ${
+              workingOn
+                ? "text-blue-500 hover:text-blue-600"
+                : "text-muted-foreground/40 hover:text-muted-foreground"
+            }`}
+            aria-label={workingOn ? "Stop tracking objective" : "Track objective"}
+            title={workingOn ? "Stop tracking" : "Track in Current work"}
+          >
+            <Target className="h-4 w-4" />
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+function RewardSection({
+  title,
+  group,
+  icon,
+  destructive = false,
+}: {
+  title: string;
+  group: StorylineRewardGroup;
+  icon: React.ReactNode;
+  destructive?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className={`rounded-md border ${
+        destructive ? "border-destructive/25 bg-destructive/5" : "bg-muted/10"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-8 w-full items-center gap-1.5 px-2.5 text-left text-xs font-medium"
+        aria-expanded={open}
+      >
+        {icon}
+        <span className="flex-1">{title}</span>
+        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+          {group.entries.length}
+        </Badge>
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" />
+        )}
+      </button>
+      {open && (
+        <div className="space-y-1 border-t p-2">
+          {group.entries.map((entry) => (
+            <div
+              key={entry.id}
+              className="flex items-center gap-1.5 rounded border bg-background/50 px-2 py-1.5"
+            >
+              {entry.iconLink ? (
+                <img
+                  src={entry.iconLink}
+                  alt=""
+                  className="h-6 w-6 flex-none object-contain"
+                  loading="lazy"
+                />
+              ) : entry.type === "experience" || entry.type === "standing" ? (
+                <CircleDollarSign className="h-5 w-5 flex-none text-primary" />
+              ) : (
+                <Gift className="h-5 w-5 flex-none text-muted-foreground" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[11px] font-medium">{entry.label}</p>
+                {entry.description && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {entry.description}
+                  </p>
+                )}
+              </div>
+              {entry.count !== undefined && (
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {entry.count > 0 ? "+" : ""}
+                  {entry.count.toLocaleString()}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

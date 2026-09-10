@@ -65,6 +65,70 @@ const fallingSkiesQuest = STORYLINE_QUESTS.find(
   (quest) => quest.id === "falling-skies",
 );
 
+// The Storyline checklist now persists upstream Tarkov.dev objective IDs.
+// Keep the curated Lightkeeper route labels and guide links, but bind each
+// milestone to the corresponding live objective identifier.
+const STORYLINE_API_OBJECTIVE_IDS: Record<string, string> = {
+  "tour-main-1": "6895bc04162304804bdc056e",
+  "tour-main-2": "68c81d6e82b7593afaa638e0",
+  "tour-main-3": "68c6a8ea578cb34230742497",
+  "tour-main-4": "6895c24ec097ed522295a05d",
+  "tour-opt-1": "68ccffb395ec3bc6eddfc3e3",
+  "tour-main-5": "68c15e129c0090b717977bd4",
+  "tour-main-6": "69bd6bcb78ea678bd3d84907",
+  "tour-main-7": "68cc123af7f4373ce2365213",
+  "tour-main-8": "68c2c0907a45d1fc06b150a2",
+  "tour-main-9": "69bd7ff06c31a244742b1775",
+  "tour-opt-2": "68cd000e66cfbf075021bbb4",
+  "tour-main-10": "6895c4a6b9a96237b73e15a1",
+  "tour-main-11": "68c41dde2ddd4581cfc7531c",
+  "falling-skies-main-2": "68f3e4d558b556716299f8de",
+  "falling-skies-main-3": "68c01c6c954650cf2b48bbea",
+  "falling-skies-opt-1": "68b83ecbe7204965a7265865",
+  "falling-skies-main-5": "678f6eae2ed26c2110cb9909",
+  "falling-skies-main-6": "678f6ec00199b227bbf61473",
+  "falling-skies-main-7": "68bdb2dca55fc9decb4551a2",
+  "falling-skies-main-8": "678fa00a09dd512f7d493bd0",
+  "falling-skies-main-9": "678fa01c06932e11d6741b80",
+  "falling-skies-main-10": "68d5be85d12284307b081760",
+  "falling-skies-main-11": "678fa38cc5377951addd369f",
+  "falling-skies-main-12": "678fa3bd675748f2b6d98c7e",
+  "falling-skies-main-13": "678fa3a6a65842dba9d420f8",
+  "falling-skies-main-14": "68bdb3b00deb8afba70216bf",
+  "falling-skies-main-15": "69017129b491f9fe2c6d2d8f",
+  "falling-skies-main-16": "679cde277d312130eefb88e7",
+  "falling-skies-main-17": "68cc07e96a6359b02109da1a",
+  "falling-skies-main-18": "679cdee4ce3a208fee0ad65a",
+  "falling-skies-opt-2": "68fbbc8ea9ece72415bf5223",
+  "falling-skies-main-19": "679cdee4ce3a208fee0ad65b",
+  "falling-skies-main-20": "690177dcaaed5ef80cdcd1ef",
+  "batya-main-1": "68dea804e88b45b0ecefa10d",
+  "batya-main-2": "68d97067104f263eefaff823",
+  "batya-main-3": "68cd75f985759834cdb8077e",
+  "batya-main-4": "68dbe472fc1cbb19989a792e",
+  "batya-main-5": "68cd76423e506353c08a0b71",
+  "batya-main-6": "68f9eed31dbc7a9f81001a49",
+  "batya-main-7": "68f9ef8a1dbc7a9f81001a94",
+  "batya-main-8": "68f9ef8a1dbc7a9f81001a92",
+  "batya-main-9": "68f9eed31dbc7a9f81001a43",
+  "batya-main-10": "68f9ef8a1dbc7a9f81001a98",
+  "batya-main-11": "68cd423a99a8769285aa4a30",
+  "batya-main-12": "6915bb41efc107ce960110e5",
+  "batya-main-13": "6915bb41efc107ce960110de",
+  "batya-main-14": "6915bb41efc107ce960110e3",
+  "batya-main-15": "6915bb52dff93d50490eaf58",
+  "batya-main-16": "6915bb52dff93d50490eaf5b",
+  "batya-main-17": "68cd71414bff4d23910fa1f7",
+  "batya-main-18": "68dbcd695ac7893559edefe7",
+  "batya-main-19": "68dbcd420aca9f0b68a4141a",
+  "batya-main-20": "68f81b2cf92d7f60dac72678",
+  "batya-main-21": "68cd75b551a1ee3476a9605c",
+  "batya-main-22": "68d52f63e94e3689328fc3b0",
+};
+
+const getApiStorylineObjectiveId = (legacyId: string): string =>
+  STORYLINE_API_OBJECTIVE_IDS[legacyId] ?? legacyId;
+
 const BATYA_WIKI_URL =
   "https://escapefromtarkov.fandom.com/wiki/Batya";
 
@@ -121,8 +185,8 @@ const batyaObjectiveSteps: LightkeeperStep[] =
         Number(objective.id.replace("batya-main-", "")) <= 22,
     )
     .map((objective) => ({
-      id: objective.id,
-      objectiveId: objective.id,
+      id: getApiStorylineObjectiveId(objective.id),
+      objectiveId: getApiStorylineObjectiveId(objective.id),
       label: objective.description,
       wikiUrl: `${BATYA_WIKI_URL}#${
         BATYA_GUIDE_ANCHORS[
@@ -132,12 +196,6 @@ const batyaObjectiveSteps: LightkeeperStep[] =
     })) ?? [];
 
 export const LIGHTKEEPER_BATYA_STEPS: LightkeeperStep[] = [
-  {
-    id: "batya-start-requirement",
-    label: "Start Batya by visiting any one location",
-    choices: LIGHTKEEPER_BATYA_START_LOCATIONS,
-    wikiUrl: `${BATYA_WIKI_URL}#Requirements`,
-  },
   ...batyaObjectiveSteps,
 ];
 
@@ -155,8 +213,8 @@ function createStorylineStep(
     (candidate) => candidate.id === objectiveId,
   );
   return {
-    id: objectiveId,
-    objectiveId,
+    id: getApiStorylineObjectiveId(objectiveId),
+    objectiveId: getApiStorylineObjectiveId(objectiveId),
     label: options.label ?? objective?.description ?? objectiveId,
     itemRequirement: objective?.itemRequirement,
     wikiUrl,
@@ -165,16 +223,11 @@ function createStorylineStep(
 }
 
 export const LIGHTKEEPER_TICKET_STEPS: LightkeeperStep[] = [
-  createStorylineStep(
-    tourQuest,
-    "tour-main-1",
-    `${TOUR_WIKI_URL}#Escape_Ground_Zero`,
-    {
-      chapter: "Tour",
-      chapterDescription:
-        "Progress through Tour until Mechanic can be asked about the downed plane.",
-    },
-  ),
+  createStorylineStep(tourQuest, "tour-main-1", `${TOUR_WIKI_URL}#Escape_Ground_Zero`, {
+    chapter: "Tour",
+    chapterDescription:
+      "Progress through Tour until Mechanic can be asked about the downed plane.",
+  }),
   createStorylineStep(
     tourQuest,
     "tour-main-2",
@@ -240,18 +293,13 @@ export const LIGHTKEEPER_TICKET_STEPS: LightkeeperStep[] = [
   ),
   createStorylineStep(
     fallingSkiesQuest,
-    "falling-skies-main-1",
-    `${FALLING_SKIES_WIKI_URL}#Locate_the_fallen_plane`,
+    "falling-skies-main-2",
+    `${FALLING_SKIES_WIKI_URL}#Reach_Loyalty_Level_2_with_Prapor`,
     {
       chapter: "Falling Skies",
       chapterDescription:
         "Follow Prapor's investigation, then hand over the armored case to unlock the Network Provider shortcut.",
     },
-  ),
-  createStorylineStep(
-    fallingSkiesQuest,
-    "falling-skies-main-2",
-    `${FALLING_SKIES_WIKI_URL}#Reach_Loyalty_Level_2_with_Prapor`,
   ),
   createStorylineStep(
     fallingSkiesQuest,
@@ -343,16 +391,18 @@ export const LIGHTKEEPER_TICKET_STEPS: LightkeeperStep[] = [
   {
     id: "falling-skies-armored-case-decision",
     label: "Choose what to do with the armored case",
-    completionChoiceIds: ["falling-skies-main-19"],
+    completionChoiceIds: [
+      getApiStorylineObjectiveId("falling-skies-main-19"),
+    ],
     choices: [
       {
-        id: "falling-skies-main-20",
+        id: getApiStorylineObjectiveId("falling-skies-main-20"),
         label: "Keep the armored case for yourself",
         note: "Continues the alternate storyline route and does not unlock the Network Provider shortcut.",
         wikiUrl: `${FALLING_SKIES_WIKI_URL}#Decision:_Keep_the_armored_case`,
       },
       {
-        id: "falling-skies-main-19",
+        id: getApiStorylineObjectiveId("falling-skies-main-19"),
         label: "Hand over the armored case to Prapor",
         note: "Unlocks the shortcut to Network Provider - Part 1.",
         wikiUrl: `${FALLING_SKIES_WIKI_URL}#Decision:_Hand_over_the_armored_case_directly_to_Prapor`,

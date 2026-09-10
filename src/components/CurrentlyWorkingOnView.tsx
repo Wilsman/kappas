@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Task, HideoutStation } from "@/types";
-import { STORYLINE_QUESTS, StorylineQuest } from "@/data/storylineQuests";
+import type { StorylineChapter } from "@/types/storyline";
 import {
   Card,
   CardContent,
@@ -66,9 +66,17 @@ import {
   isLogicalTaskCompleted,
   isLogicalTaskCompletable,
 } from "@/utils/taskVariants";
+import {
+  groupStorylineObjectives,
+  isStorylineObjectiveGroupCompleted,
+  isStorylineObjectiveGroupPartiallyCompleted,
+  isStorylineObjectiveGroupWorkingOn,
+  type StorylineObjectiveGroup,
+} from "@/utils/storylinePresentation";
 
 interface CurrentlyWorkingOnViewProps {
   tasks: Task[];
+  storylineChapters: StorylineChapter[];
   workingOnTasks: Set<string>;
   workingOnStorylineObjectives: Set<string>;
   workingOnHideoutStations: Set<string>;
@@ -81,11 +89,17 @@ interface CurrentlyWorkingOnViewProps {
   ignoredTasks: Set<string>;
   playerLevel: number;
   onToggleWorkingOnTask: (taskId: string) => void;
-  onToggleWorkingOnStorylineObjective: (objectiveId: string) => void;
+  onToggleWorkingOnStorylineObjective: (
+    objectiveId: string,
+    relatedObjectiveIds?: string[],
+  ) => void;
   onToggleCollectorItem: (itemId: string) => void;
   onToggleWorkingOnHideoutStation: (stationKey: string) => void;
   onToggleTask: (taskId: string) => void;
-  onToggleStorylineObjective: (objectiveId: string) => void;
+  onToggleStorylineObjective: (
+    objectiveId: string,
+    relatedObjectiveIds?: string[],
+  ) => void;
   onToggleHideoutItem: (itemKey: string) => void;
   onToggleIgnoredTask: (taskId: string) => void;
   completedTaskObjectives: Set<string>;
@@ -107,6 +121,7 @@ interface CurrentlyWorkingOnViewProps {
 
 export function CurrentlyWorkingOnView({
   tasks,
+  storylineChapters,
   workingOnTasks,
   workingOnStorylineObjectives,
   workingOnHideoutStations,
@@ -495,23 +510,28 @@ export function CurrentlyWorkingOnView({
   // Filter storyline objectives that are marked as working on
   const activeStorylineObjectives = useMemo(() => {
     const result: Array<{
-      quest: StorylineQuest;
-      objectiveId: string;
-      description: string;
+      quest: StorylineChapter;
+      group: StorylineObjectiveGroup;
     }> = [];
-    STORYLINE_QUESTS.forEach((quest) => {
-      quest.objectives?.forEach((obj) => {
-        if (obj.type === "main" && workingOnStorylineObjectives.has(obj.id)) {
-          result.push({
-            quest,
-            objectiveId: obj.id,
-            description: obj.description,
-          });
-        }
+    storylineChapters.forEach((quest) => {
+      quest.steps.forEach((step) => {
+        groupStorylineObjectives(step.objectives).forEach((group) => {
+          if (
+            isStorylineObjectiveGroupWorkingOn(
+              group,
+              workingOnStorylineObjectives,
+            )
+          ) {
+            result.push({
+              quest,
+              group,
+            });
+          }
+        });
       });
     });
     return result;
-  }, [workingOnStorylineObjectives]);
+  }, [storylineChapters, workingOnStorylineObjectives]);
 
   // Collector items - always show all
   const activeCollectorItems = useMemo(() => {
@@ -1948,7 +1968,7 @@ export function CurrentlyWorkingOnView({
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5" />
               <CardTitle>
-                Storyline Objectives ({activeStorylineObjectives.length})
+                Storyline Tasks ({activeStorylineObjectives.length})
               </CardTitle>
               {isStorylineCollapsed ? (
                 <ChevronDown className="h-4 w-4 ml-auto" />
@@ -1957,18 +1977,25 @@ export function CurrentlyWorkingOnView({
               )}
             </div>
             <CardDescription>
-              1.0 storyline objectives in progress
+              1.0 storyline tasks in progress
             </CardDescription>
           </CardHeader>
           {!isStorylineCollapsed && (
             <CardContent className="space-y-3">
               {activeStorylineObjectives.map(
-                ({ quest, objectiveId, description }) => {
-                  const isCompleted =
-                    completedStorylineObjectives.has(objectiveId);
+                ({ quest, group }) => {
+                  const isCompleted = isStorylineObjectiveGroupCompleted(
+                    group,
+                    completedStorylineObjectives,
+                  );
+                  const isPartiallyCompleted =
+                    isStorylineObjectiveGroupPartiallyCompleted(
+                      group,
+                      completedStorylineObjectives,
+                    );
                   return (
                     <div
-                      key={objectiveId}
+                      key={group.id}
                       className={cn(
                         "flex items-start justify-between gap-4 p-3 rounded-lg border bg-card transition-colors",
                         isCompleted && "opacity-60",
@@ -1976,15 +2003,25 @@ export function CurrentlyWorkingOnView({
                     >
                       <div className="flex items-start gap-3 flex-1 min-w-0">
                         <Checkbox
-                          checked={isCompleted}
+                          checked={
+                            isPartiallyCompleted ? "indeterminate" : isCompleted
+                          }
                           onCheckedChange={() =>
-                            onToggleStorylineObjective(objectiveId)
+                            onToggleStorylineObjective(
+                              group.canonicalObjectiveId,
+                              group.objectiveIds,
+                            )
                           }
                           className="mt-1 h-5 w-5"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <Badge variant="outline">{quest.name}</Badge>
+                            {group.paired && (
+                              <Badge variant="secondary">
+                                Collect + hand over
+                              </Badge>
+                            )}
                           </div>
                           <p
                             className={cn(
@@ -1993,7 +2030,7 @@ export function CurrentlyWorkingOnView({
                                 "line-through text-muted-foreground",
                             )}
                           >
-                            {description}
+                            {group.primaryObjective.description}
                           </p>
                         </div>
                       </div>
@@ -2001,7 +2038,10 @@ export function CurrentlyWorkingOnView({
                         variant="ghost"
                         size="icon"
                         onClick={() =>
-                          onToggleWorkingOnStorylineObjective(objectiveId)
+                          onToggleWorkingOnStorylineObjective(
+                            group.canonicalObjectiveId,
+                            group.objectiveIds,
+                          )
                         }
                         className="flex-shrink-0"
                         title="Remove from working on"

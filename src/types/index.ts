@@ -40,6 +40,7 @@ export interface Task {
 export interface TaskObjective {
   id?: string;
   description?: string;
+  optional?: boolean;
   playerLevel?: number;
   maps?: {
     name: string;

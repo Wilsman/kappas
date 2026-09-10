@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateLightkeeperProgress,
-  LIGHTKEEPER_BATYA_START_LOCATIONS,
   LIGHTKEEPER_BATYA_STEPS,
   LIGHTKEEPER_SIDEQUEST_STEPS,
   LIGHTKEEPER_STAGE_TWO_TASKS,
@@ -39,32 +38,26 @@ describe("calculateLightkeeperProgress", () => {
       completedStorylineObjectives,
     });
 
-    expect(progress.routes.batya.completed).toBe(23);
+    expect(progress.routes.batya.completed).toBe(22);
     expect(progress.stageOneReady).toBe(true);
   });
 
-  it("starts Batya after visiting any one listed location", () => {
-    LIGHTKEEPER_BATYA_START_LOCATIONS.forEach((location) => {
-      const progress = calculateLightkeeperProgress({
-        scavKarma: null,
-        ...emptyProgress(),
-        completedStorylineObjectives: new Set([location.id]),
-      });
-
-      expect(progress.routes.batya.steps[0].isComplete).toBe(true);
-      expect(progress.routes.batya.completed).toBe(1);
+  it("starts Batya from the upstream locate-traces objective", () => {
+    const firstObjective = LIGHTKEEPER_BATYA_STEPS[0].objectiveId!;
+    const progress = calculateLightkeeperProgress({
+      scavKarma: null,
+      ...emptyProgress(),
+      completedStorylineObjectives: new Set([firstObjective]),
     });
+
+    expect(progress.routes.batya.steps[0].isComplete).toBe(true);
+    expect(progress.routes.batya.completed).toBe(1);
   });
 
   it("links Batya checkpoints without adding redundant map links to start locations", () => {
-    expect(LIGHTKEEPER_BATYA_STEPS).toHaveLength(23);
+    expect(LIGHTKEEPER_BATYA_STEPS).toHaveLength(22);
     expect(
       LIGHTKEEPER_BATYA_STEPS.every((step) => step.wikiUrl?.startsWith("https://")),
-    ).toBe(true);
-    expect(
-      LIGHTKEEPER_BATYA_START_LOCATIONS.every(
-        (location) => location.wikiUrl === undefined,
-      ),
     ).toBe(true);
   });
 
@@ -84,8 +77,8 @@ describe("calculateLightkeeperProgress", () => {
       completedStorylineObjectives,
     });
 
-    expect(progress.routes.ticket.completed).toBe(29);
-    expect(progress.routes.ticket.total).toBe(29);
+    expect(progress.routes.ticket.completed).toBe(28);
+    expect(progress.routes.ticket.total).toBe(28);
     expect(progress.routes.ticket.isComplete).toBe(true);
     expect(progress.stageOneReady).toBe(true);
   });
@@ -97,23 +90,28 @@ describe("calculateLightkeeperProgress", () => {
         return [step.objectiveId ?? step.id];
       }),
     );
-    completedStorylineObjectives.add("falling-skies-main-20");
+    const decision = LIGHTKEEPER_TICKET_STEPS.find(
+      (step) => step.id === "falling-skies-armored-case-decision",
+    )!;
+    const keepCaseId = decision.choices![0].id;
+    const handOverCaseId = decision.choices![1].id;
+    completedStorylineObjectives.add(keepCaseId);
 
     const keepCase = calculateLightkeeperProgress({
       scavKarma: 1,
       ...emptyProgress(),
       completedStorylineObjectives,
     });
-    expect(keepCase.routes.ticket.completed).toBe(28);
+    expect(keepCase.routes.ticket.completed).toBe(27);
     expect(keepCase.routes.ticket.isComplete).toBe(false);
 
-    completedStorylineObjectives.add("falling-skies-main-19");
+    completedStorylineObjectives.add(handOverCaseId);
     const handOverCase = calculateLightkeeperProgress({
       scavKarma: 1,
       ...emptyProgress(),
       completedStorylineObjectives,
     });
-    expect(handOverCase.routes.ticket.completed).toBe(29);
+    expect(handOverCase.routes.ticket.completed).toBe(28);
     expect(handOverCase.routes.ticket.isComplete).toBe(true);
   });
 
@@ -124,7 +122,7 @@ describe("calculateLightkeeperProgress", () => {
       completedStorylineMapNodes: new Set(["lk-access"]),
     });
 
-    expect(progress.routes.ticket.completed).toBe(29);
+    expect(progress.routes.ticket.completed).toBe(28);
     expect(progress.routes.ticket.isComplete).toBe(true);
   });
 
@@ -156,7 +154,7 @@ describe("calculateLightkeeperProgress", () => {
     });
 
     expect(progress.routes.batya.completed).toBe(14);
-    expect(progress.routes.batya.total).toBe(23);
+    expect(progress.routes.batya.total).toBe(22);
     expect(progress.routes.batya.steps[14].isComplete).toBe(false);
   });
 

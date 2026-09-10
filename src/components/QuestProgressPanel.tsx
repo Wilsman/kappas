@@ -211,7 +211,7 @@ export function QuestProgressPanel({
             </div>
             <div className="text-sm text-muted-foreground">
               {completedStorylineObjectives} / {totalStorylineObjectives}{" "}
-              Objectives
+              Tasks
             </div>
           </div>
           <div className="mt-3">

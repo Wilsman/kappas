@@ -27,7 +27,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/types";
 import {
@@ -845,10 +844,10 @@ export function EftLogImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
         {step === "intro" && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <HardDrive className="h-5 w-5" />
                 EFT Game Logs Import
@@ -861,7 +860,7 @@ export function EftLogImportDialog({
                 game log files for "{profileName}".
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3 py-3 text-sm">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3 pr-1 text-sm">
               <EftLogImportBetaWarning />
               <SourceGameModeToggle
                 value={sourceGameMode}
@@ -913,7 +912,7 @@ export function EftLogImportDialog({
                 onChange={handleFallbackFiles}
               />
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="shrink-0 gap-2 sm:gap-0">
               <Button variant="ghost" onClick={() => handleOpenChange(false)}>
                 Cancel
               </Button>
@@ -927,7 +926,7 @@ export function EftLogImportDialog({
 
         {step === "versions" && scanPlan && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <FolderInput className="h-5 w-5" />
                 Include Log Versions
@@ -939,7 +938,7 @@ export function EftLogImportDialog({
                 Untick older patches or wipes you do not want to import.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3 py-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3 pr-1">
               <EftLogImportBetaWarning compact />
               <SourceGameModeToggle
                 value={sourceGameMode}
@@ -959,7 +958,7 @@ export function EftLogImportDialog({
                 </StatusMessage>
               )}
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="shrink-0 gap-2 sm:gap-0">
               <Button variant="ghost" onClick={resetState}>
                 Back
               </Button>
@@ -978,7 +977,7 @@ export function EftLogImportDialog({
 
         {step === "scanning" && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 Scanning EFT logs
@@ -998,7 +997,7 @@ export function EftLogImportDialog({
 
         {step === "preview" && summary && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <FileSearch className="h-5 w-5" />
                 Preview beta import
@@ -1010,7 +1009,7 @@ export function EftLogImportDialog({
                 Review detected quest progress before anything is saved.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3 py-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3 pr-1">
               <EftLogImportBetaWarning compact />
               <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-6">
                 <PreviewStat
@@ -1098,7 +1097,7 @@ export function EftLogImportDialog({
                 </StatusMessage>
               )}
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="shrink-0 gap-2 sm:gap-0">
               <Button
                 variant="ghost"
                 onClick={resetState}
@@ -1128,7 +1127,7 @@ export function EftLogImportDialog({
 
         {step === "no-changes" && summary && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                 No changes in the logs detected
@@ -1140,7 +1139,7 @@ export function EftLogImportDialog({
                 No new quest completions were found in the saved EFT logs.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3 py-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3 pr-1">
               <EftLogImportBetaWarning compact />
               <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                 <PreviewStat
@@ -1160,7 +1159,7 @@ export function EftLogImportDialog({
                 versions, or backfill choices before scanning again.
               </div>
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="shrink-0 gap-2 sm:gap-0">
               <Button variant="ghost" onClick={() => handleOpenChange(false)}>
                 Done
               </Button>
@@ -1174,7 +1173,7 @@ export function EftLogImportDialog({
 
         {step === "complete" && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                 Beta import complete
@@ -1184,7 +1183,7 @@ export function EftLogImportDialog({
                 {newMatches.length === 1 ? "" : "s"} into "{profileName}".
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter>
+            <DialogFooter className="shrink-0">
               <Button onClick={() => handleOpenChange(false)}>Done</Button>
             </DialogFooter>
           </>
@@ -1368,35 +1367,33 @@ function PatchVersionChecklist({
           No patch versions were found in this Logs folder.
         </div>
       ) : (
-        <ScrollArea className="h-52">
-          <ul className="divide-y">
-            {patchVersions.map((patch) => {
-              const checked = selectedPatchVersions.has(patch.version);
-              return (
-                <li
-                  key={patch.version}
-                  className="flex items-center gap-3 px-3 py-2"
-                >
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={(nextChecked) =>
-                      onToggle(patch.version, Boolean(nextChecked))
-                    }
-                    aria-label={`Include log version ${patch.version}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm">{patch.version}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {patch.sessionCount} session
-                      {patch.sessionCount === 1 ? "" : "s"} · {patch.fileCount}{" "}
-                      file{patch.fileCount === 1 ? "" : "s"}
-                    </div>
+        <ul className="divide-y">
+          {patchVersions.map((patch) => {
+            const checked = selectedPatchVersions.has(patch.version);
+            return (
+              <li
+                key={patch.version}
+                className="flex items-center gap-3 px-3 py-2"
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={(nextChecked) =>
+                    onToggle(patch.version, Boolean(nextChecked))
+                  }
+                  aria-label={`Include log version ${patch.version}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{patch.version}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {patch.sessionCount} session
+                    {patch.sessionCount === 1 ? "" : "s"} · {patch.fileCount}{" "}
+                    file{patch.fileCount === 1 ? "" : "s"}
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        </ScrollArea>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
@@ -1426,30 +1423,28 @@ function BackfillChecklist({
           {selectedCount}/{candidates.length}
         </Badge>
       </div>
-      <ScrollArea className="h-52">
-        <ul className="divide-y">
-          {candidates.map((candidate) => {
-            const checked = selectedTaskIds.has(candidate.taskId);
-            return (
-              <li key={candidate.taskId} className="flex items-center gap-3 px-3 py-2">
-                <Checkbox
-                  checked={checked}
-                  onCheckedChange={(nextChecked) =>
-                    onToggle(candidate.taskId, Boolean(nextChecked))
-                  }
-                  aria-label={`Backfill ${candidate.taskName}`}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{candidate.taskName}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {candidate.traderName ?? candidate.taskId}
-                  </div>
+      <ul className="divide-y">
+        {candidates.map((candidate) => {
+          const checked = selectedTaskIds.has(candidate.taskId);
+          return (
+            <li key={candidate.taskId} className="flex items-center gap-3 px-3 py-2">
+              <Checkbox
+                checked={checked}
+                onCheckedChange={(nextChecked) =>
+                  onToggle(candidate.taskId, Boolean(nextChecked))
+                }
+                aria-label={`Backfill ${candidate.taskName}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm">{candidate.taskName}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {candidate.traderName ?? candidate.taskId}
                 </div>
-              </li>
-            );
-          })}
-        </ul>
-      </ScrollArea>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -1477,29 +1472,27 @@ function ImportList({
       {rows.length === 0 ? (
         <div className="px-3 py-4 text-sm text-muted-foreground">{empty}</div>
       ) : (
-        <ScrollArea className="h-52">
-          <ul className="divide-y">
-            {rows.map((row) => (
-              <li key={row.id} className="flex items-center gap-3 px-3 py-2">
-                <span
-                  className={cn(
-                    "h-2 w-2 shrink-0 rounded-full",
-                    row.tone === "new" && "bg-emerald-500",
-                    row.tone === "muted" && "bg-muted-foreground/60",
-                    row.tone === "warn" && "bg-amber-500",
-                  )}
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{row.title}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {row.detail}
-                  </div>
+        <ul className="divide-y">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-center gap-3 px-3 py-2">
+              <span
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  row.tone === "new" && "bg-emerald-500",
+                  row.tone === "muted" && "bg-muted-foreground/60",
+                  row.tone === "warn" && "bg-amber-500",
+                )}
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm">{row.title}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {row.detail}
                 </div>
-              </li>
-            ))}
-          </ul>
-        </ScrollArea>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

@@ -20,6 +20,7 @@ import {
   Compass,
   Boxes,
   Trophy,
+  Ship,
 } from "lucide-react";
 
 import {
@@ -143,7 +144,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     | "current"
     | "kord-breach"
     | "lightkeeper"
-    | "kappa";
+    | "kappa"
+    | "icebreaker";
   onSetViewMode: (mode: AppSidebarProps["viewMode"]) => void;
   onOpenStorylineMap: () => void;
   onSetFocus: (mode: "all" | "kappa") => void;
@@ -901,13 +903,28 @@ export function AppSidebar({
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Lightkeeper access"
+                  tooltip="Lightkeeper access - Coming soon"
                   isActive={viewMode === "lightkeeper"}
-                  onClick={() => onSetViewMode("lightkeeper")}
+                  aria-disabled="true"
+                  title="Coming soon"
+                  onClick={(e) => e.preventDefault()}
+                  className="cursor-not-allowed opacity-50 aria-disabled:pointer-events-auto"
                 >
                   <TowerControl />
                   <span>Lightkeeper access</span>
-                  <NavigationStatus>New</NavigationStatus>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Icebreaker unlock - Coming soon"
+                  isActive={viewMode === "icebreaker"}
+                  aria-disabled="true"
+                  title="Coming soon"
+                  onClick={(e) => e.preventDefault()}
+                  className="cursor-not-allowed opacity-50 aria-disabled:pointer-events-auto"
+                >
+                  <Ship />
+                  <span>Icebreaker Unlock</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 

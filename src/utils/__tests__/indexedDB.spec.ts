@@ -196,6 +196,63 @@ describe("TaskStorage - Storyline Objectives", () => {
     expect(loaded.size).toBe(2);
     expect(loaded.has("node-1")).toBe(true);
   });
+
+  it("resets legacy checklist progress once while preserving map and unrelated data", async () => {
+    const profileId = "storyline-api-migration-profile";
+    const legacyStorage = new TaskStorage();
+    legacyStorage.setProfile(profileId);
+    await legacyStorage.init();
+    await legacyStorage.saveUserPreferences({
+      storylineProgressSchemaVersion: 1,
+    });
+    await legacyStorage.saveCompletedStorylineObjectives(
+      new Set(["tour-main-1"]),
+    );
+    await legacyStorage.saveCompletedStorylineMapNodes(new Set(["lk-access"]));
+    await legacyStorage.saveWorkingOnItems({
+      tasks: new Set(["normal-task"]),
+      storylineObjectives: new Set(["tour-main-1"]),
+      collectorItems: new Set(["collector-item"]),
+      hideoutStations: new Set(["workbench-1"]),
+    });
+    await legacyStorage.saveTaskObjectiveItemProgress({
+      "storyline-objective::tour-main-1::items": 2,
+      "normal-task::objective::item": 3,
+    });
+    legacyStorage.setProfile("close-migration-db");
+
+    const migratedStorage = new TaskStorage();
+    migratedStorage.setProfile(profileId);
+    await migratedStorage.init();
+
+    expect(await migratedStorage.loadCompletedStorylineObjectives()).toEqual(
+      new Set(),
+    );
+    expect(await migratedStorage.loadCompletedStorylineMapNodes()).toEqual(
+      new Set(["lk-access"]),
+    );
+    const workingOn = await migratedStorage.loadWorkingOnItems();
+    expect(workingOn.storylineObjectives).toEqual(new Set());
+    expect(workingOn.tasks).toEqual(new Set(["normal-task"]));
+    const itemProgress =
+      await migratedStorage.loadTaskObjectiveItemProgress();
+    expect(itemProgress).toEqual({ "normal-task::objective::item": 3 });
+    expect(await migratedStorage.loadUserPreferences()).toMatchObject({
+      storylineProgressSchemaVersion: 2,
+      storylineProgressResetNoticePending: true,
+    });
+
+    await migratedStorage.saveCompletedStorylineObjectives(
+      new Set(["68c81d6e82b7593afaa638e0"]),
+    );
+    migratedStorage.setProfile("close-migrated-db");
+    const secondSession = new TaskStorage();
+    secondSession.setProfile(profileId);
+    await secondSession.init();
+    expect(await secondSession.loadCompletedStorylineObjectives()).toEqual(
+      new Set(["68c81d6e82b7593afaa638e0"]),
+    );
+  });
 });
 
 describe("TaskStorage - Task Objective Item Progress", () => {
@@ -294,6 +351,7 @@ describe("TaskStorage - User Preferences", () => {
       notes: "Test notes",
       playerLevel: 42,
       scavKarma: 1.23,
+      icebreakerProgress: ["boreas-start", "board-shoreline-hovercraft"],
       enableLevelFilter: true,
       showCompleted: false,
       dismissedAnnouncementIds: ["prestige-requirements-easier-v2"],
@@ -302,7 +360,8 @@ describe("TaskStorage - User Preferences", () => {
     await storage.saveUserPreferences(prefs);
     const loaded = await storage.loadUserPreferences();
 
-    expect(loaded).toEqual(prefs);
+    expect(loaded).toMatchObject(prefs);
+    expect(loaded.storylineProgressSchemaVersion).toBe(2);
   });
 
   it("should support partial preference updates", async () => {

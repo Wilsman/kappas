@@ -800,6 +800,54 @@ describe("fetchCombinedData", () => {
     expect(result.tasks.data.tasks[0].objectives?.[0]?.count).toBe(40);
   });
 
+  it("keeps optional objectives and normalizes marker items from JSON tasks", async () => {
+    mockCombinedJsonApi({
+      tasks: {
+        transit: {
+          id: "transit",
+          name: "Saving Private Roman",
+          trader: "btr-driver",
+          objectives: {
+            mark: {
+              id: "mark",
+              description: "Mark the transit",
+              markerItem: "marker",
+              count: 1,
+            },
+            optional: {
+              id: "optional",
+              description: "Find an extra item",
+              items: ["extra"],
+              count: 2,
+              optional: true,
+            },
+          },
+        },
+      },
+      itemTranslations: {
+        "marker Name": "MS2000 Marker",
+        "extra Name": "Extra item",
+      },
+    });
+
+    const result = await fetchCombinedData();
+    const objectives = result.tasks.data.tasks[0].objectives ?? [];
+
+    expect(objectives[0]).toMatchObject({
+      optional: false,
+      items: [
+        {
+          id: "marker",
+          name: "MS2000 Marker",
+        },
+      ],
+    });
+    expect(objectives[1]).toMatchObject({
+      optional: true,
+      items: [{ id: "extra", name: "Extra item" }],
+    });
+  });
+
   it("applies task wiki link overrides from the fetched overlay", async () => {
     const overlayResponse = {
       tasks: {

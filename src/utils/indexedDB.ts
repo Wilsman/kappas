@@ -5,6 +5,7 @@ import {
   normalizeLanguage,
   type LanguageCode,
 } from "@/utils/language";
+import type { StorylineChapter } from "@/types/storyline";
 
 const DB_BASE_NAME = "TarkovQuests";
 const DB_VERSION = 14;
@@ -88,13 +89,18 @@ export interface UserPreferences {
   playerLevel: number;
   scavKarma?: number | null;
   kappaLl4Traders?: string[];
+  icebreakerProgress?: string[];
   enableLevelFilter: boolean;
   showCompleted: boolean;
   showEvents: boolean;
   hideoutRequirementsHideFound: boolean;
   hideoutRequirementsLevelFilter: number | "all";
   dismissedAnnouncementIds: string[];
+  storylineProgressSchemaVersion?: number;
+  storylineProgressResetNoticePending?: boolean;
 }
+
+const STORYLINE_PROGRESS_SCHEMA_VERSION = 2;
 
 export class TaskStorage {
   private db: IDBDatabase | null = null;
@@ -142,7 +148,9 @@ export class TaskStorage {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
-        resolve();
+        void this.ensureStorylineProgressSchema()
+          .then(() => resolve())
+          .catch((error) => reject(error));
       };
 
       request.onupgradeneeded = (event) => {
@@ -684,6 +692,12 @@ export class TaskStorage {
                   (trader): trader is string => typeof trader === "string",
                 )
               : [];
+          else if (item.id === "icebreakerProgress")
+            prefs.icebreakerProgress = Array.isArray(item.value)
+              ? item.value.filter(
+                  (stepId): stepId is string => typeof stepId === "string",
+                )
+              : [];
           else if (item.id === "enableLevelFilter")
             prefs.enableLevelFilter = item.value as boolean;
           else if (item.id === "showCompleted")
@@ -702,6 +716,11 @@ export class TaskStorage {
                     typeof id === "string" && id.length > 0,
                 )
               : [];
+          else if (item.id === "storylineProgressSchemaVersion")
+            prefs.storylineProgressSchemaVersion =
+              typeof item.value === "number" ? item.value : undefined;
+          else if (item.id === "storylineProgressResetNoticePending")
+            prefs.storylineProgressResetNoticePending = item.value === true;
         });
         resolve(prefs);
       };
@@ -825,6 +844,97 @@ export class TaskStorage {
       key,
       data: tasks,
       updatedAt: Date.now(),
+    });
+  }
+
+  async saveStorylineApiCache(
+    gameMode: GameMode,
+    language: LanguageCode,
+    chapters: StorylineChapter[],
+  ): Promise<void> {
+    if (!this.db) await this.init();
+    if (!this.db) return;
+
+    const tx = this.db.transaction([API_CACHE_STORE], "readwrite");
+    const store = tx.objectStore(API_CACHE_STORE);
+    await store.put({
+      key: `story::${gameMode}::${normalizeLanguage(language)}`,
+      data: chapters,
+      updatedAt: Date.now(),
+    });
+  }
+
+  async loadStorylineApiCache(
+    gameMode: GameMode,
+    language: LanguageCode,
+  ): Promise<{ chapters: StorylineChapter[]; updatedAt: number } | null> {
+    if (!this.db) await this.init();
+    if (!this.db) return null;
+
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction([API_CACHE_STORE], "readonly");
+      const store = tx.objectStore(API_CACHE_STORE);
+      const request = store.get(
+        `story::${gameMode}::${normalizeLanguage(language)}`,
+      );
+      request.onsuccess = () => {
+        const result = request.result as
+          | { data?: unknown; updatedAt?: unknown }
+          | undefined;
+        resolve(
+          Array.isArray(result?.data) &&
+            typeof result?.updatedAt === "number"
+            ? {
+                chapters: result.data as StorylineChapter[],
+                updatedAt: result.updatedAt,
+              }
+            : null,
+        );
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  private async ensureStorylineProgressSchema(): Promise<void> {
+    if (!this.db) return;
+
+    const preferences = await this.loadUserPreferences();
+    if (
+      (preferences.storylineProgressSchemaVersion ?? 0) >=
+      STORYLINE_PROGRESS_SCHEMA_VERSION
+    ) {
+      return;
+    }
+
+    const [completedObjectives, workingOnItems, itemProgress] =
+      await Promise.all([
+      this.loadCompletedStorylineObjectives(),
+      this.loadWorkingOnItems(),
+      this.loadTaskObjectiveItemProgress(),
+    ]);
+    const hadLegacyProgress =
+      completedObjectives.size > 0 ||
+      workingOnItems.storylineObjectives.size > 0 ||
+      Object.keys(itemProgress).some((key) =>
+        key.startsWith("storyline-objective::"),
+      );
+    const retainedItemProgress = Object.fromEntries(
+      Object.entries(itemProgress).filter(
+        ([key]) => !key.startsWith("storyline-objective::"),
+      ),
+    );
+
+    await Promise.all([
+      this.saveCompletedStorylineObjectives(new Set()),
+      this.saveWorkingOnItems({
+        ...workingOnItems,
+        storylineObjectives: new Set(),
+      }),
+      this.saveTaskObjectiveItemProgress(retainedItemProgress),
+    ]);
+    await this.saveUserPreferences({
+      storylineProgressSchemaVersion: STORYLINE_PROGRESS_SCHEMA_VERSION,
+      storylineProgressResetNoticePending: hadLegacyProgress,
     });
   }
 }

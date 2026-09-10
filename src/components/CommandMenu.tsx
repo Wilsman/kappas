@@ -90,7 +90,8 @@ interface CommandMenuProps {
     | "current"
     | "kord-breach"
     | "lightkeeper"
-    | "kappa";
+    | "kappa"
+    | "icebreaker";
   groupBy: "trader" | "map";
   collectorGroupBy: "collector" | "hideout-stations";
   traders: string[];
@@ -697,6 +698,10 @@ export function CommandMenu(props: CommandMenuProps) {
     },
     navigateKappa() {
       onSetViewMode("kappa");
+      setOpen(false);
+    },
+    navigateIcebreaker() {
+      onSetViewMode("icebreaker");
       setOpen(false);
     },
   } as const;
@@ -1815,6 +1820,13 @@ export function CommandMenu(props: CommandMenuProps) {
                   onSelect={handle.navigateKappa}
                 >
                   Kappa {viewMode === "kappa" ? "(current)" : ""}
+                </CommandItem>
+                <CommandItem
+                  value="icebreaker unlock boreas shoreline btr driver stick to it"
+                  onSelect={handle.navigateIcebreaker}
+                >
+                  Icebreaker Unlock{" "}
+                  {viewMode === "icebreaker" ? "(current)" : ""}
                 </CommandItem>
                 <CommandItem
                   value="storyline-quests"

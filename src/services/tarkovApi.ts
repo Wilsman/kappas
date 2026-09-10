@@ -708,10 +708,12 @@ type JsonTask = {
 type JsonTaskObjective = {
   id?: string;
   description?: string;
+  optional?: boolean;
   count?: number;
   playerLevel?: number;
   maps?: string[];
   items?: string[];
+  markerItem?: string;
   foundInRaid?: boolean;
 };
 
@@ -1480,13 +1482,17 @@ const normalizeJsonTasks = (
           objective.description,
           objective.description ?? "",
         ),
+        optional: objective.optional === true,
         count: objective.count,
         playerLevel: objective.playerLevel,
         foundInRaid: objective.foundInRaid,
         maps: (objective.maps ?? []).map((mapId) => ({
           name: translateIdName(translations.maps, mapId),
         })),
-        items: (objective.items ?? [])
+        items: [
+          ...(objective.items ?? []),
+          ...(objective.markerItem ? [objective.markerItem] : []),
+        ]
           .map((itemId) => buildJsonItem(itemId, translations.items))
           .filter((item): item is NonNullable<typeof item> => item !== null),
       }),

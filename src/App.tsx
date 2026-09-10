@@ -38,6 +38,7 @@ import {
   migrateDefaultDbIfNeeded,
   ExportImportService,
   AutoBackupService,
+  type UserPreferences,
 } from "./utils/indexedDB";
 import "./utils/debug"; // Registers window.debugTracker() for user support
 import {
@@ -113,6 +114,9 @@ import {
   OVERLAY_URL,
   buildEventTasksFromOverlay,
 } from "./services/tarkovApi";
+import { loadStorylineData } from "@/services/storylineApi";
+import type { StorylineLoadResult } from "@/types/storyline";
+import { getStorylineDisplayProgress } from "@/utils/storylinePresentation";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -143,6 +147,22 @@ async function loadWithRetry<T>(
     }
   }
   throw lastError;
+}
+
+async function consumeStorylineResetNotice(
+  profileId: string,
+  preferences: Partial<UserPreferences>,
+): Promise<void> {
+  if (!preferences.storylineProgressResetNoticePending) return;
+  toast.info("Storyline progress updated", {
+    description:
+      "The checklist now uses live Tarkov.dev objective IDs, so legacy checklist progress was reset. Decision Map progress was kept.",
+    duration: 9000,
+  });
+  if (taskStorage.getProfileId() !== profileId) return;
+  await taskStorage.saveUserPreferences({
+    storylineProgressResetNoticePending: false,
+  });
 }
 import { Button } from "./components/ui/button";
 import {
@@ -242,11 +262,15 @@ const KappaJourney = lazy(() =>
     default: m.KappaJourney,
   })),
 );
+const IcebreakerUnlock = lazy(() =>
+  import("./components/IcebreakerUnlock").then((m) => ({
+    default: m.IcebreakerUnlock,
+  })),
+);
 import { CommandMenu } from "./components/CommandMenu";
 import { NotesWidget } from "./components/NotesWidget";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { LazyLoadErrorBoundary } from "./components/LazyLoadErrorBoundary";
-import { STORYLINE_QUESTS } from "@/data/storylineQuests";
 import { Textarea } from "@/components/ui/textarea";
 
 const SUPPORT_DISCORD_URL = "https://discord.com/invite/3dFmr5qaJK";
@@ -669,6 +693,7 @@ function App() {
   const lastLoadedGameModeRef = useRef<GameMode | null>(null);
   const lastLoadedLanguageRef = useRef<LanguageCode | null>(null);
   const gameModeRequestRef = useRef(0);
+  const storylineRequestRef = useRef(0);
   const activeDataRetryAfterRef = useRef<Record<string, number>>({});
   const prefetchRetryAfterRef = useRef<Record<string, number>>({});
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -681,6 +706,51 @@ function App() {
   const kappaLl4TradersRef = useRef<Set<KappaLl4Trader>>(new Set());
   const [apiCollectorItems, setApiCollectorItems] =
     useState<CollectorItemsData | null>(null);
+  const [storylineData, setStorylineData] =
+    useState<StorylineLoadResult | null>(null);
+  const [storylineLoading, setStorylineLoading] = useState(false);
+  const [storylineError, setStorylineError] = useState<string | null>(null);
+
+  const refreshStorylineData = useCallback(
+    async (forceRefresh = false) => {
+      if (!activeProfileId) return;
+      const requestId = ++storylineRequestRef.current;
+      setStorylineLoading(true);
+      setStorylineError(null);
+      try {
+        taskStorage.setProfile(activeProfileId);
+        await taskStorage.init();
+        const result = await loadStorylineData(
+          activeProfileGameMode,
+          apiLanguage,
+          { forceRefresh },
+        );
+        if (storylineRequestRef.current !== requestId) return;
+        setStorylineData(result);
+        setStorylineError(
+          result.stale
+            ? "The live Storyline feed could not be refreshed."
+            : null,
+        );
+      } catch (error) {
+        if (storylineRequestRef.current !== requestId) return;
+        setStorylineData(null);
+        setStorylineError(
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        if (storylineRequestRef.current === requestId) {
+          setStorylineLoading(false);
+        }
+      }
+    },
+    [activeProfileGameMode, activeProfileId, apiLanguage],
+  );
+
+  useEffect(() => {
+    setStorylineData(null);
+    void refreshStorylineData(false);
+  }, [refreshStorylineData]);
 
   // Transform collector items data to match the expected structure (Patched by Overlay)
   const collectorItems = useMemo(() => {
@@ -721,6 +791,7 @@ function App() {
     | "kord-breach"
     | "lightkeeper"
     | "kappa"
+    | "icebreaker"
   >("grouped");
   const [groupBy, setGroupBy] = useState<"trader" | "map">("trader");
   const [collectorGroupBy, setCollectorGroupBy] = useState<
@@ -781,7 +852,9 @@ function App() {
       setViewMode((currentView) =>
         currentView === "kord-breach" ||
         currentView === "lightkeeper" ||
-        currentView === "kappa"
+        currentView === "kappa" ||
+        currentView === "storyline" ||
+        currentView === "storyline-map"
           ? currentView
           : "grouped",
       );
@@ -1247,6 +1320,9 @@ function App() {
       if (nextView === "kappa") {
         return "/Kappa";
       }
+      if (nextView === "icebreaker") {
+        return "/Icebreaker";
+      }
       return "/";
     },
     [],
@@ -1309,6 +1385,8 @@ function App() {
       nextView = "lightkeeper";
     } else if (parts[0] === "kappa") {
       nextView = "kappa";
+    } else if (parts[0] === "icebreaker") {
+      nextView = "icebreaker";
     }
 
     return { nextView, nextCollectorGroupBy, nextStorylineView, nextEndingId };
@@ -1391,12 +1469,19 @@ function App() {
 
   const usesViewportCanvas = viewMode === "storyline-map";
   const usesViewportFrame =
-    usesViewportCanvas || viewMode === "lightkeeper" || viewMode === "kappa";
+    usesViewportCanvas ||
+    viewMode === "lightkeeper" ||
+    viewMode === "kappa" ||
+    viewMode === "icebreaker";
   const isKordBreachView = viewMode === "kord-breach";
   const isLightkeeperView = viewMode === "lightkeeper";
   const isKappaView = viewMode === "kappa";
+  const isIcebreakerView = viewMode === "icebreaker";
   const isFullWidthView =
-    isKordBreachView || isLightkeeperView || isKappaView;
+    isKordBreachView ||
+    isLightkeeperView ||
+    isKappaView ||
+    isIcebreakerView;
 
   // Note: preserve query params (e.g., ?tasksSearch=...) to enable deep links
   // When navigating between views we already replace the path without query above.
@@ -1420,11 +1505,19 @@ function App() {
   );
 
   const handleToggleStorylineObjective = useCallback(
-    async (id: string) => {
+    async (id: string, relatedObjectiveIds: string[] = [id]) => {
       if (!activeProfileId) return;
       const next = new Set(completedStorylineObjectives);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const objectiveIds = relatedObjectiveIds.length
+        ? relatedObjectiveIds
+        : [id];
+      const allCompleted = objectiveIds.every((objectiveId) =>
+        next.has(objectiveId),
+      );
+      objectiveIds.forEach((objectiveId) => {
+        if (allCompleted) next.delete(objectiveId);
+        else next.add(objectiveId);
+      });
       setCompletedStorylineObjectives(next);
       try {
         taskStorage.setProfile(activeProfileId);
@@ -1475,27 +1568,17 @@ function App() {
     visibleCompletedTasks.has(task.id),
   ).length;
 
-  // Calculate storyline objectives (only main objectives count towards progress)
+  // Calculate API-backed Storyline progress using visible objective groups.
   const { totalStorylineObjectives, completedStorylineCount } = useMemo(() => {
-    let total = 0;
-    let completed = 0;
-
-    STORYLINE_QUESTS.forEach((quest) => {
-      quest.objectives?.forEach((obj) => {
-        if (obj.type === "main") {
-          total++;
-          if (completedStorylineObjectives.has(obj.id)) {
-            completed++;
-          }
-        }
-      });
-    });
-
+    const progress = getStorylineDisplayProgress(
+      storylineData?.chapters ?? [],
+      completedStorylineObjectives,
+    );
     return {
-      totalStorylineObjectives: total,
-      completedStorylineCount: completed,
+      totalStorylineObjectives: progress.total,
+      completedStorylineCount: progress.completed,
     };
-  }, [completedStorylineObjectives]);
+  }, [completedStorylineObjectives, storylineData]);
 
   // Build progress data for QuestProgressPanel
   const traderProgress = useMemo(() => {
@@ -1651,6 +1734,7 @@ function App() {
         setWorkingOnHideoutStations(savedWorkingOnItems.hideoutStations);
         // Load player level from user preferences
         const savedPrefs = await taskStorage.loadUserPreferences();
+        await consumeStorylineResetNotice(id, savedPrefs);
         setDismissedAnnouncementIds(savedPrefs.dismissedAnnouncementIds ?? []);
         setScavKarma(
           typeof savedPrefs.scavKarma === "number"
@@ -2052,6 +2136,7 @@ function App() {
         });
         // Load player level from user preferences (with migration from localStorage)
         const savedPrefs = await taskStorage.loadUserPreferences();
+        await consumeStorylineResetNotice(ensured.activeId, savedPrefs);
         setDismissedAnnouncementIds(savedPrefs.dismissedAnnouncementIds ?? []);
         setScavKarma(
           typeof savedPrefs.scavKarma === "number"
@@ -2701,6 +2786,7 @@ function App() {
 
       const objectiveKeys = buildTaskObjectiveKeys(task);
       return objectiveKeys.every((objectiveKey, index) =>
+        task.objectives?.[index]?.optional ||
         isTaskObjectiveCompleted(
           objectiveProgress,
           objectiveKey,
@@ -2956,11 +3042,18 @@ function App() {
   );
 
   const handleToggleWorkingOnStorylineObjective = useCallback(
-    async (objectiveId: string) => {
+    async (
+      objectiveId: string,
+      relatedObjectiveIds: string[] = [objectiveId],
+    ) => {
       if (!activeProfileId) return;
       const next = new Set(workingOnStorylineObjectives);
-      if (next.has(objectiveId)) {
-        next.delete(objectiveId);
+      const objectiveIds = relatedObjectiveIds.length
+        ? relatedObjectiveIds
+        : [objectiveId];
+      const isWorkingOnGroup = objectiveIds.some((id) => next.has(id));
+      if (isWorkingOnGroup) {
+        objectiveIds.forEach((id) => next.delete(id));
       } else {
         next.add(objectiveId);
       }
@@ -3113,7 +3206,9 @@ function App() {
             playerLevel: 1,
             enableLevelFilter: false,
             kappaLl4Traders: [],
-            ...(resetAll ? { scavKarma: null } : {}),
+            ...(resetAll
+              ? { scavKarma: null, icebreakerProgress: [] }
+              : {}),
           });
           if (resetAll) setScavKarma(null);
           window.dispatchEvent(new Event("taskTracker:reset"));
@@ -3222,6 +3317,7 @@ function App() {
       setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
       setHideoutItemQuantities(savedHideoutItemQuantities);
       const savedPrefs = await taskStorage.loadUserPreferences();
+      await consumeStorylineResetNotice(activeProfileId, savedPrefs);
       setScavKarma(
         typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
       );
@@ -3234,7 +3330,7 @@ function App() {
     } catch (e) {
       console.error("Import reload error", e);
     }
-  }, []);
+  }, [activeProfileId]);
 
   const handleImportGameLogs = useCallback(
     async (
@@ -3406,6 +3502,7 @@ function App() {
       setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
       setHideoutItemQuantities(savedHideoutItemQuantities);
       const savedPrefs = await taskStorage.loadUserPreferences();
+      await consumeStorylineResetNotice(newProfile.id, savedPrefs);
       setScavKarma(
         typeof savedPrefs.scavKarma === "number" ? savedPrefs.scavKarma : null,
       );
@@ -3496,6 +3593,7 @@ function App() {
           setTaskObjectiveItemProgress(savedTaskObjectiveItemProgress);
           setHideoutItemQuantities(savedHideoutItemQuantities);
           const savedPrefs = await taskStorage.loadUserPreferences();
+          await consumeStorylineResetNotice(targetProfile.id, savedPrefs);
           setScavKarma(
             typeof savedPrefs.scavKarma === "number"
               ? savedPrefs.scavKarma
@@ -3623,6 +3721,14 @@ function App() {
           imageAlt="Dawn of a New Era achievement artwork"
           keywords="Escape from Tarkov, Kappa, Collector, Dawn of a New Era, Chemical Part 4, Shooter Born in Heaven"
         />
+      ) : isIcebreakerView ? (
+        <SEO
+          title="Icebreaker Unlock - Escape from Tarkov"
+          description="Follow the Boreas Shoreline transit and BTR Driver questline required to unlock Icebreaker access."
+          canonical={`${window.location.origin}/Icebreaker`}
+          imageAlt="Icebreaker unlock route"
+          keywords="Escape from Tarkov, Icebreaker, Boreas, Stick to It, BTR Driver, Shoreline transit"
+        />
       ) : (
         <SEO />
       )}
@@ -3699,9 +3805,11 @@ function App() {
                             ? "Lightkeeper Access"
                             : isKappaView
                               ? "Kappa"
-                          : isMobile
-                            ? "EFT Tracker"
-                            : "Escape from Tarkov Task Tracker"}
+                              : isIcebreakerView
+                                ? "Icebreaker Unlock"
+                                : isMobile
+                                  ? "EFT Tracker"
+                                  : "Escape from Tarkov Task Tracker"}
                       </h1>
                       {isKordBreachView ? (
                         <span className="inline-flex border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-400">
@@ -3936,6 +4044,7 @@ function App() {
                     viewMode === "kord-breach" ||
                     viewMode === "lightkeeper" ||
                     viewMode === "kappa" ||
+                    viewMode === "icebreaker" ||
                     viewMode === "tracked-items" ||
                     viewMode === "collector" ||
                     viewMode === "flow" ||
@@ -3954,6 +4063,22 @@ function App() {
                     <Suspense fallback={<ContentSkeleton />}>
                       {viewMode === "kord-breach" ? (
                         <KordBreachPlanner />
+                      ) : viewMode === "icebreaker" ? (
+                        <IcebreakerUnlock
+                          activeProfileId={activeProfileId}
+                          tasks={tasksWithEvents}
+                          storylineChapters={storylineData?.chapters ?? []}
+                          completedTasks={visibleCompletedTasks}
+                          completedTaskObjectives={
+                            visibleCompletedTaskObjectives
+                          }
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onToggleTask={handleToggleComplete}
+                          onToggleTaskObjective={handleToggleTaskObjective}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
+                        />
                       ) : viewMode === "lightkeeper" ? (
                         <LightkeeperJourney
                           tasks={tasksWithEvents}
@@ -4131,6 +4256,13 @@ function App() {
                         />
                       ) : viewMode === "storyline" ? (
                         <StorylineQuestsView
+                          chapters={storylineData?.chapters ?? []}
+                          isLoading={storylineLoading}
+                          error={storylineError}
+                          updatedAt={storylineData?.updatedAt ?? null}
+                          source={storylineData?.source ?? null}
+                          isStale={storylineData?.stale ?? false}
+                          onRetry={() => void refreshStorylineData(true)}
                           completedObjectives={completedStorylineObjectives}
                           onToggleObjective={handleToggleStorylineObjective}
                           onSetCompletedObjectives={
@@ -4188,6 +4320,7 @@ function App() {
                       ) : viewMode === "current" ? (
                         <CurrentlyWorkingOnView
                           tasks={tasks}
+                          storylineChapters={storylineData?.chapters ?? []}
                           workingOnTasks={workingOnTasks}
                           workingOnStorylineObjectives={
                             workingOnStorylineObjectives
