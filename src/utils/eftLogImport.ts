@@ -7,13 +7,15 @@ import type { GameMode } from "@/utils/gameMode";
 import { getEquivalentTaskIds } from "@/utils/taskProgressView";
 
 export type EftLogImportMatchStatus = "new" | "already-complete";
-export type EftLogSourceGameMode = "regular" | "pve";
+export type EftLogSourceGameMode = "regular" | "pve" | "seasonal";
 export type EftLogSessionGameMode = EftLogSourceGameMode | "unknown";
 
 export function getEftLogSourceGameMode(
   gameMode: GameMode,
 ): EftLogSourceGameMode {
-  return gameMode === "pve" ? "pve" : "regular";
+  if (gameMode === "pve") return "pve";
+  if (gameMode === "pvp-season") return "seasonal";
+  return "regular";
 }
 
 export interface EftLogImportQuestMatch {
@@ -98,7 +100,7 @@ const MODE_LOG_FILE_PATTERN =
 const QUEST_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const QUEST_SUCCESS_TEMPLATE_PATTERN =
   /\b([a-f0-9]{24})\s+successMessageText\b/gi;
-const SESSION_MODE_PATTERN = /\bSession mode:\s*([A-Za-z]+)/gi;
+const SESSION_MODE_PATTERN = /\bSession mode:\s*([A-Za-z-]+)/gi;
 const COMPLETED_STATUS_NUMBERS = new Set([3, 4]);
 const COMPLETED_STATUS_WORDS = new Set([
   "availableforfinish",
@@ -289,21 +291,84 @@ export function extractCompletedQuestIdsFromLogText(text: string): string[] {
   return Array.from(questIds).sort();
 }
 
+// Future work: segmented per-mode mapper (pve -> PvE, pvp -> PvP,
+// pvp-season -> Seasonal in one import).
+//
+// Today every session folder gets ONE mode (precedence below: seasonal >
+// pve > regular > unknown) and all its quest IDs go to the single active
+// profile. That misattributes mixed sessions where the player switched
+// characters without restarting the client, which is common (4 of 31
+// sessions in real logs from patch 1.1.x, Aug 2026).
+//
+// Real logs already contain everything needed to split a session at its
+// mode switches instead:
+// - Switch points are timestamped: "Session mode: X" lines plus character
+//   switches logged as "PrepareSelectedProfileLocally ProfileId:<24hex>
+//   AccountId:<n>" / "CompleteSelectedProfile ..." in application_*.log.
+//   Caveat: the profile active at client start logs NO select line, so the
+//   first segment must fall back to "Session mode:" + gateway-host evidence.
+// - ProfileIds are stable per character (2 distinct IDs across 31 sessions),
+//   so one scan can build a ProfileId -> mode table: label each select event
+//   by the gateway host used right after it (gw-pve / gw-pvp-season / gw-pvp)
+//   and reuse that label everywhere the ID appears.
+// - Every log line carries a timestamp, so merging application + backend +
+//   push-notifications files in time order yields segments like
+//   [start → switch → end], each attributable to one mode.
+// - Quest evidence (successMessageText lines, push payloads) is event-based
+//   and lands exactly in its segment. Quest-list snapshots reflect the active
+//   profile at dump time, so they follow the segment too.
+// - Backend responseText bodies are EMPTY in release logs, so quest signal
+//   comes only from push payloads and message templates. One output log also
+//   embeds binary (NUL bytes), so segment parsing must tolerate that.
+// Suggested shape: detect segments per session, group matches by mode,
+// preview shows Seasonal N / PvE N / PvP N groups, apply writes each group
+// to its profile store instead of one active profile.
 export function detectEftLogSessionGameMode(
   text: string,
 ): EftLogSessionGameMode {
+  let hasSeasonalMode = false;
+  let hasPveMode = false;
+  let hasRegularMode = false;
   for (const match of text.matchAll(SESSION_MODE_PATTERN)) {
-    const mode = match[1].trim().toLowerCase();
-    if (mode === "pve") return "pve";
-    if (["pvp", "regular", "normal"].includes(mode)) return "regular";
+    // Normalize so "PvpSeason", "Pvp-Season" and "Seasonal" all match.
+    const mode = match[1].replace(/[^a-z]/gi, "").toLowerCase();
+    if (mode === "pve") {
+      hasPveMode = true;
+    } else if (
+      mode === "pvpseason" ||
+      mode === "seasonal" ||
+      mode === "season"
+    ) {
+      hasSeasonalMode = true;
+    } else if (["pvp", "regular", "normal"].includes(mode)) {
+      hasRegularMode = true;
+    }
   }
+  // A client logs "Session mode: Regular" at startup before a profile is
+  // selected, then logs the real mode after. Scan every occurrence and let
+  // the most specific mode win instead of returning on the first hit.
+  if (hasSeasonalMode) return "seasonal";
+  if (hasPveMode) return "pve";
+  if (hasRegularMode) return "regular";
 
+  let hasSeasonalEvidence = false;
   let hasPveEvidence = false;
   let hasRegularEvidence = false;
   const lines = text.split(/\r?\n/);
 
   for (const line of lines) {
     const normalizedLine = line.toLowerCase();
+    // Seasonal markers must be checked before the PvP ones: "vhost=pvp" is a
+    // substring of "vhost=pvp-season" and "wsn-pvp-" prefixes
+    // "wsn-pvp-season-01".
+    if (
+      normalizedLine.includes("gw-pvp-season.escapefromtarkov.com") ||
+      normalizedLine.includes("wsn-pvp-season-") ||
+      normalizedLine.includes("vhost=pvp-season")
+    ) {
+      hasSeasonalEvidence = true;
+      continue;
+    }
     if (
       normalizedLine.includes("gw-pve.escapefromtarkov.com") ||
       normalizedLine.includes("wsn-pve-") ||
@@ -327,6 +392,7 @@ export function detectEftLogSessionGameMode(
     }
   }
 
+  if (hasSeasonalEvidence) return "seasonal";
   if (hasPveEvidence) return "pve";
   if (hasRegularEvidence) return "regular";
   return "unknown";
@@ -401,6 +467,7 @@ export function isEftLogSessionIncludedForSourceMode(
   sourceGameMode: EftLogSourceGameMode,
 ): boolean {
   if (sourceGameMode === "pve") return sessionMode === "pve";
+  if (sourceGameMode === "seasonal") return sessionMode === "seasonal";
   return sessionMode === "regular" || sessionMode === "unknown";
 }
 

@@ -131,6 +131,7 @@ const QUICK_IMPORT_HANDLE_KEY = "logsDirectory";
 const SOURCE_GAME_MODE_LABELS: Record<EftLogSourceGameMode, string> = {
   regular: "PvP",
   pve: "PvE",
+  seasonal: "Seasonal",
 };
 
 interface QuickImportSettings {
@@ -165,7 +166,12 @@ function readQuickImportSettings(): QuickImportSettings | null {
     const raw = localStorage.getItem(QUICK_IMPORT_SETTINGS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<QuickImportSettings>;
-    const sourceGameMode = parsed.sourceGameMode === "pve" ? "pve" : "regular";
+    const sourceGameMode =
+      parsed.sourceGameMode === "pve"
+        ? "pve"
+        : parsed.sourceGameMode === "seasonal"
+          ? "seasonal"
+          : "regular";
     return {
       sourceGameMode,
       selectedPatchVersionCount: Math.max(
@@ -317,6 +323,7 @@ function mergeSessionMode(
   current: EftLogSessionGameMode,
   next: EftLogSessionGameMode,
 ): EftLogSessionGameMode {
+  if (current === "seasonal" || next === "seasonal") return "seasonal";
   if (current === "pve" || next === "pve") return "pve";
   if (current === "regular" || next === "regular") return "regular";
   return "unknown";
@@ -1317,8 +1324,8 @@ function SourceGameModeToggle({
       <div className="mb-2 text-xs font-medium text-muted-foreground">
         Import log mode
       </div>
-      <div className="grid grid-cols-2 gap-1 rounded-md bg-background p-1">
-        {(["regular", "pve"] as const).map((mode) => (
+      <div className="grid grid-cols-3 gap-1 rounded-md bg-background p-1">
+        {(["regular", "pve", "seasonal"] as const).map((mode) => (
           <Button
             key={mode}
             type="button"

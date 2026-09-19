@@ -150,9 +150,75 @@ describe("eftLogImport", () => {
     expect(isEftLogSessionIncludedForSourceMode("pve", "pve")).toBe(true);
   });
 
-  it("keeps Seasonal profiles on the existing PvP/PvE log-source boundary", () => {
-    expect(getEftLogSourceGameMode("pvp-season")).toBe("regular");
+  it("maps Seasonal profiles to the seasonal log source", () => {
+    expect(getEftLogSourceGameMode("pvp-season")).toBe("seasonal");
     expect(getEftLogSourceGameMode("pve")).toBe("pve");
+    expect(getEftLogSourceGameMode("regular")).toBe("regular");
+  });
+
+  it("detects seasonal sessions from explicit session mode", () => {
+    expect(
+      detectEftLogSessionGameMode(
+        "2026-08-28|Info|application|Session mode: PvpSeason",
+      ),
+    ).toBe("seasonal");
+  });
+
+  it("prefers seasonal over the startup Regular session mode line", () => {
+    expect(
+      detectEftLogSessionGameMode(
+        [
+          "2026-08-03|Info|application|Session mode: Regular",
+          "2026-08-03|Info|application|Session mode: PvpSeason",
+        ].join("\n"),
+      ),
+    ).toBe("seasonal");
+  });
+
+  it("detects seasonal sessions from gateway, websocket, and vhost fallbacks", () => {
+    expect(
+      detectEftLogSessionGameMode(
+        "URL: https://gw-pvp-season.escapefromtarkov.com/client/game/start.",
+      ),
+    ).toBe("seasonal");
+    expect(
+      detectEftLogSessionGameMode(
+        "ws:wss://wsn-pvp-season-02.escapefromtarkov.com/push/notifier/getwebsocket",
+      ),
+    ).toBe("seasonal");
+    expect(
+      detectEftLogSessionGameMode(
+        "URL: https://lobby.escapefromtarkov.com/router?vhost=pvp-season.",
+      ),
+    ).toBe("seasonal");
+  });
+
+  it("does not classify seasonal vhost and websocket lines as regular", () => {
+    expect(
+      detectEftLogSessionGameMode(
+        [
+          "URL: https://gw-pvp.escapefromtarkov.com/client/game/mode.",
+          "URL: https://gw-pvp-season.escapefromtarkov.com/client/game/start.",
+          "URL: https://lobby.escapefromtarkov.com/router?vhost=pvp-season.",
+        ].join("\n"),
+      ),
+    ).toBe("seasonal");
+  });
+
+  it("routes seasonal sessions only to seasonal imports", () => {
+    expect(isEftLogSessionIncludedForSourceMode("seasonal", "seasonal")).toBe(
+      true,
+    );
+    expect(isEftLogSessionIncludedForSourceMode("seasonal", "regular")).toBe(
+      false,
+    );
+    expect(isEftLogSessionIncludedForSourceMode("seasonal", "pve")).toBe(false);
+    expect(isEftLogSessionIncludedForSourceMode("regular", "seasonal")).toBe(
+      false,
+    );
+    expect(isEftLogSessionIncludedForSourceMode("unknown", "seasonal")).toBe(
+      false,
+    );
   });
 
   it("extracts completed quest IDs from backend and push notification payloads", () => {
