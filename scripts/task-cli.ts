@@ -16,7 +16,7 @@
  */
 
 const TARKOV_JSON_API_BASE_URL = 'https://json.tarkov.dev';
-const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json';
+const OVERLAY_URL = 'https://cdn.jsdelivr.net/gh/Wilsman/tarkov-data-overlay@main/dist/overlay.json';
 type GameMode = 'regular' | 'pve' | 'pvp-season';
 const GAME_MODES = new Set<GameMode>(['regular', 'pve', 'pvp-season']);
 let selectedGameMode: GameMode = 'regular';

@@ -4,6 +4,7 @@ import {
   CollectorItemsData,
   HideoutStationsData,
   AchievementsData,
+  Edition,
   Overlay,
   Task,
   TaskOverride,
@@ -14,6 +15,7 @@ import {
   RewardItem,
 } from "../types";
 import { TraderName } from "../data/traders";
+import { LOCAL_EDITIONS } from "@/data/editions";
 import {
   DEFAULT_GAME_MODE,
   normalizeGameMode,
@@ -40,8 +42,11 @@ export const getTarkovJsonRequestBaseUrl = (
     ? TARKOV_JSON_DEV_PROXY_BASE_URL
     : TARKOV_JSON_API_BASE_URL;
 
+// Upstream overlay (tarkovtracker-org/tarkov-data-overlay) is no longer
+// available; using our own copy. Upstream URL, if access returns:
+// https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json
 export const OVERLAY_URL =
-  "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json";
+  "https://cdn.jsdelivr.net/gh/Wilsman/tarkov-data-overlay@main/dist/overlay.json";
 const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
 const ADDITIONAL_COLLECTOR_ITEMS: CollectorItemsData["data"]["task"]["objectives"][number]["items"] =
   [
@@ -575,6 +580,25 @@ export function normalizeCollectorItems<
   T extends CollectorItemsData["data"]["task"],
 >(task: T): T {
   return addAdditionalCollectorItems(task);
+}
+
+// Where game edition data comes from. "local" uses `@/data/editions`;
+// switch to "overlay" to read `overlay.editions` again (falls back to local
+// data if the overlay has none).
+export type EditionsSource = "local" | "overlay";
+export const EDITIONS_SOURCE: EditionsSource = "local";
+
+export function resolveEditions(
+  overlay: Overlay | null | undefined,
+  source: EditionsSource = EDITIONS_SOURCE,
+): Record<string, Edition> {
+  if (source === "overlay") {
+    const overlayEditions = overlay?.editions;
+    if (overlayEditions && Object.keys(overlayEditions).length > 0) {
+      return overlayEditions;
+    }
+  }
+  return LOCAL_EDITIONS;
 }
 
 export async function fetchOverlay(): Promise<Overlay> {

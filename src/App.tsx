@@ -106,6 +106,7 @@ import { getEditionDefaultHideoutLevelKeys } from "@/utils/hideoutProgress";
 import {
   fetchCombinedData,
   fetchOverlay,
+  resolveEditions,
   loadCombinedCache,
   isCombinedCacheFresh,
   getCombinedCacheDebugInfo,
@@ -499,11 +500,11 @@ function App() {
   const [modeTasksByMode, setModeTasksByMode] = useState<
     Partial<Record<GameMode, Task[]>>
   >({});
-  const editionOptions = useMemo(() => {
-    const editions = overlay?.editions;
-    if (!editions) return [];
-    return Object.values(editions).sort((a, b) => a.value - b.value);
-  }, [overlay]);
+  const editions = useMemo(() => resolveEditions(overlay), [overlay]);
+  const editionOptions = useMemo(
+    () => Object.values(editions).sort((a, b) => a.value - b.value),
+    [editions],
+  );
   const tasks = useMemo(() => {
     let filtered = allTasks;
     if (activeProfileFaction) {
@@ -515,13 +516,13 @@ function App() {
       );
     }
 
-    if (overlay?.editions && activeProfileEdition) {
-      const currentEdition = overlay.editions[activeProfileEdition];
+    if (activeProfileEdition) {
+      const currentEdition = editions[activeProfileEdition];
       if (currentEdition) {
         const excluded = new Set(currentEdition.excludedTaskIds ?? []);
         const exclusive = new Set(currentEdition.exclusiveTaskIds ?? []);
         const allExclusive = new Set(
-          Object.values(overlay.editions).flatMap(
+          Object.values(editions).flatMap(
             (edition) => edition.exclusiveTaskIds ?? [],
           ),
         );
@@ -537,7 +538,7 @@ function App() {
     }
 
     return filtered;
-  }, [allTasks, activeProfileFaction, activeProfileEdition, overlay]);
+  }, [allTasks, activeProfileFaction, activeProfileEdition, editions]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const traderImageByName = useMemo(() => {
     const map = new Map<string, string>();
@@ -870,7 +871,7 @@ function App() {
   >(new Set());
   const [hideoutStations, setHideoutStations] = useState<HideoutStation[]>([]);
   const activeEdition = activeProfileEdition
-    ? overlay?.editions?.[activeProfileEdition]
+    ? editions[activeProfileEdition]
     : undefined;
   const editionDefaultBuiltLevels = useMemo(
     () => getEditionDefaultHideoutLevelKeys(hideoutStations, activeEdition),

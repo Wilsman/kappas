@@ -14,7 +14,47 @@ import {
   sanitizeTaskRewardData,
   normalizeCollectorItems,
   buildEventTasksFromOverlay,
+  resolveEditions,
 } from "../tarkovApi";
+import { LOCAL_EDITIONS } from "@/data/editions";
+import type { Overlay } from "@/types";
+
+describe("resolveEditions", () => {
+  const overlayEditions: Overlay["editions"] = {
+    custom: {
+      id: "custom",
+      title: "Custom",
+      value: 1,
+      defaultStashLevel: 2,
+      defaultCultistCircleLevel: 0,
+      traderRepBonus: {},
+    },
+  };
+  const overlay: Overlay = {
+    editions: overlayEditions,
+    $meta: { version: "1.0.0", generated: "2026-01-01T00:00:00.000Z" },
+  };
+
+  it("uses local editions by default, ignoring the overlay", () => {
+    expect(resolveEditions(overlay)).toBe(LOCAL_EDITIONS);
+    expect(resolveEditions(null)).toBe(LOCAL_EDITIONS);
+  });
+
+  it("uses overlay editions when the source is overlay", () => {
+    expect(resolveEditions(overlay, "overlay")).toBe(overlayEditions);
+  });
+
+  it("falls back to local editions when the overlay has none", () => {
+    const emptyOverlay: Overlay = { ...overlay, editions: {} };
+    expect(resolveEditions(emptyOverlay, "overlay")).toBe(LOCAL_EDITIONS);
+    expect(resolveEditions(null, "overlay")).toBe(LOCAL_EDITIONS);
+  });
+
+  it("ships all editions in ascending order", () => {
+    const values = Object.values(LOCAL_EDITIONS).map((e) => e.value);
+    expect(values).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+});
 
 describe("getTarkovJsonRequestBaseUrl", () => {
   it("uses the same-origin proxy during local development", () => {
@@ -362,7 +402,7 @@ describe("fetchCombinedData", () => {
       "https://json.tarkov.dev/regular/items_en",
       "https://json.tarkov.dev/regular/traders_en",
       "https://json.tarkov.dev/regular/maps_en",
-      "https://cdn.jsdelivr.net/gh/tarkovtracker-org/tarkov-data-overlay@main/dist/overlay.json",
+      "https://cdn.jsdelivr.net/gh/Wilsman/tarkov-data-overlay@main/dist/overlay.json",
     ]);
   });
 

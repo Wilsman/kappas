@@ -58,7 +58,7 @@ The tracker uses a community-maintained data overlay to correct and extend tarko
 
 **How it works:**
 
-1. Fetches the latest overlay from [tarkov-data-overlay](https://github.com/tarkovtracker-org/tarkov-data-overlay)
+1. Fetches the latest overlay from [tarkov-data-overlay](https://github.com/Wilsman/tarkov-data-overlay)
 2. Merges corrections into API responses (task XP, objective counts, prerequisites, etc.)
 3. Falls back to a bundled local copy if the remote fetch fails
 
