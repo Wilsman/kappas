@@ -3,6 +3,7 @@ import type { Task } from "@/types";
 import {
   buildKappaQuestRoutes,
   calculateKappaProgress,
+  getKappaRouteTargets,
   KAPPA_LL4_TRADERS,
   KAPPA_QUEST_TARGETS,
   normalizeKappaLl4Traders,
@@ -146,6 +147,83 @@ describe("calculateKappaProgress", () => {
         completedTasks: new Set(KAPPA_QUEST_TARGETS.slice(0, -1).map((t) => t.id)),
       }).collectorUnlocked,
     ).toBe(false);
+  });
+});
+
+describe("getKappaRouteTargets", () => {
+  function kappaTask(
+    id: string,
+    name: string,
+    requirementIds: string[] = [],
+    extra: Partial<Task> = {},
+  ): Task {
+    return {
+      ...task(id, name, requirementIds),
+      kappaRequired: true,
+      ...extra,
+    };
+  }
+
+  it("groups kappa tasks into one route per terminal task", () => {
+    const tasks = [
+      kappaTask("pp1", "Postman Pat 1"),
+      kappaTask("pp2", "Postman Pat 2", ["pp1"]),
+      kappaTask("chem1", "Chemical 1"),
+      kappaTask("chem2", "Chemical 2", ["chem1"]),
+      kappaTask("chem3", "Chemical 3", ["chem2"]),
+    ];
+
+    expect(getKappaRouteTargets(tasks).map((t) => t.id)).toEqual([
+      "chem3",
+      "pp2",
+    ]);
+  });
+
+  it("covers every kappa task through its terminal chain", () => {
+    const tasks = [
+      kappaTask("pp1", "Postman Pat 1"),
+      kappaTask("pp2", "Postman Pat 2", ["pp1"]),
+      kappaTask("chem3", "Chemical 3", ["chem2"]),
+      kappaTask("chem2", "Chemical 2", ["chem1"]),
+      kappaTask("chem1", "Chemical 1"),
+    ];
+
+    const routes = buildKappaQuestRoutes(tasks, new Set());
+    const covered = new Set(routes.flatMap((route) => route.tasks.map((t) => t.id)));
+    for (const id of ["pp1", "pp2", "chem1", "chem2", "chem3"]) {
+      expect(covered.has(id)).toBe(true);
+    }
+  });
+
+  it("excludes Collector and event tasks from route targets", () => {
+    const tasks = [
+      kappaTask("pp2", "Postman Pat 2", ["pp1"]),
+      kappaTask("pp1", "Postman Pat 1"),
+      kappaTask("5c51aac186f77432ea65c552", "Collector", ["pp2"]),
+      kappaTask("event_1", "Event Task", [], { isEvent: true }),
+    ];
+
+    expect(getKappaRouteTargets(tasks).map((t) => t.id)).toEqual(["pp2"]);
+  });
+
+  it("prefers Collector's task requirements over kappa flags", () => {
+    const tasks = [
+      kappaTask("pp1", "Postman Pat 1"),
+      kappaTask("pp2", "Postman Pat 2", ["pp1"]),
+      task("chem3", "Chemical 3"),
+      task("5c51aac186f77432ea65c552", "Collector", ["pp2", "chem3"]),
+    ];
+
+    expect(getKappaRouteTargets(tasks).map((t) => t.id)).toEqual([
+      "chem3",
+      "pp2",
+    ]);
+  });
+
+  it("falls back to legacy targets when no kappa flags are present", () => {
+    expect(
+      getKappaRouteTargets([task("a", "A")]).map((t) => t.id),
+    ).toEqual(KAPPA_QUEST_TARGETS.map((t) => t.id));
   });
 });
 

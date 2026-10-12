@@ -15,15 +15,27 @@ export const KAPPA_LL4_TRADERS = [
 
 export type KappaLl4Trader = (typeof KAPPA_LL4_TRADERS)[number];
 
+// Offline/sample-data fallback; live routes come from getKappaRouteTargets.
+// Matches Collector's task requirements in the tarkov.dev API.
 export const KAPPA_QUEST_TARGETS = [
   {
-    id: "597a0f5686f774273b74f676",
-    label: "Chemical - Part 4",
+    id: "597a0e5786f77426d66c0636",
+    label: "Chemical - Part 3",
     shortLabel: "Chemical",
   },
   {
+    id: "596760e186f7741e11214d58",
+    label: "Postman Pat - Part 2",
+    shortLabel: "Postman Pat",
+  },
+  {
+    id: "5ae4497b86f7744cf402ed00",
+    label: "Sew it Good - Part 2",
+    shortLabel: "Sew it Good",
+  },
+  {
     id: "5c0bde0986f77479cf22c2f8",
-    label: "A Shooter Born in Heaven",
+    label: "Shooter Born in Heaven",
     shortLabel: "Shooter Born",
   },
   {
@@ -31,12 +43,69 @@ export const KAPPA_QUEST_TARGETS = [
     label: "The Tarkov Shooter - Part 4",
     shortLabel: "Tarkov Shooter",
   },
-  {
-    id: "5ae4497b86f7744cf402ed00",
-    label: "Sew it Good - Part 4",
-    shortLabel: "Sew it Good",
-  },
 ] as const;
+
+const COLLECTOR_TASK_ID = "5c51aac186f77432ea65c552";
+
+export interface KappaRouteTarget {
+  id: string;
+  label: string;
+  shortLabel: string;
+}
+
+const toRouteTarget = (id: string, name: string): KappaRouteTarget => ({
+  id,
+  label: name,
+  shortLabel: name,
+});
+
+const sortByLabel = (targets: KappaRouteTarget[]): KappaRouteTarget[] =>
+  targets.sort((a, b) => a.label.localeCompare(b.label));
+
+/**
+ * Derive route endpoints from live API data, in order of preference:
+ * 1. Collector's own task requirements (the authoritative unlock list).
+ * 2. Every kappa-required task (excluding events and Collector) grouped into
+ *    chains, one route per terminal task. A terminal is a kappa task required
+ *    by no other kappa task, so walking its prerequisites backwards yields
+ *    the full start-to-finish chain.
+ * 3. KAPPA_QUEST_TARGETS when neither is available (offline/sample data).
+ */
+export function getKappaRouteTargets(tasks: Task[]): KappaRouteTarget[] {
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+
+  const collectorRequirements = (
+    tasksById.get(COLLECTOR_TASK_ID)?.taskRequirements ?? []
+  ).filter((requirement) => requirement?.task?.id);
+  if (collectorRequirements.length > 0) {
+    return sortByLabel(
+      collectorRequirements.map(({ task }) =>
+        toRouteTarget(task.id, tasksById.get(task.id)?.name ?? task.name),
+      ),
+    );
+  }
+
+  const candidates = tasks.filter(
+    (task) =>
+      task.kappaRequired === true &&
+      task.isEvent !== true &&
+      task.id !== COLLECTOR_TASK_ID,
+  );
+  if (candidates.length === 0) {
+    return KAPPA_QUEST_TARGETS.map((target) => ({ ...target }));
+  }
+
+  const requiredIds = new Set<string>();
+  for (const task of candidates) {
+    for (const requirement of task.taskRequirements ?? []) {
+      if (requirement?.task?.id) requiredIds.add(requirement.task.id);
+    }
+  }
+
+  const terminals = candidates.filter((task) => !requiredIds.has(task.id));
+  const endpoints = terminals.length > 0 ? terminals : candidates;
+  return sortByLabel(endpoints.map((task) => toRouteTarget(task.id, task.name)));
+}
 
 export interface KappaJourneyTask {
   id: string;
@@ -101,10 +170,11 @@ export function normalizeKappaLl4Traders(value: unknown): KappaLl4Trader[] {
 export function buildKappaQuestRoutes(
   tasks: Task[],
   completedTasks: Set<string>,
+  targets: readonly KappaRouteTarget[] = getKappaRouteTargets(tasks),
 ): KappaQuestRoute[] {
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
 
-  return KAPPA_QUEST_TARGETS.map((target) => {
+  return targets.map((target) => {
     const rows = new Map<string, KappaJourneyTask>();
     const requirementNames = new Map<string, string>();
     const visiting = new Set<string>();
