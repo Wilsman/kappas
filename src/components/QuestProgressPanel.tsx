@@ -29,7 +29,7 @@ interface QuestProgressPanelProps {
   completedKappaTasks?: number;
   totalPrestigeSteps?: number;
   completedPrestigeSteps?: number;
-  currentPrestigeId?: string;
+  prestigeLabel?: string;
   progressTitle?: string;
   isLoading?: boolean;
 }
@@ -132,7 +132,7 @@ export function QuestProgressPanel({
   completedKappaTasks = 0,
   totalPrestigeSteps = 0,
   completedPrestigeSteps = 0,
-  currentPrestigeId,
+  prestigeLabel = "Prestige",
   progressTitle = "Progress Overview",
   isLoading = false,
 }: QuestProgressPanelProps) {
@@ -160,9 +160,6 @@ export function QuestProgressPanel({
     totalPrestigeSteps > 0
       ? (completedPrestigeSteps / totalPrestigeSteps) * 100
       : 0;
-  const prestigeLabel = currentPrestigeId
-    ? `Prestige ${currentPrestigeId.split("-")[1]}`
-    : "Prestige";
 
   return (
     <div

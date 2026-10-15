@@ -23,11 +23,26 @@ export interface ResetOptions {
   trackedItems: boolean;
 }
 
+const EMPTY_RESET_OPTIONS: ResetOptions = {
+  storylineQuests: false,
+  normalTasks: false,
+  hideoutItems: false,
+  collectorItems: false,
+  achievements: false,
+  prestiges: false,
+  workingOnItems: false,
+  trackedItems: false,
+};
+
 interface SelectiveResetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   profileName: string;
   onConfirm: (options: ResetOptions) => void;
+  /** Options pre-checked each time the dialog opens. */
+  defaultOptions?: Partial<ResetOptions>;
+  title?: string;
+  description?: React.ReactNode;
 }
 
 export function SelectiveResetDialog({
@@ -35,32 +50,22 @@ export function SelectiveResetDialog({
   onOpenChange,
   profileName,
   onConfirm,
+  defaultOptions,
+  title = "Reset Progress?",
+  description,
 }: SelectiveResetDialogProps) {
   const [options, setOptions] = React.useState<ResetOptions>({
-    storylineQuests: false,
-    normalTasks: false,
-    hideoutItems: false,
-    collectorItems: false,
-    achievements: false,
-    prestiges: false,
-    workingOnItems: false,
-    trackedItems: false,
+    ...EMPTY_RESET_OPTIONS,
+    ...defaultOptions,
   });
 
   // Reset state when dialog opens
   React.useEffect(() => {
     if (open) {
-      setOptions({
-        storylineQuests: false,
-        normalTasks: false,
-        hideoutItems: false,
-        collectorItems: false,
-        achievements: false,
-        prestiges: false,
-        workingOnItems: false,
-        trackedItems: false,
-      });
+      setOptions({ ...EMPTY_RESET_OPTIONS, ...defaultOptions });
     }
+    // Only re-seed on open; callers often pass a fresh object each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const allSelected = Object.values(options).every((v) => v);
@@ -89,10 +94,14 @@ export function SelectiveResetDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>Reset Progress?</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            Choose which areas to reset for "{profileName}". This action cannot
-            be undone.
+            {description ?? (
+              <>
+                Choose which areas to reset for "{profileName}". This action
+                cannot be undone.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
 

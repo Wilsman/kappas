@@ -1017,10 +1017,14 @@ export class ExportImportService {
       taskStorage.loadWorkingOnItems(),
     ]);
 
-    // Load prestige progress for all prestiges (prestige-1 through prestige-6)
+    // Load the prestige state record plus legacy per-prestige records
+    // (prestige-1 through prestige-6) so older exports still round-trip.
     const prestigeProgress: Record<string, unknown> = {};
-    for (let i = 1; i <= 6; i++) {
-      const prestigeId = `prestige-${i}`;
+    const prestigeIds = [
+      "prestige-state",
+      ...Array.from({ length: 6 }, (_, i) => `prestige-${i + 1}`),
+    ];
+    for (const prestigeId of prestigeIds) {
       const data = await taskStorage.loadPrestigeProgress(prestigeId);
       if (data) {
         prestigeProgress[prestigeId] = data;

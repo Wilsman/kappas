@@ -21,6 +21,8 @@ export interface Task {
   kappaRequired?: boolean;
   lightkeeperRequired?: boolean;
   isEvent?: boolean;
+  /** Prestige id that must be reached before this task becomes available. */
+  requiredPrestigeId?: string;
   objectives?: TaskObjective[];
   startRewards?: {
     items: RewardItem[];
@@ -243,6 +245,59 @@ export interface Achievement {
 export interface AchievementsData {
   data: {
     achievements: Achievement[];
+  };
+}
+
+// Prestige
+export type PrestigeCondition =
+  | { id: string; type: "playerLevel"; level: number }
+  | { id: string; type: "taskStatus"; taskId: string; taskName: string }
+  | {
+      id: string;
+      type: "skill";
+      /** Untranslated skill key, stable across languages. */
+      skillId: string;
+      skillName: string;
+      level: number;
+    }
+  | {
+      id: string;
+      type: "hideoutStation";
+      stationId: string;
+      stationName: string;
+      level: number;
+    }
+  | {
+      id: string;
+      type: "haveItem";
+      itemId: string;
+      itemName: string;
+      iconLink?: string;
+      count: number;
+      foundInRaid: boolean;
+    }
+  | { id: string; type: "other"; description: string };
+
+export interface PrestigeTransferSettings {
+  stashGrid?: { width: number; height: number };
+  skillsRate?: number;
+  masteringRate?: number;
+}
+
+export interface Prestige {
+  id: string;
+  name: string;
+  prestigeLevel: number;
+  iconLink?: string;
+  imageLink?: string;
+  conditions: PrestigeCondition[];
+  rewards?: Task["finishRewards"];
+  transfer?: PrestigeTransferSettings;
+}
+
+export interface PrestigeData {
+  data: {
+    prestiges: Prestige[];
   };
 }
 

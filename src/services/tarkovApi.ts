@@ -6,6 +6,9 @@ import {
   AchievementsData,
   Edition,
   Overlay,
+  Prestige,
+  PrestigeCondition,
+  PrestigeData,
   Task,
   TaskOverride,
   ObjectiveAdd,
@@ -677,6 +680,7 @@ interface CombinedApiData {
     task: CollectorItemsData["data"]["task"];
     achievements: AchievementsData["data"]["achievements"];
     hideoutStations: HideoutStationsData["hideoutStations"];
+    prestiges: Prestige[];
   };
 }
 
@@ -706,6 +710,7 @@ type JsonTasksResponse = {
   data?: {
     tasks?: Record<string, JsonTask>;
     achievements?: Record<string, JsonAchievement>;
+    prestige?: JsonPrestige[] | Record<string, JsonPrestige>;
   };
 };
 type JsonHideoutResponse = {
@@ -727,6 +732,39 @@ type JsonTask = {
   kappaRequired?: boolean;
   lightkeeperRequired?: boolean;
   map?: string | null;
+  requiredPrestige?: string | null;
+};
+
+type JsonPrestigeCondition = {
+  id?: string;
+  type?: string;
+  description?: string;
+  count?: number | null;
+  playerLevel?: number;
+  task?: string;
+  skill?: string | { name?: string };
+  level?: number;
+  station?: string;
+  stationLevel?: number;
+  items?: string[];
+  foundInRaid?: boolean;
+};
+
+type JsonPrestige = {
+  id?: string;
+  name?: string;
+  prestigeLevel?: number;
+  iconLink?: string;
+  imageLink?: string;
+  conditions?: JsonPrestigeCondition[];
+  rewards?: JsonTaskRewards;
+  transferSettings?: Array<{
+    name?: string;
+    gridWidth?: number;
+    gridHeight?: number;
+    skillType?: string;
+    transferRate?: number;
+  }>;
 };
 
 type JsonTaskObjective = {
@@ -823,6 +861,8 @@ export interface CombinedCachePayload {
   collectorItems: CollectorItemsData;
   achievements: AchievementsData;
   hideoutStations: { data: HideoutStationsData };
+  /** Optional so caches written before prestige support still load. */
+  prestiges?: PrestigeData;
 }
 
 interface StoredCache {
@@ -835,6 +875,7 @@ interface ModeCacheData {
   payload: {
     tasks: TaskData;
     achievements: AchievementsData;
+    prestiges?: PrestigeData;
   };
 }
 
@@ -960,6 +1001,9 @@ function readSplitCache(
         collectorItems: sharedCache.collectorItems,
         achievements: modeCache.payload.achievements,
         hideoutStations: sharedCache.hideoutStations,
+        ...(modeCache.payload.prestiges
+          ? { prestiges: modeCache.payload.prestiges }
+          : {}),
       };
     }
   } catch {
@@ -989,7 +1033,9 @@ function isSplitCacheFresh(
       sharedCache.hideoutStations &&
       modeCache?.updatedAt &&
       modeCache.payload?.tasks &&
-      modeCache.payload?.achievements
+      modeCache.payload?.achievements &&
+      // Caches written before prestige support refetch once.
+      Array.isArray(modeCache.payload.prestiges?.data?.prestiges)
     ) {
       const now = Date.now();
       return (
@@ -1254,6 +1300,7 @@ export async function saveCombinedCache(
       payload: {
         tasks: payload.tasks,
         achievements: payload.achievements,
+        ...(payload.prestiges ? { prestiges: payload.prestiges } : {}),
       },
     };
     setCacheItemWithQuotaRecovery(
@@ -1554,6 +1601,9 @@ const normalizeJsonTasks = (
         },
         kappaRequired: rawTask.kappaRequired,
         lightkeeperRequired: rawTask.lightkeeperRequired ?? false,
+        ...(rawTask.requiredPrestige
+          ? { requiredPrestigeId: rawTask.requiredPrestige }
+          : {}),
         startRewards: (() => {
           const items = normalizeJsonRewardItems(
             rawTask.startRewards,
@@ -1567,6 +1617,152 @@ const normalizeJsonTasks = (
     ];
   });
 };
+
+const normalizeJsonPrestigeCondition = (
+  condition: JsonPrestigeCondition,
+  tasksById: Record<string, JsonTask>,
+  hideoutStationsById: Record<string, JsonHideoutStation>,
+  translations: {
+    tasks: JsonTranslationMap;
+    items: JsonTranslationMap;
+    hideout: JsonTranslationMap;
+  },
+): PrestigeCondition => {
+  const id = condition.id ?? "";
+  switch (condition.type) {
+    case "playerLevel":
+      return {
+        id,
+        type: "playerLevel",
+        level: condition.playerLevel ?? condition.count ?? 0,
+      };
+    case "taskStatus":
+      if (condition.task) {
+        return {
+          id,
+          type: "taskStatus",
+          taskId: condition.task,
+          taskName: translate(
+            translations.tasks,
+            tasksById[condition.task]?.name,
+            translateIdName(translations.tasks, condition.task),
+          ),
+        };
+      }
+      break;
+    case "skill": {
+      const skillKey =
+        typeof condition.skill === "string"
+          ? condition.skill
+          : condition.skill?.name;
+      if (skillKey) {
+        return {
+          id,
+          type: "skill",
+          skillId: skillKey,
+          skillName: translate(translations.tasks, skillKey, skillKey),
+          level: condition.level ?? 0,
+        };
+      }
+      break;
+    }
+    case "hideoutStation":
+      if (condition.station) {
+        return {
+          id,
+          type: "hideoutStation",
+          stationId: condition.station,
+          stationName: translate(
+            translations.hideout,
+            hideoutStationsById[condition.station]?.name,
+            condition.station,
+          ),
+          level: condition.stationLevel ?? condition.count ?? 1,
+        };
+      }
+      break;
+    case "haveItem": {
+      const itemId = condition.items?.[0];
+      if (itemId) {
+        return {
+          id,
+          type: "haveItem",
+          itemId,
+          itemName: translateIdName(translations.items, itemId),
+          iconLink: buildIconLink(itemId),
+          count: condition.count ?? 1,
+          foundInRaid: condition.foundInRaid === true,
+        };
+      }
+      break;
+    }
+  }
+
+  return {
+    id,
+    type: "other",
+    description: translate(
+      translations.tasks,
+      condition.description,
+      condition.type ?? "",
+    ),
+  };
+};
+
+const normalizeJsonPrestiges = (
+  rawPrestiges: JsonPrestige[] | Record<string, JsonPrestige> | undefined,
+  tasksById: Record<string, JsonTask>,
+  hideoutStationsById: Record<string, JsonHideoutStation>,
+  translations: {
+    tasks: JsonTranslationMap;
+    items: JsonTranslationMap;
+    traders: JsonTranslationMap;
+    hideout: JsonTranslationMap;
+  },
+): Prestige[] =>
+  normalizeJsonValueArray(rawPrestiges)
+    .flatMap((raw): Prestige[] => {
+      if (!raw?.id || typeof raw.prestigeLevel !== "number") return [];
+      const transfer = (raw.transferSettings ?? []).reduce<
+        NonNullable<Prestige["transfer"]>
+      >((acc, setting) => {
+        if (
+          typeof setting.gridWidth === "number" &&
+          typeof setting.gridHeight === "number"
+        ) {
+          acc.stashGrid = { width: setting.gridWidth, height: setting.gridHeight };
+        } else if (setting.skillType === "skills") {
+          acc.skillsRate = setting.transferRate;
+        } else if (setting.skillType === "mastering") {
+          acc.masteringRate = setting.transferRate;
+        }
+        return acc;
+      }, {});
+      return [
+        {
+          id: raw.id,
+          name: translate(
+            translations.tasks,
+            raw.name,
+            `Prestige ${raw.prestigeLevel}`,
+          ),
+          prestigeLevel: raw.prestigeLevel,
+          iconLink: raw.iconLink,
+          imageLink: raw.imageLink,
+          conditions: (raw.conditions ?? []).map((condition) =>
+            normalizeJsonPrestigeCondition(
+              condition,
+              tasksById,
+              hideoutStationsById,
+              translations,
+            ),
+          ),
+          rewards: normalizeJsonRewards(raw.rewards, translations),
+          ...(Object.keys(transfer).length > 0 ? { transfer } : {}),
+        },
+      ];
+    })
+    .sort((a, b) => a.prestigeLevel - b.prestigeLevel);
 
 const normalizeJsonCollectorItems = (
   collectorTask: JsonTask | undefined,
@@ -1768,6 +1964,17 @@ async function fetchCombinedJsonApiData(
       hideoutTranslations,
       itemTranslations,
     ),
+    prestiges: normalizeJsonPrestiges(
+      tasksPayload.data?.prestige,
+      tasksById,
+      hideoutPayload.data ?? {},
+      {
+        tasks: taskTranslations,
+        items: itemTranslations,
+        traders: traderTranslations,
+        hideout: hideoutTranslations,
+      },
+    ),
   };
 }
 
@@ -1814,6 +2021,7 @@ export async function fetchCombinedData(
   collectorItems: CollectorItemsData;
   achievements: AchievementsData;
   hideoutStations: { data: HideoutStationsData };
+  prestiges: PrestigeData;
   overlay: Overlay;
 }> {
   const normalizedGameMode = normalizeGameMode(gameMode);
@@ -1838,7 +2046,9 @@ async function finalizeCombinedData(
   normalizedGameMode: GameMode,
   normalizedLanguage: LanguageCode,
   onStage?: (stage: FetchStage) => void,
-): Promise<CombinedCachePayload & { overlay: Overlay }> {
+): Promise<
+  CombinedCachePayload & { prestiges: PrestigeData; overlay: Overlay }
+> {
   // Aggregated maps from objectives into task.maps array
   // Apply task requirement overrides before processing
   const tasksWithOverrides = applyTaskRequirementOverrides(data.tasks);
@@ -1907,7 +2117,19 @@ async function finalizeCombinedData(
     },
   };
 
-  const combined = { tasks, collectorItems, achievements, hideoutStations };
+  const prestiges: PrestigeData = {
+    data: {
+      prestiges: data.prestiges ?? [],
+    },
+  };
+
+  const combined = {
+    tasks,
+    collectorItems,
+    achievements,
+    hideoutStations,
+    prestiges,
+  };
   // Save fresh data to cache for next startup
   await saveCombinedCache(combined, normalizedGameMode, normalizedLanguage);
   onStage?.("done");

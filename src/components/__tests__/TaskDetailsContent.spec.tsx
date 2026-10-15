@@ -87,4 +87,33 @@ describe("TaskDetailsContent", () => {
     expect(html).toContain("5/7");
     expect(html).toContain('data-state="checked"');
   });
+
+  it("shows an accepted-items list instead of steppers for any-of objectives", () => {
+    const figurines = ["BEAR operative", "USEC operative", "Den"].map(
+      (name) => ({ id: name, name: `${name} figurine` }),
+    );
+    const html = renderToStaticMarkup(
+      <TaskDetailsContent
+        task={{
+          ...detailedTask,
+          objectives: [
+            {
+              id: "figurine",
+              description: "Hand over any PMC figurine",
+              items: figurines,
+            },
+          ],
+        }}
+        completedTaskObjectives={new Set()}
+        taskObjectiveItemProgress={{}}
+        onToggleTaskObjective={vi.fn()}
+        onUpdateTaskObjectiveItemProgress={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("Any of 3 accepted");
+    expect(html).toContain("BEAR operative figurine, USEC operative figurine");
+    expect(html).not.toContain("Increase");
+    expect(html).not.toContain("remaining");
+  });
 });

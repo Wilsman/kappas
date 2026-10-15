@@ -1581,7 +1581,8 @@ export function CommandMenu(props: CommandMenuProps) {
                   </CommandGroup>
 
                   <CommandGroup heading="Search • Prestiges">
-                    {["Prestige 1", "Prestige 2", "Prestige 3", "Prestige 4"]
+                    {[1, 2, 3, 4, 5, 6]
+                      .map((level) => `Prestige ${level}`)
                       .filter((p) => p.toLowerCase().includes(queryLower))
                       .map((title) => (
                         <CommandItem
