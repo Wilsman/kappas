@@ -240,6 +240,11 @@ export function PrestigesView({
                   onOpenTask={onOpenTask}
                   onOpenHideout={onOpenHideout}
                   onPrestige={() => setResetOpen(true)}
+                  onSetCurrent={() =>
+                    onUpdatePrestigeState({
+                      currentLevel: selected.prestige.prestigeLevel,
+                    })
+                  }
                 />
                 <PrestigeRewards prestige={selected.prestige} />
               </div>
@@ -257,11 +262,13 @@ export function PrestigesView({
         description={
           <>
             Your current prestige becomes {nextProgress?.prestige.name}. Choose
-            what to wipe on "{profileName}" for the new run. Achievements carry
-            over in game, so they're left unchecked. This cannot be undone.
+            what to wipe on "{profileName}" for the new run, or untick
+            everything to just update your prestige. Achievements carry over
+            in game, so they're left unchecked. Wiping cannot be undone.
           </>
         }
         onConfirm={onStartNewPrestige}
+        emptyConfirmLabel="Update prestige only"
       />
     </main>
   );
@@ -449,6 +456,7 @@ function PrestigeHero({
   onOpenTask,
   onOpenHideout,
   onPrestige,
+  onSetCurrent,
 }: {
   progress: PrestigeProgress;
   gameMode: GameMode;
@@ -464,6 +472,7 @@ function PrestigeHero({
   onOpenTask: PrestigesViewProps["onOpenTask"];
   onOpenHideout: PrestigesViewProps["onOpenHideout"];
   onPrestige: () => void;
+  onSetCurrent: () => void;
 }) {
   const { prestige } = progress;
   const reached = prestige.prestigeLevel <= currentLevel;
@@ -527,6 +536,20 @@ function PrestigeHero({
               {progress.ready
                 ? "Everything's ready. Prestige in game, then start your new run here."
                 : `${remaining.length} requirement${remaining.length === 1 ? "" : "s"} left`}
+            </span>
+          </div>
+        )}
+        {!reached && !isNext && (
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <Button
+              onClick={onSetCurrent}
+              variant="outline"
+              className="rounded-none font-mono text-xs uppercase tracking-wider"
+            >
+              I'm already {prestige.name}
+            </Button>
+            <span className="text-[11px] text-muted-foreground">
+              Sets your current prestige. Nothing is wiped.
             </span>
           </div>
         )}

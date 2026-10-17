@@ -43,6 +43,8 @@ interface SelectiveResetDialogProps {
   defaultOptions?: Partial<ResetOptions>;
   title?: string;
   description?: React.ReactNode;
+  /** When set, confirming with nothing ticked is allowed and uses this label. */
+  emptyConfirmLabel?: string;
 }
 
 export function SelectiveResetDialog({
@@ -53,6 +55,7 @@ export function SelectiveResetDialog({
   defaultOptions,
   title = "Reset Progress?",
   description,
+  emptyConfirmLabel,
 }: SelectiveResetDialogProps) {
   const [options, setOptions] = React.useState<ResetOptions>({
     ...EMPTY_RESET_OPTIONS,
@@ -255,13 +258,19 @@ export function SelectiveResetDialog({
 
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleConfirm}
-            disabled={noneSelected}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-          >
-            Reset Selected
-          </AlertDialogAction>
+          {noneSelected && emptyConfirmLabel ? (
+            <AlertDialogAction onClick={handleConfirm}>
+              {emptyConfirmLabel}
+            </AlertDialogAction>
+          ) : (
+            <AlertDialogAction
+              onClick={handleConfirm}
+              disabled={noneSelected}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+            >
+              Reset Selected
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

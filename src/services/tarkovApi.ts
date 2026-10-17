@@ -1741,11 +1741,10 @@ const normalizeJsonPrestiges = (
       return [
         {
           id: raw.id,
-          name: translate(
-            translations.tasks,
-            raw.name,
+          // Some modes ship a blank translation, so fall back on empty too.
+          name:
+            translate(translations.tasks, raw.name) ||
             `Prestige ${raw.prestigeLevel}`,
-          ),
           prestigeLevel: raw.prestigeLevel,
           iconLink: raw.iconLink,
           imageLink: raw.imageLink,
