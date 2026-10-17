@@ -30,8 +30,94 @@ interface QuestProgressPanelProps {
   totalPrestigeSteps?: number;
   completedPrestigeSteps?: number;
   prestigeLabel?: string;
+  /** Prestige the user has reached (null when not prestiged yet). */
+  currentPrestige?: PrestigeBadge | null;
+  /** Prestige the user is working towards; shown dimmed when not prestiged. */
+  nextPrestige?: PrestigeBadge | null;
+  onOpenPrestiges?: () => void;
   progressTitle?: string;
   isLoading?: boolean;
+}
+
+export interface PrestigeBadge {
+  name: string;
+  level: number;
+  imageLink?: string;
+}
+
+function PrestigeCard({
+  current,
+  next,
+  completed,
+  total,
+  onOpen,
+}: {
+  current?: PrestigeBadge | null;
+  next?: PrestigeBadge | null;
+  completed: number;
+  total: number;
+  onOpen?: () => void;
+}) {
+  const badge = current ?? next;
+  if (!badge) return null;
+  const progress = total > 0 ? (completed / total) * 100 : 0;
+  const Wrapper = onOpen ? "button" : "div";
+
+  return (
+    <Wrapper
+      type={onOpen ? "button" : undefined}
+      onClick={onOpen}
+      className={cn(
+        "relative mb-3 flex w-full flex-col items-center overflow-hidden rounded-lg border bg-muted/10 p-3 text-center sm:mb-4 sm:p-4",
+        onOpen &&
+          "transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
+      )}
+    >
+      {current && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-4 size-32 -translate-x-1/2 rounded-full bg-amber-400/15 blur-2xl"
+        />
+      )}
+      {badge.imageLink ? (
+        <img
+          src={badge.imageLink}
+          alt={badge.name}
+          className={cn(
+            "relative size-32 object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.45)]",
+            !current && "opacity-40 grayscale",
+          )}
+        />
+      ) : (
+        <div className="relative flex size-32 items-center justify-center font-mono text-5xl font-bold">
+          {badge.level}
+        </div>
+      )}
+      <p className="mt-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+        {current ? "Current prestige" : "Not prestiged"}
+      </p>
+      <p className="text-base font-semibold">
+        {current ? current.name : `Next: ${badge.name}`}
+      </p>
+      {next && total > 0 && (
+        <div className="mt-3 w-full space-y-1.5 text-left">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span className="truncate">
+              {current ? `Next: ${next.name}` : "Requirements"}
+            </span>
+            <span>
+              {completed}/{total}
+            </span>
+          </div>
+          <Progress
+            value={progress}
+            className="h-2"
+            indicatorClassName="bg-violet-500"
+          />
+        </div>
+      )}
+    </Wrapper>
+  );
 }
 
 /**
@@ -133,6 +219,9 @@ export function QuestProgressPanel({
   totalPrestigeSteps = 0,
   completedPrestigeSteps = 0,
   prestigeLabel = "Prestige",
+  currentPrestige,
+  nextPrestige,
+  onOpenPrestiges,
   progressTitle = "Progress Overview",
   isLoading = false,
 }: QuestProgressPanelProps) {
@@ -156,6 +245,9 @@ export function QuestProgressPanel({
       : 0;
   const kappaProgress =
     totalKappaTasks > 0 ? (completedKappaTasks / totalKappaTasks) * 100 : 0;
+  // The prestige card already shows next-prestige progress.
+  const showPrestigeRow =
+    totalPrestigeSteps > 0 && !currentPrestige && !nextPrestige;
   const prestigeProgress =
     totalPrestigeSteps > 0
       ? (completedPrestigeSteps / totalPrestigeSteps) * 100
@@ -168,6 +260,14 @@ export function QuestProgressPanel({
         className,
       )}
     >
+      <PrestigeCard
+        current={currentPrestige}
+        next={nextPrestige}
+        completed={completedPrestigeSteps}
+        total={totalPrestigeSteps}
+        onOpen={onOpenPrestiges}
+      />
+
       {/* Overview card */}
       <div className="rounded-lg border bg-muted/10 p-3 sm:p-4 mb-3 sm:mb-4">
         <div className="flex items-center gap-2 text-foreground mb-2">
@@ -247,7 +347,7 @@ export function QuestProgressPanel({
       {(totalKappaTasks > 0 ||
         totalCollectorItems > 0 ||
         totalAchievements > 0 ||
-        totalPrestigeSteps > 0) && (
+        showPrestigeRow) && (
         <div className="rounded-lg border bg-muted/5 p-3 mb-3 sm:mb-4">
           <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2">
             Focused Tasks
@@ -302,7 +402,7 @@ export function QuestProgressPanel({
             </div>
           )}
 
-          {totalPrestigeSteps > 0 && (
+          {showPrestigeRow && (
             <div className="space-y-2">
               <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
                 <span>🜲 {prestigeLabel}</span>

@@ -29,7 +29,10 @@ import {
   Overlay,
   Prestige,
 } from "./types";
-import { QuestProgressPanel } from "./components/QuestProgressPanel";
+import {
+  QuestProgressPanel,
+  type PrestigeBadge,
+} from "./components/QuestProgressPanel";
 import { ContentSkeleton } from "./components/ContentSkeleton";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import SEO from "./components/SEO";
@@ -2552,6 +2555,30 @@ function App() {
     return next ? evaluatePrestige(next, prestigeTrackerState) : null;
   }, [prestigeState.currentLevel, prestigeTrackerState, prestiges]);
 
+  const prestigeBadges = useMemo(() => {
+    const toBadge = (prestige?: Prestige | null): PrestigeBadge | null =>
+      prestige
+        ? {
+            name: prestige.name,
+            level: prestige.prestigeLevel,
+            imageLink: prestige.imageLink ?? prestige.iconLink,
+          }
+        : null;
+    return {
+      current: toBadge(
+        prestiges.find(
+          (prestige) => prestige.prestigeLevel === prestigeState.currentLevel,
+        ),
+      ),
+      next: toBadge(nextPrestigeProgress?.prestige),
+    };
+  }, [nextPrestigeProgress, prestigeState.currentLevel, prestiges]);
+
+  const handleOpenPrestiges = useCallback(() => {
+    setViewMode("prestiges");
+    setProgressOpen(false);
+  }, []);
+
   const showAutoCompletionUndoToast = useCallback(
     (params: {
       clickedTaskId: string;
@@ -4543,6 +4570,9 @@ function App() {
                     totalPrestigeSteps={nextPrestigeProgress?.total}
                     completedPrestigeSteps={nextPrestigeProgress?.completed}
                     prestigeLabel={nextPrestigeProgress?.prestige.name}
+                    currentPrestige={prestigeBadges.current}
+                    nextPrestige={prestigeBadges.next}
+                    onOpenPrestiges={handleOpenPrestiges}
                     progressTitle={progressTitle}
                     isLoading={isLoading}
                   />
@@ -4599,6 +4629,9 @@ function App() {
               totalPrestigeSteps={nextPrestigeProgress?.total}
               completedPrestigeSteps={nextPrestigeProgress?.completed}
               prestigeLabel={nextPrestigeProgress?.prestige.name}
+              currentPrestige={prestigeBadges.current}
+              nextPrestige={prestigeBadges.next}
+              onOpenPrestiges={handleOpenPrestiges}
               progressTitle={progressTitle}
               isLoading={isLoading}
             />

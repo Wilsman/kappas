@@ -1,0 +1,117 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e6]:
+        - generic [ref=e8]:
+          - generic [ref=e9]:
+            - link "Go to EFT Tracker homepage" [ref=e10] [cursor=pointer]:
+              - /url: /
+              - generic [ref=e16]: EFT Tracker
+            - generic [ref=e17]: Beta
+          - generic [ref=e18]:
+            - text: Report bugs on
+            - link "Discord" [ref=e19] [cursor=pointer]:
+              - /url: https://discord.gg/X6v7RVQAC8
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - generic [ref=e34]: Navigate
+            - list [ref=e39]:
+              - listitem [ref=e40]:
+                - button "Current work Pick up where you left off" [ref=e41] [cursor=pointer]:
+                  - generic [ref=e47]:
+                    - generic [ref=e48]: Current work
+                    - generic [ref=e49]: Pick up where you left off
+              - listitem [aria-hidden] [ref=e52]: Plan
+              - listitem [ref=e53]:
+                - button "Quests" [ref=e54] [cursor=pointer]
+              - listitem [ref=e61]:
+                - button "Item tracker" [ref=e62] [cursor=pointer]
+              - listitem [ref=e74]:
+                - button "Collector items" [ref=e75] [cursor=pointer]
+              - listitem [ref=e81]:
+                - button "Hideout" [ref=e82] [cursor=pointer]
+              - listitem [aria-hidden] [ref=e89]: Journeys
+              - listitem [ref=e90]:
+                - button "Kappa journey New" [ref=e91] [cursor=pointer]:
+                  - generic [ref=e95]: Kappa journey
+                  - generic [ref=e96]: New
+              - listitem [ref=e97]:
+                - button "Lightkeeper access" [disabled] [ref=e98]
+              - listitem [ref=e104]:
+                - button "Icebreaker Unlock" [disabled] [ref=e105]
+              - listitem [ref=e111]:
+                - button "1.0 Storyline WIP" [ref=e112] [cursor=pointer]:
+                  - generic [ref=e117]: 1.0 Storyline
+                  - generic [ref=e118]: WIP
+              - listitem [aria-hidden] [ref=e121]: Records
+              - listitem [ref=e122]:
+                - button "Prestiges" [ref=e123] [cursor=pointer]
+              - listitem [ref=e131]:
+                - button "Achievements" [ref=e132] [cursor=pointer]
+              - listitem [aria-hidden] [ref=e140]: Tools
+              - listitem [ref=e141]:
+                - button "Kord Breach planner New" [ref=e142] [cursor=pointer]:
+                  - generic [ref=e147]: Kord Breach planner
+                  - generic [ref=e148]: New
+          - generic [ref=e149]:
+            - generic [ref=e150]: Filters
+            - list [ref=e152]:
+              - listitem [ref=e153]:
+                - button "Traders" [ref=e154] [cursor=pointer]
+              - listitem [ref=e160]:
+                - button "Maps" [ref=e161] [cursor=pointer]
+        - generic [ref=e168]:
+          - button "My Notes Ctrl+Shift+U" [ref=e170] [cursor=pointer]:
+            - generic [ref=e174]: My Notes
+            - generic [ref=e175]: Ctrl+Shift+U
+          - generic [ref=e176]:
+            - button "Export Debug Data" [ref=e177] [cursor=pointer]
+            - paragraph [ref=e188]: Having issues? Export debug info and share with support
+          - link [ref=e190] [cursor=pointer]:
+            - /url: https://discord.com/invite/3dFmr5qaJK
+            - img "Discord" [ref=e191]
+          - generic [ref=e192]:
+            - text: Data from
+            - link "tarkov.dev" [ref=e193] [cursor=pointer]:
+              - /url: https://tarkov.dev
+        - button "Toggle Sidebar" [ref=e194]
+      - main [ref=e195]:
+        - generic [ref=e196]:
+          - generic [ref=e199]:
+            - generic [ref=e201]:
+              - button "Toggle Sidebar" [ref=e202] [cursor=pointer]
+              - heading "Escape from Tarkov Task Tracker" [level=1] [ref=e204]
+              - generic [ref=e205]: BETA
+              - generic [ref=e206]: Live API
+            - generic [ref=e207]:
+              - generic [ref=e208]: Focus
+              - generic [ref=e209]:
+                - button "All" [ref=e210] [cursor=pointer]
+                - button "Kappa" [ref=e211] [cursor=pointer]
+            - generic [ref=e213]:
+              - button "Search Ctrl K" [ref=e214] [cursor=pointer]:
+                - generic [ref=e215]: Search
+                - generic [ref=e216]:
+                  - generic [ref=e217]: Ctrl
+                  - generic [ref=e218]: K
+              - combobox "API language" [ref=e219] [cursor=pointer]:
+                - generic: English
+              - button "Quick sync with EFT logs beta" [ref=e222] [cursor=pointer]:
+                - generic [ref=e223]: Sync Logs (Beta)
+              - button "Refresh data" [ref=e224] [cursor=pointer]:
+                - generic [ref=e225]: Refresh
+          - region "Announcements" [ref=e226]:
+            - article [ref=e228]:
+              - generic [ref=e232]:
+                - paragraph [ref=e233]: EFT Patch 1.1.0.0 [Kord Breach] update on August 3rd
+                - paragraph [ref=e234]: Some quests and game data may be temporarily out of date while Tarkov.dev and the community wiki catch up.
+              - 'button "Dismiss announcement: EFT Patch 1.1.0.0 [Kord Breach] update on August 3rd" [ref=e235] [cursor=pointer]'
+          - generic [ref=e236]:
+            - main [ref=e237]
+            - complementary [ref=e339]:
+              - generic [ref=e340]:
+                - generic [ref=e341]: Progress
+                - button "Collapse sidebar" [ref=e345] [cursor=pointer]
+    - region "Notifications alt+T"
+  - generic:
+    - region "Notifications"

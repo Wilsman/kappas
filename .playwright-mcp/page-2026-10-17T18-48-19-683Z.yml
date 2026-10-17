@@ -1,0 +1,442 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e6]:
+        - generic [ref=e8]:
+          - generic [ref=e9]:
+            - link "Go to EFT Tracker homepage" [ref=e10] [cursor=pointer]:
+              - /url: /
+              - generic [ref=e16]: EFT Tracker
+            - generic [ref=e17]: Beta
+          - generic [ref=e18]:
+            - text: Report bugs on
+            - link "Discord" [ref=e19] [cursor=pointer]:
+              - /url: https://discord.gg/X6v7RVQAC8
+          - generic [ref=e20]:
+            - generic [ref=e21]:
+              - combobox [ref=e426] [cursor=pointer]:
+                - generic: Default
+              - button "Character actions" [ref=e429] [cursor=pointer]
+            - generic [ref=e430]:
+              - generic [ref=e432]:
+                - button "USEC" [ref=e433] [cursor=pointer]
+                - button "BEAR" [ref=e434] [cursor=pointer]
+              - generic [ref=e435]:
+                - button "PvP" [pressed] [ref=e436] [cursor=pointer]
+                - button "PvE" [ref=e437] [cursor=pointer]
+                - button "Seasonal Beta" [ref=e438] [cursor=pointer]:
+                  - text: Seasonal
+                  - generic [ref=e439]: Beta
+              - combobox [ref=e441] [cursor=pointer]:
+                - generic: Standard
+              - generic [ref=e444]:
+                - generic [ref=e445]: Level
+                - spinbutton "Level" [ref=e446]: "1"
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - generic [ref=e34]: Navigate
+            - list [ref=e39]:
+              - listitem [ref=e40]:
+                - button "Current work Pick up where you left off" [ref=e41] [cursor=pointer]:
+                  - generic [ref=e47]:
+                    - generic [ref=e48]: Current work
+                    - generic [ref=e49]: Pick up where you left off
+              - listitem [aria-hidden] [ref=e52]: Plan
+              - listitem [ref=e53]:
+                - button "Quests" [ref=e54] [cursor=pointer]
+              - listitem [ref=e61]:
+                - button "Item tracker" [ref=e62] [cursor=pointer]
+              - listitem [ref=e74]:
+                - button "Collector items" [ref=e75] [cursor=pointer]
+              - listitem [ref=e81]:
+                - button "Hideout" [ref=e82] [cursor=pointer]
+              - listitem [aria-hidden] [ref=e89]: Journeys
+              - listitem [ref=e90]:
+                - button "Kappa journey New" [ref=e91] [cursor=pointer]:
+                  - generic [ref=e95]: Kappa journey
+                  - generic [ref=e96]: New
+              - listitem [ref=e97]:
+                - button "Lightkeeper access" [disabled] [ref=e98]
+              - listitem [ref=e104]:
+                - button "Icebreaker Unlock" [disabled] [ref=e105]
+              - listitem [ref=e111]:
+                - button "1.0 Storyline WIP" [ref=e112] [cursor=pointer]:
+                  - generic [ref=e117]: 1.0 Storyline
+                  - generic [ref=e118]: WIP
+              - listitem [aria-hidden] [ref=e121]: Records
+              - listitem [ref=e122]:
+                - button "Prestiges" [ref=e123] [cursor=pointer]
+              - listitem [ref=e131]:
+                - button "Achievements" [ref=e132] [cursor=pointer]
+              - listitem [aria-hidden] [ref=e140]: Tools
+              - listitem [ref=e141]:
+                - button "Kord Breach planner New" [ref=e142] [cursor=pointer]:
+                  - generic [ref=e147]: Kord Breach planner
+                  - generic [ref=e148]: New
+          - generic [ref=e149]:
+            - generic [ref=e150]: Filters
+            - list [ref=e152]:
+              - listitem [ref=e153]:
+                - button "Traders" [ref=e154] [cursor=pointer]
+              - listitem [ref=e160]:
+                - button "Maps" [ref=e161] [cursor=pointer]
+        - generic [ref=e168]:
+          - button "My Notes Ctrl+Shift+U" [ref=e170] [cursor=pointer]:
+            - generic [ref=e174]: My Notes
+            - generic [ref=e175]: Ctrl+Shift+U
+          - generic [ref=e176]:
+            - button "Export Debug Data" [ref=e177] [cursor=pointer]
+            - paragraph [ref=e188]: Having issues? Export debug info and share with support
+          - link [ref=e190] [cursor=pointer]:
+            - /url: https://discord.com/invite/3dFmr5qaJK
+            - img "Discord" [ref=e191]
+          - generic [ref=e192]:
+            - text: Data from
+            - link "tarkov.dev" [ref=e193] [cursor=pointer]:
+              - /url: https://tarkov.dev
+        - button "Toggle Sidebar" [ref=e194]
+      - main [ref=e195]:
+        - generic [ref=e196]:
+          - generic [ref=e199]:
+            - generic [ref=e201]:
+              - button "Toggle Sidebar" [ref=e202] [cursor=pointer]
+              - heading "Escape from Tarkov Task Tracker" [level=1] [ref=e204]
+              - generic [ref=e205]: BETA
+              - generic [ref=e206]: Live API
+            - generic [ref=e207]:
+              - generic [ref=e208]: Focus
+              - generic [ref=e209]:
+                - button "All" [ref=e210] [cursor=pointer]
+                - button "Kappa" [ref=e211] [cursor=pointer]
+            - generic [ref=e213]:
+              - button "Search Ctrl K" [ref=e214] [cursor=pointer]:
+                - generic [ref=e215]: Search
+                - generic [ref=e216]:
+                  - generic [ref=e217]: Ctrl
+                  - generic [ref=e218]: K
+              - combobox "API language" [ref=e219] [cursor=pointer]:
+                - generic: English
+              - button "Quick sync with EFT logs beta" [ref=e222] [cursor=pointer]:
+                - generic [ref=e223]: Sync Logs (Beta)
+              - button "Refresh data" [ref=e224] [cursor=pointer]:
+                - generic [ref=e225]: Refresh
+          - region "Announcements" [ref=e226]:
+            - article [ref=e228]:
+              - generic [ref=e232]:
+                - paragraph [ref=e233]: EFT Patch 1.1.0.0 [Kord Breach] update on August 3rd
+                - paragraph [ref=e234]: Some quests and game data may be temporarily out of date while Tarkov.dev and the community wiki catch up.
+              - 'button "Dismiss announcement: EFT Patch 1.1.0.0 [Kord Breach] update on August 3rd" [ref=e235] [cursor=pointer]'
+          - generic [ref=e236]:
+            - main [ref=e237]:
+              - main [ref=e447]:
+                - generic [ref=e448]:
+                  - generic [ref=e449]:
+                    - generic [ref=e450]:
+                      - generic [ref=e451]:
+                        - heading "Prestige" [level=1] [ref=e452]
+                        - generic [ref=e453]: PvP
+                      - paragraph [ref=e454]: PvP requirements from live game data. Level, tasks and hideout are tracked automatically; enter roubles and skills yourself.
+                    - generic [ref=e455]:
+                      - combobox "Current prestige" [active] [ref=e456] [cursor=pointer]:
+                        - generic: "Current: Prestige 2"
+                      - generic [ref=e459]: Prestige 3 · 0 / 9
+                  - navigation "Prestige levels" [ref=e460]:
+                    - generic [ref=e461]:
+                      - button "Prestige 1 – Reached" [ref=e466] [cursor=pointer]:
+                        - generic [ref=e468]: P1
+                        - generic [ref=e469]: Reached
+                      - button "Prestige 2 – Reached" [ref=e470] [cursor=pointer]:
+                        - generic [ref=e472]: P2
+                        - generic [ref=e473]: Reached
+                      - button "Prestige 3 – 0/9" [ref=e474] [cursor=pointer]:
+                        - generic [ref=e477]: P3
+                        - generic [ref=e478]: 0/9
+                      - button "Prestige 4 – Locked" [ref=e479] [cursor=pointer]:
+                        - generic [ref=e481]: P4
+                        - generic [ref=e482]: Locked
+                      - button "Prestige 5 – Locked" [ref=e483] [cursor=pointer]:
+                        - generic [ref=e485]: P5
+                        - generic [ref=e486]: Locked
+                      - button "Prestige 6 – Locked" [ref=e487] [cursor=pointer]:
+                        - generic [ref=e489]: P6
+                        - generic [ref=e490]: Locked
+                  - generic [ref=e491]:
+                    - region [ref=e492]:
+                      - generic [ref=e493]:
+                        - generic [ref=e495]:
+                          - paragraph [ref=e496]: Next prestige
+                          - heading "Prestige 3" [level=2] [ref=e497]
+                          - generic [ref=e498]:
+                            - generic [ref=e499]: 0%
+                            - generic [ref=e500]: 0 / 9 requirements
+                        - generic [ref=e501]:
+                          - button "I prestiged" [ref=e502] [cursor=pointer]
+                          - generic [ref=e503]: 9 requirements left
+                      - progressbar [ref=e504]
+                      - list [ref=e506]:
+                        - listitem [ref=e507]:
+                          - generic [ref=e509]:
+                            - generic [ref=e514]:
+                              - generic [ref=e515]:
+                                - paragraph [ref=e516]: Reach PMC level 35
+                                - generic [ref=e517]: Tracked
+                              - paragraph [ref=e518]: You're level 1. 34 more to go. Keep your level in the header up to date.
+                              - progressbar [ref=e519]
+                            - generic [ref=e522]:
+                              - spinbutton "PMC level" [ref=e523]: "1"
+                              - generic [ref=e524]: / 35
+                        - listitem [ref=e525]:
+                          - generic [ref=e527]:
+                            - generic [ref=e528]:
+                              - 'button "Mark complete: Complete \"New Beginning\"" [ref=e529] [cursor=pointer]'
+                              - generic [ref=e532]:
+                                - generic [ref=e533]:
+                                  - paragraph [ref=e534]: Complete "New Beginning"
+                                  - generic [ref=e535]: Tracked
+                                - paragraph [ref=e536]: Unlocks at level 47 from Ragman.
+                            - generic [ref=e537]:
+                              - button "Objectives (9)" [ref=e538] [cursor=pointer]:
+                                - text: Objectives
+                                - generic [ref=e539]: (9)
+                              - button "View task" [ref=e540] [cursor=pointer]
+                        - listitem [ref=e541]:
+                          - generic [ref=e543]:
+                            - generic [ref=e548]:
+                              - generic [ref=e549]:
+                                - paragraph [ref=e550]: Intelligence Center level 1
+                                - generic [ref=e551]: Tracked
+                              - paragraph [ref=e552]: Not built yet. Build Intelligence Center up to level 1 in your Hideout.
+                            - generic [ref=e553]:
+                              - generic [ref=e554]: Lv 0 / 1
+                              - button "Open hideout" [ref=e555] [cursor=pointer]
+                        - listitem [ref=e556]:
+                          - generic [ref=e558]:
+                            - generic [ref=e563]:
+                              - generic [ref=e564]:
+                                - paragraph [ref=e565]: Rest Space level 2
+                                - generic [ref=e566]: Tracked
+                              - paragraph [ref=e567]: Not built yet. Build Rest Space up to level 2 in your Hideout.
+                              - progressbar [ref=e568]
+                            - generic [ref=e570]:
+                              - generic [ref=e571]: Lv 0 / 2
+                              - button "Open hideout" [ref=e572] [cursor=pointer]
+                        - listitem [ref=e573]:
+                          - generic [ref=e575]:
+                            - generic [ref=e580]:
+                              - generic [ref=e581]:
+                                - paragraph [ref=e582]: Nutrition Unit level 2
+                                - generic [ref=e583]: Tracked
+                              - paragraph [ref=e584]: Not built yet. Build Nutrition Unit up to level 2 in your Hideout.
+                              - progressbar [ref=e585]
+                            - generic [ref=e587]:
+                              - generic [ref=e588]: Lv 0 / 2
+                              - button "Open hideout" [ref=e589] [cursor=pointer]
+                        - listitem [ref=e590]:
+                          - generic [ref=e592]:
+                            - generic [ref=e597]:
+                              - generic [ref=e598]:
+                                - paragraph [ref=e599]: Strength level 10
+                                - generic [ref=e600]: Manual
+                              - paragraph [ref=e601]: Check Character > Skills in game and enter your Strength level.
+                              - progressbar [ref=e602]
+                            - generic [ref=e605]:
+                              - spinbutton "Strength level" [ref=e606]
+                              - generic [ref=e607]: / 10
+                        - listitem [ref=e608]:
+                          - generic [ref=e610]:
+                            - generic [ref=e615]:
+                              - generic [ref=e616]:
+                                - paragraph [ref=e617]: Endurance level 10
+                                - generic [ref=e618]: Manual
+                              - paragraph [ref=e619]: Check Character > Skills in game and enter your Endurance level.
+                              - progressbar [ref=e620]
+                            - generic [ref=e623]:
+                              - spinbutton "Endurance level" [ref=e624]
+                              - generic [ref=e625]: / 10
+                        - listitem [ref=e626]:
+                          - generic [ref=e628]:
+                            - generic [ref=e633]:
+                              - generic [ref=e634]:
+                                - paragraph [ref=e635]: Charisma level 7
+                                - generic [ref=e636]: Manual
+                              - paragraph [ref=e637]: Check Character > Skills in game and enter your Charisma level.
+                              - progressbar [ref=e638]
+                            - generic [ref=e641]:
+                              - spinbutton "Charisma level" [ref=e642]
+                              - generic [ref=e643]: / 7
+                        - listitem [ref=e644]:
+                          - generic [ref=e646]:
+                            - generic [ref=e651]:
+                              - generic [ref=e652]:
+                                - paragraph [ref=e653]: Have ₽15,000,000
+                                - generic [ref=e654]: Manual
+                              - paragraph [ref=e655]: Keep ₽15,000,000 in your stash. They're spent when you prestige. Enter your current balance.
+                              - progressbar [ref=e656]
+                            - generic [ref=e659]:
+                              - spinbutton "Roubles in stash" [ref=e660]
+                              - generic [ref=e661]: / ₽15,000,000
+                    - generic [ref=e662]:
+                      - generic [ref=e663]:
+                        - heading "Rewards" [level=3] [ref=e669]
+                        - list [ref=e670]:
+                          - listitem [ref=e671]:
+                            - generic [ref=e672]:
+                              - generic [ref=e673]: Dropped ceiling
+                              - generic [ref=e674]: Ceiling
+                          - listitem [ref=e675]:
+                            - generic [ref=e679]:
+                              - generic [ref=e680]: Dogtag (Prestige 3)
+                              - generic [ref=e681]: Dogtag
+                          - listitem [ref=e682]:
+                            - generic [ref=e686]:
+                              - generic [ref=e687]: Vitaly
+                              - generic [ref=e688]: Character voice
+                          - listitem [ref=e689]:
+                            - generic [ref=e690]:
+                              - generic [ref=e691]: Honor
+                              - generic [ref=e692]: Mannequin pose
+                          - listitem [ref=e693]:
+                            - generic [ref=e697]:
+                              - generic [ref=e698]: Rob
+                              - generic [ref=e699]: Character voice
+                          - listitem [ref=e700]:
+                            - generic [ref=e701]:
+                              - generic [ref=e702]: Crow target
+                              - generic [ref=e703]: Targets
+                          - listitem [ref=e704]:
+                            - generic [ref=e705]:
+                              - generic [ref=e706]: Prestige icon
+                              - generic [ref=e707]: Prestige icon
+                          - listitem [ref=e708]:
+                            - generic [ref=e709]: PMC Origins figurine
+                          - listitem [ref=e711]:
+                            - generic [ref=e712]: Get a Life poster
+                          - listitem [ref=e714]:
+                            - generic [ref=e715]: Armband (Prestige 3)
+                          - listitem [ref=e717]:
+                            - generic [ref=e721]:
+                              - generic [ref=e722]: Charisma +1
+                              - generic [ref=e723]: Skill level
+                      - generic [ref=e724]:
+                        - heading "What carries over" [level=3] [ref=e730]
+                        - generic [ref=e731]:
+                          - generic [ref=e732]:
+                            - term [ref=e733]: Transfer stash
+                            - definition [ref=e734]: 8×5 grid
+                          - generic [ref=e735]:
+                            - term [ref=e736]: Skill progress
+                            - definition [ref=e737]: 15% kept
+                          - generic [ref=e738]:
+                            - term [ref=e739]: Weapon mastering
+                            - definition [ref=e740]: 15% kept
+            - complementary [ref=e339]:
+              - generic [ref=e340]:
+                - generic [ref=e341]: Progress
+                - button "Collapse sidebar" [ref=e345] [cursor=pointer]
+              - generic [ref=e741]:
+                - 'button "Prestige 2 Current prestige Prestige 2 Next: Prestige 3 0/9" [ref=e742] [cursor=pointer]':
+                  - img "Prestige 2" [ref=e743]
+                  - paragraph [ref=e744]: Current prestige
+                  - paragraph [ref=e745]: Prestige 2
+                  - generic [ref=e746]:
+                    - generic [ref=e747]:
+                      - generic [ref=e748]: "Next: Prestige 3"
+                      - generic [ref=e749]: 0/9
+                    - progressbar [ref=e750]
+                - generic [ref=e752]:
+                  - heading "Progress Overview" [level=2] [ref=e757]
+                  - generic [ref=e758]:
+                    - generic [ref=e759]: 0%
+                    - generic [ref=e760]: 0 / 483 Quests
+                  - progressbar [ref=e762]
+                - generic [ref=e764]:
+                  - heading "Storyline Progress" [level=2] [ref=e769]
+                  - generic [ref=e770]:
+                    - generic [ref=e771]: 0%
+                    - generic [ref=e772]: 0 / 424 Tasks
+                  - progressbar [ref=e774]
+                - generic [ref=e776]:
+                  - generic [ref=e777]:
+                    - generic [ref=e778]: Completed
+                    - generic [ref=e784]: "0"
+                  - generic [ref=e785]:
+                    - generic [ref=e786]: Remaining
+                    - generic [ref=e791]: "483"
+                - generic [ref=e792]:
+                  - heading "Focused Tasks" [level=3] [ref=e793]
+                  - generic [ref=e794]:
+                    - generic [ref=e795]:
+                      - generic [ref=e796]: 🎯 Kappa Required
+                      - generic [ref=e797]: 0/13
+                    - progressbar [ref=e798]
+                  - generic [ref=e800]:
+                    - generic [ref=e801]:
+                      - generic [ref=e802]: 🧩 Collector Items
+                      - generic [ref=e803]: 0/44
+                    - progressbar [ref=e804]
+                  - generic [ref=e806]:
+                    - generic [ref=e808]:
+                      - generic [ref=e809]: 🏆 Achievements
+                      - generic [ref=e810]: 0/127
+                    - progressbar [ref=e811]
+                - generic [ref=e813]:
+                  - heading "All Tasks" [level=3] [ref=e815]
+                  - generic [ref=e817]:
+                    - generic [ref=e818]:
+                      - generic [ref=e819]:
+                        - generic [ref=e821]: Prapor
+                        - generic [ref=e822]: 0/59
+                      - progressbar [ref=e823]
+                    - generic [ref=e825]:
+                      - generic [ref=e826]:
+                        - generic [ref=e828]: Therapist
+                        - generic [ref=e829]: 0/52
+                      - progressbar [ref=e830]
+                    - generic [ref=e832]:
+                      - generic [ref=e833]:
+                        - generic [ref=e835]: Skier
+                        - generic [ref=e836]: 0/64
+                      - progressbar [ref=e837]
+                    - generic [ref=e839]:
+                      - generic [ref=e840]:
+                        - generic [ref=e842]: Peacekeeper
+                        - generic [ref=e843]: 0/51
+                      - progressbar [ref=e844]
+                    - generic [ref=e846]:
+                      - generic [ref=e847]:
+                        - generic [ref=e849]: Mechanic
+                        - generic [ref=e850]: 0/70
+                      - progressbar [ref=e851]
+                    - generic [ref=e853]:
+                      - generic [ref=e854]:
+                        - generic [ref=e856]: Ragman
+                        - generic [ref=e857]: 0/53
+                      - progressbar [ref=e858]
+                    - generic [ref=e860]:
+                      - generic [ref=e861]:
+                        - generic [ref=e863]: Jaeger
+                        - generic [ref=e864]: 0/64
+                      - progressbar [ref=e865]
+                    - generic [ref=e867]:
+                      - generic [ref=e868]:
+                        - generic [ref=e870]: Fence
+                        - generic [ref=e871]: 0/16
+                      - progressbar [ref=e872]
+                    - generic [ref=e874]:
+                      - generic [ref=e875]:
+                        - generic [ref=e877]: Lightkeeper
+                        - generic [ref=e878]: 0/14
+                      - progressbar [ref=e879]
+                    - generic [ref=e881]:
+                      - generic [ref=e882]:
+                        - generic [ref=e884]: Ref
+                        - generic [ref=e885]: 0/21
+                      - progressbar [ref=e886]
+                    - generic [ref=e888]:
+                      - generic [ref=e889]:
+                        - generic [ref=e891]: BTR Driver
+                        - generic [ref=e892]: 0/19
+                      - progressbar [ref=e893]
+    - region "Notifications alt+T"
+  - generic:
+    - region "Notifications"
