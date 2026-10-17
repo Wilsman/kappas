@@ -2,6 +2,11 @@ import React from "react";
 import { Minus, Plus } from "lucide-react";
 import type { Achievement, Task } from "@/types";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 import {
   buildLegacyTaskObjectiveItemProgressKey,
@@ -152,6 +157,8 @@ export function TaskDetailsContent({
                 !objective.items?.length && requiredCount > 1;
               const items = objective.items ?? [];
               const usesSharedPool = items.length > 1 && requiredCount > 1;
+              // "Hand over any one of these": the checkbox is the only control.
+              const isAnyOf = items.length > 1 && requiredCount === 1;
               const itemProgress = items.map((item, itemIndex) => {
                 const itemIdentity = item.id || item.name || String(itemIndex);
                 const itemKey = buildTaskObjectiveItemProgressKey(
@@ -237,7 +244,9 @@ export function TaskDetailsContent({
                         />
                       )}
 
-                      {items.length > 0 && (
+                      {isAnyOf && <AcceptedItems items={items} />}
+
+                      {items.length > 0 && !isAnyOf && (
                         <div className="mt-2 grid gap-2">
                           {itemProgress.map(
                             ({ item, itemKey, legacyItemKeys, count }) => {
@@ -426,6 +435,62 @@ function ItemImage({
         <span className="size-1.5 rounded-full bg-muted-foreground/50" />
       )}
     </span>
+  );
+}
+
+const ACCEPTED_ITEMS_PREVIEW = 6;
+
+function AcceptedItems({
+  items,
+}: {
+  items: { id?: string; name: string; iconLink?: string }[];
+}) {
+  const preview = items.slice(0, ACCEPTED_ITEMS_PREVIEW);
+  const overflow = items.length - preview.length;
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Accepted items: ${items.map((item) => item.name).join(", ")}`}
+          className="mt-2 inline-flex items-center gap-2 rounded-md border border-border/70 bg-card/40 py-1 pl-1 pr-2.5 transition-colors hover:border-foreground/25 hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+        >
+          <span className="flex -space-x-1.5">
+            {preview.map((item, index) => (
+              <ItemImage
+                key={item.id ?? `${item.name}-${index}`}
+                item={item}
+                className="size-6 bg-background ring-1 ring-background"
+              />
+            ))}
+            {overflow > 0 && (
+              <span className="flex size-6 items-center justify-center rounded border border-border/70 bg-background font-mono text-[9px] text-muted-foreground ring-1 ring-background">
+                +{overflow}
+              </span>
+            )}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            Any of {items.length} accepted
+          </span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-72 p-2">
+        <p className="px-1.5 pb-1.5 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          Any one of these works
+        </p>
+        <ul className="max-h-80 space-y-0.5 overflow-y-auto">
+          {items.map((item, index) => (
+            <li
+              key={item.id ?? `${item.name}-${index}`}
+              className="flex items-center gap-2 rounded px-1.5 py-1 text-xs text-foreground/90"
+            >
+              <ItemImage item={item} className="size-7" />
+              <span className="truncate">{item.name}</span>
+            </li>
+          ))}
+        </ul>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 

@@ -27,8 +27,12 @@ import {
   Achievement,
   HideoutStation,
   Overlay,
+  Prestige,
 } from "./types";
-import { QuestProgressPanel } from "./components/QuestProgressPanel";
+import {
+  QuestProgressPanel,
+  type PrestigeBadge,
+} from "./components/QuestProgressPanel";
 import { ContentSkeleton } from "./components/ContentSkeleton";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import SEO from "./components/SEO";
@@ -69,9 +73,15 @@ import {
   type LanguageCode,
 } from "@/utils/language";
 import {
-  loadCurrentPrestigeSummary,
+  createPrestigeTaskFilter,
+  EMPTY_PRESTIGE_STATE,
+  evaluatePrestige,
+  getNextPrestige,
+  loadPrestigeState,
   PRESTIGE_UPDATED_EVENT,
-  PRESTIGE_CONFIGS,
+  savePrestigeState,
+  type PrestigeState,
+  type PrestigeTrackerState,
 } from "@/utils/prestige";
 import { buildTaskDependencyMap, getAllDependencies } from "./utils/taskUtils";
 import {
@@ -500,6 +510,13 @@ function App() {
   const [modeTasksByMode, setModeTasksByMode] = useState<
     Partial<Record<GameMode, Task[]>>
   >({});
+  const [prestiges, setPrestiges] = useState<Prestige[]>([]);
+  const [prestigeState, setPrestigeState] =
+    useState<PrestigeState>(EMPTY_PRESTIGE_STATE);
+  const prestigeStateRef = useRef(prestigeState);
+  useEffect(() => {
+    prestigeStateRef.current = prestigeState;
+  }, [prestigeState]);
   const editions = useMemo(() => resolveEditions(overlay), [overlay]);
   const editionOptions = useMemo(
     () => Object.values(editions).sort((a, b) => a.value - b.value),
@@ -537,8 +554,23 @@ function App() {
       }
     }
 
+    if (prestiges.length > 0) {
+      const isVisibleAtPrestige = createPrestigeTaskFilter(
+        prestiges,
+        prestigeState.currentLevel,
+      );
+      filtered = filtered.filter(isVisibleAtPrestige);
+    }
+
     return filtered;
-  }, [allTasks, activeProfileFaction, activeProfileEdition, editions]);
+  }, [
+    allTasks,
+    activeProfileFaction,
+    activeProfileEdition,
+    editions,
+    prestiges,
+    prestigeState.currentLevel,
+  ]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const traderImageByName = useMemo(() => {
     const map = new Map<string, string>();
@@ -1054,12 +1086,14 @@ function App() {
         collectorItems: CollectorItemsData;
         achievements: { data: { achievements: Achievement[] } };
         hideoutStations: { data: { hideoutStations: HideoutStation[] } };
+        prestiges?: { data: { prestiges: Prestige[] } };
         overlay?: Overlay;
       },
       gameMode: GameMode,
       language: LanguageCode,
     ) => {
       setAllTasks(payload.tasks.data.tasks);
+      setPrestiges(payload.prestiges?.data.prestiges ?? []);
       setApiCollectorItems(payload.collectorItems);
       setAchievements(payload.achievements.data.achievements);
       setModeAchievementsByMode((prev) => ({
@@ -2441,38 +2475,108 @@ function App() {
   //   });
   // }, [playerLevel, activeProfileId]);
 
-  // Compute "next" prestige progress (only one visible at a time)
-  const [prestigeProgress, setPrestigeProgress] = useState<{
-    id: string;
-    completed: number;
-    total: number;
-  } | null>(null);
-
+  // Per-profile prestige state (current prestige, manual roubles and skills)
   useEffect(() => {
+    if (!activeProfileId) return;
+    let cancelled = false;
     const refresh = async () => {
       try {
-        console.debug("[Prestige] App refresh summary:start");
-        const current = await loadCurrentPrestigeSummary();
-        setPrestigeProgress(current);
-        console.debug("[Prestige] App refresh summary:done", current);
+        taskStorage.setProfile(activeProfileId);
+        await taskStorage.init();
+        const state = await loadPrestigeState();
+        if (!cancelled) setPrestigeState(state);
       } catch (e) {
-        console.error("Prestige progress load error", e);
-        setPrestigeProgress(null);
+        console.error("Prestige state load error", e);
+        if (!cancelled) setPrestigeState(EMPTY_PRESTIGE_STATE);
       }
     };
 
-    refresh();
-    const handler = (evt: Event) => {
-      console.debug("[Prestige] App event received", evt);
-      void refresh();
-    };
-    window.addEventListener(PRESTIGE_UPDATED_EVENT, handler as EventListener);
+    void refresh();
+    const handler = () => void refresh();
+    window.addEventListener(PRESTIGE_UPDATED_EVENT, handler);
     return () => {
-      window.removeEventListener(
-        PRESTIGE_UPDATED_EVENT,
-        handler as EventListener,
-      );
+      cancelled = true;
+      window.removeEventListener(PRESTIGE_UPDATED_EVENT, handler);
     };
+  }, [activeProfileId]);
+
+  const handleUpdatePrestigeState = useCallback(
+    async (update: Partial<PrestigeState>) => {
+      const next = { ...prestigeStateRef.current, ...update };
+      prestigeStateRef.current = next;
+      setPrestigeState(next);
+      try {
+        taskStorage.setProfile(activeProfileId);
+        await taskStorage.init();
+        await savePrestigeState(next);
+      } catch (e) {
+        console.error("Prestige state save error", e);
+      }
+    },
+    [activeProfileId],
+  );
+
+  const allTasksById = useMemo(
+    () => new Map(allTasks.map((task) => [task.id, task])),
+    [allTasks],
+  );
+
+  const prestigeTrackerState = useMemo<PrestigeTrackerState>(
+    () => ({
+      playerLevel,
+      completedTasks: visibleCompletedTasks,
+      completedTaskObjectives: visibleCompletedTaskObjectives,
+      tasksById: allTasksById,
+      hideoutStations,
+      hideout: {
+        completedItems: completedHideoutItems,
+        itemQuantities: hideoutItemQuantities,
+        completedRequirements: completedHideoutRequirements,
+        editionDefaultBuiltLevels,
+      },
+      manual: prestigeState,
+    }),
+    [
+      allTasksById,
+      completedHideoutItems,
+      completedHideoutRequirements,
+      editionDefaultBuiltLevels,
+      hideoutItemQuantities,
+      hideoutStations,
+      playerLevel,
+      prestigeState,
+      visibleCompletedTaskObjectives,
+      visibleCompletedTasks,
+    ],
+  );
+
+  const nextPrestigeProgress = useMemo(() => {
+    const next = getNextPrestige(prestiges, prestigeState.currentLevel);
+    return next ? evaluatePrestige(next, prestigeTrackerState) : null;
+  }, [prestigeState.currentLevel, prestigeTrackerState, prestiges]);
+
+  const prestigeBadges = useMemo(() => {
+    const toBadge = (prestige?: Prestige | null): PrestigeBadge | null =>
+      prestige
+        ? {
+            name: prestige.name,
+            level: prestige.prestigeLevel,
+            imageLink: prestige.imageLink ?? prestige.iconLink,
+          }
+        : null;
+    return {
+      current: toBadge(
+        prestiges.find(
+          (prestige) => prestige.prestigeLevel === prestigeState.currentLevel,
+        ),
+      ),
+      next: toBadge(nextPrestigeProgress?.prestige),
+    };
+  }, [nextPrestigeProgress, prestigeState.currentLevel, prestiges]);
+
+  const handleOpenPrestiges = useCallback(() => {
+    setViewMode("prestiges");
+    setProgressOpen(false);
   }, []);
 
   const showAutoCompletionUndoToast = useCallback(
@@ -3190,13 +3294,13 @@ function App() {
           await taskStorage.clearWorkingOnItems();
         }
 
-        // Reset prestige by saving empty entries per prestige id
+        // Clear manual prestige inputs. The reached prestige only resets with
+        // a full reset, so starting a new prestige run keeps it.
         if (resetPrestiges) {
-          for (const cfg of PRESTIGE_CONFIGS) {
-            await taskStorage.savePrestigeProgress(cfg.id, {});
-            console.debug("[Prestige] Reset:prestige saved empty", cfg.id);
-          }
-          // Notify listeners so UI refreshes immediately
+          await savePrestigeState({
+            ...EMPTY_PRESTIGE_STATE,
+            currentLevel: resetAll ? 0 : prestigeStateRef.current.currentLevel,
+          });
           window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
         }
 
@@ -3219,6 +3323,24 @@ function App() {
       }
     },
     [activeProfileId],
+  );
+
+  const handleStartNewPrestige = useCallback(
+    async (
+      options: import("@/components/SelectiveResetDialog").ResetOptions,
+    ) => {
+      const nextLevel = Math.min(
+        prestigeStateRef.current.currentLevel + 1,
+        Math.max(0, ...prestiges.map((prestige) => prestige.prestigeLevel)),
+      );
+      // Bump first so a prestige reset keeps the new level.
+      await handleUpdatePrestigeState({ currentLevel: nextLevel });
+      if (Object.values(options).some(Boolean)) {
+        await handleResetProgress(options);
+      }
+      toast.success(`Welcome to Prestige ${nextLevel}`);
+    },
+    [handleResetProgress, handleUpdatePrestigeState, prestiges],
   );
 
   // Check if onboarding should be shown (only once)
@@ -4246,7 +4368,30 @@ function App() {
                           editionTitle={activeEdition?.title}
                         />
                       ) : viewMode === "prestiges" ? (
-                        <PrestigesView />
+                        <PrestigesView
+                          gameMode={activeProfileGameMode}
+                          prestiges={prestiges}
+                          prestigeState={prestigeState}
+                          trackerState={prestigeTrackerState}
+                          profileName={
+                            profiles.find((p) => p.id === activeProfileId)
+                              ?.name ?? "Profile"
+                          }
+                          achievements={achievements}
+                          taskObjectiveItemProgress={taskObjectiveItemProgress}
+                          onPlayerLevelChange={handleSetPlayerLevel}
+                          onUpdatePrestigeState={handleUpdatePrestigeState}
+                          onStartNewPrestige={handleStartNewPrestige}
+                          onToggleTask={handleToggleComplete}
+                          onToggleTaskObjective={handleToggleTaskObjective}
+                          onUpdateTaskObjectiveItemProgress={
+                            handleUpdateTaskObjectiveItemProgress
+                          }
+                          onOpenTask={handleOpenLightkeeperTask}
+                          onOpenHideout={() =>
+                            setViewMode("hideout-requirements")
+                          }
+                        />
                       ) : viewMode === "achievements" ? (
                         <AchievementsView
                           achievements={achievements}
@@ -4422,9 +4567,12 @@ function App() {
                     completedAchievements={completedAchievements.size}
                     totalStorylineObjectives={totalStorylineObjectives}
                     completedStorylineObjectives={completedStorylineCount}
-                    totalPrestigeSteps={prestigeProgress?.total}
-                    completedPrestigeSteps={prestigeProgress?.completed}
-                    currentPrestigeId={prestigeProgress?.id}
+                    totalPrestigeSteps={nextPrestigeProgress?.total}
+                    completedPrestigeSteps={nextPrestigeProgress?.completed}
+                    prestigeLabel={nextPrestigeProgress?.prestige.name}
+                    currentPrestige={prestigeBadges.current}
+                    nextPrestige={prestigeBadges.next}
+                    onOpenPrestiges={handleOpenPrestiges}
                     progressTitle={progressTitle}
                     isLoading={isLoading}
                   />
@@ -4478,9 +4626,12 @@ function App() {
               completedAchievements={completedAchievements.size}
               totalStorylineObjectives={totalStorylineObjectives}
               completedStorylineObjectives={completedStorylineCount}
-              totalPrestigeSteps={prestigeProgress?.total}
-              completedPrestigeSteps={prestigeProgress?.completed}
-              currentPrestigeId={prestigeProgress?.id}
+              totalPrestigeSteps={nextPrestigeProgress?.total}
+              completedPrestigeSteps={nextPrestigeProgress?.completed}
+              prestigeLabel={nextPrestigeProgress?.prestige.name}
+              currentPrestige={prestigeBadges.current}
+              nextPrestige={prestigeBadges.next}
+              onOpenPrestiges={handleOpenPrestiges}
               progressTitle={progressTitle}
               isLoading={isLoading}
             />

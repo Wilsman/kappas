@@ -1,428 +1,454 @@
-import { taskStorage } from '@/utils/indexedDB';
+import type {
+  HideoutStation,
+  Prestige,
+  PrestigeCondition,
+  Task,
+} from "@/types";
+import type { GameMode } from "@/utils/gameMode";
+import {
+  getHideoutLevelProgress,
+  type HideoutProgressState,
+} from "@/utils/hideoutProgress";
+import { taskStorage } from "@/utils/indexedDB";
+import {
+  buildTaskObjectiveFallbackKeys,
+  buildTaskObjectiveKeys,
+  isTaskObjectiveCompleted,
+} from "@/utils/taskObjectives";
 
-export const PRESTIGE_UPDATED_EVENT = 'prestige:updated';
+export const PRESTIGE_UPDATED_EVENT = "prestige:updated";
 
-export interface PrestigeConfig {
-  id: string;
-  levelTarget: number;
-  strengthTarget: number;
-  enduranceTarget: number;
-  charismaTarget: number;
-  hideoutTargets: {
-    intelligence: number;
-    security: number;
-    restSpace: number;
-  };
-  roublesTarget: number;
-  requiredQuestIds: PrestigeQuestId[];
-  extras?: {
-    scavsTarget?: number;
-    pmcTarget?: number;
-    raidersTarget?: number;
-    bossesTarget?: number;
-    hoodedMenTarget?: number;
-    requireLabsExtract?: boolean;
-    requireLabsTransitToStreets?: boolean;
-    requireStreetsExtract?: boolean;
-    requireStreetsTransitToInterchange?: boolean;
-    requireInterchangeExtract?: boolean;
-    requireInterchangeTransitToCustoms?: boolean;
-    requireCustomsExtract?: boolean;
-    requireCustomsTransitToReserve?: boolean;
-    requireReserveExtract?: boolean;
-    figurines?: string[];
-    figurineGroups?: { id: string; label: string; target: number }[];
+/** Storage id for the per-profile prestige state record. */
+export const PRESTIGE_STATE_ID = "prestige-state";
+export const ROUBLES_ITEM_ID = "5449016a4bdc2d6f028b456f";
+export const MAX_PRESTIGE_LEVEL = 6;
+
+/** Values the tracker cannot derive, plus the prestige already reached. */
+export interface PrestigeState {
+  /** Number of prestiges already completed (0 = never prestiged). */
+  currentLevel: number;
+  roubles: number;
+  /** Skill levels keyed by untranslated skill id (e.g. "Strength"). */
+  skills: Record<string, number>;
+}
+
+export const EMPTY_PRESTIGE_STATE: PrestigeState = {
+  currentLevel: 0,
+  roubles: 0,
+  skills: {},
+};
+
+const clampLevel = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.min(MAX_PRESTIGE_LEVEL, Math.max(0, Math.floor(value)))
+    : 0;
+
+const nonNegative = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+
+export function normalizePrestigeState(raw: unknown): PrestigeState {
+  if (!raw || typeof raw !== "object") return { ...EMPTY_PRESTIGE_STATE };
+  const record = raw as Partial<PrestigeState>;
+  const skills: Record<string, number> = {};
+  if (record.skills && typeof record.skills === "object") {
+    Object.entries(record.skills).forEach(([key, value]) => {
+      const level = nonNegative(value);
+      if (level > 0) skills[key] = level;
+    });
+  }
+  return {
+    currentLevel: clampLevel(record.currentLevel),
+    roubles: nonNegative(record.roubles),
+    skills,
   };
 }
 
-export type PrestigeQuestId =
-  | 'newBeginning'
-  | 'collector'
-  | 'tour'
-  | 'fallingSkies'
-  | 'ticketFromTarkov'
-  | 'theyAreAlreadyHere'
-  | 'theTicket';
-
-export interface PrestigeSaved {
-  schemaVersion?: number;
-  level?: number;
+/** Shape of the hand-entered records saved before prestiges came from the API. */
+interface LegacyPrestigeSaved {
   strength?: number;
   endurance?: number;
   charisma?: number;
-  hideout?: {
-    intelligence?: number;
-    security?: number;
-    restSpace?: number;
-    roubles?: number;
-  };
-  quests?: Partial<Record<PrestigeQuestId, boolean>>;
-  extras?: {
-    scavs?: number;
-    pmc?: number;
-    raiders?: number;
-    bosses?: number;
-    hoodedMen?: number;
-    labsExtracted?: boolean;
-    labsTransitToStreets?: boolean;
-    streetsExtracted?: boolean;
-    streetsTransitToInterchange?: boolean;
-    interchangeExtracted?: boolean;
-    interchangeTransitToCustoms?: boolean;
-    customsExtracted?: boolean;
-    customsTransitToReserve?: boolean;
-    reserveExtracted?: boolean;
-    figurines?: Record<string, boolean>;
-    figurineGroups?: Record<string, number>;
-  };
+  hideout?: { roubles?: number };
 }
 
-export const PRESTIGE_CONFIGS: PrestigeConfig[] = [
-  {
-    id: 'prestige-1',
-    levelTarget: 25,
-    strengthTarget: 0,
-    enduranceTarget: 0,
-    charismaTarget: 0,
-    hideoutTargets: { intelligence: 1, security: 2, restSpace: 2 },
-    roublesTarget: 10_000_000,
-    requiredQuestIds: ['newBeginning'],
-    extras: {
-      scavsTarget: 50,
-      requireLabsExtract: true,
-      figurineGroups: [
-        { id: 'pmc', label: 'Any PMC figurine', target: 1 },
-        { id: 'scav', label: 'Any SCAV figurine', target: 1 },
-        { id: 'boss', label: 'Any Boss figurine', target: 1 },
-        { id: 'trader', label: 'Any Trader figurine', target: 1 },
-      ],
-    },
-  },
-  {
-    id: 'prestige-2',
-    levelTarget: 30,
-    strengthTarget: 10,
-    enduranceTarget: 10,
-    charismaTarget: 7,
-    hideoutTargets: { intelligence: 1, security: 2, restSpace: 2 },
-    roublesTarget: 15_000_000,
-    requiredQuestIds: ['newBeginning', 'tour'],
-    extras: {
-      pmcTarget: 10,
-      requireLabsExtract: true,
-      figurineGroups: [
-        { id: 'pmcFir', label: 'PMC figurines found in raid', target: 2 },
-        { id: 'scavFir', label: 'SCAV figurines found in raid', target: 2 },
-        { id: 'bossFir', label: 'Boss figurines found in raid', target: 2 },
-        { id: 'traderFir', label: 'Trader figurines found in raid', target: 2 },
-      ],
-    },
-  },
-  {
-    id: 'prestige-3',
-    levelTarget: 35,
-    strengthTarget: 10,
-    enduranceTarget: 10,
-    charismaTarget: 7,
-    hideoutTargets: { intelligence: 1, security: 2, restSpace: 2 },
-    roublesTarget: 15_000_000,
-    requiredQuestIds: ['newBeginning', 'tour', 'fallingSkies'],
-    extras: {
-      pmcTarget: 25,
-      raidersTarget: 50,
-      requireLabsTransitToStreets: true,
-      requireStreetsExtract: true,
-      figurines: [
-        'bear','mutkevich','killa','reshala','ryzhy','scav','tagilla','usec','cultist','den',
-      ],
-    },
-  },
-  {
-    id: 'prestige-4',
-    levelTarget: 40,
-    strengthTarget: 15,
-    enduranceTarget: 15,
-    charismaTarget: 12,
-    hideoutTargets: { intelligence: 1, security: 2, restSpace: 2 },
-    roublesTarget: 15_000_000,
-    requiredQuestIds: ['newBeginning', 'tour', 'ticketFromTarkov'],
-    extras: {
-      pmcTarget: 40,
-      raidersTarget: 100,
-      requireLabsTransitToStreets: true,
-      requireStreetsTransitToInterchange: true,
-      requireInterchangeExtract: true,
-      figurines: [
-        'bear','mutkevich','killa','reshala','ryzhy','scav','tagilla','usec','cultist','den',
-      ],
-    },
-  },
-  {
-    id: 'prestige-5',
-    levelTarget: 47,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 20,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['newBeginning', 'collector', 'tour', 'theyAreAlreadyHere', 'ticketFromTarkov'],
-    extras: {
-      pmcTarget: 45,
-      raidersTarget: 100,
-      bossesTarget: 1,
-      requireLabsTransitToStreets: true,
-      requireStreetsTransitToInterchange: true,
-      requireInterchangeTransitToCustoms: true,
-      requireCustomsExtract: true,
-      figurines: [
-        'bear','mutkevich','killa','reshala','ryzhy','scav','tagilla','usec','cultist','den',
-      ],
-    },
-  },
-  {
-    id: 'prestige-6',
-    levelTarget: 47,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 20,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['newBeginning', 'collector', 'theTicket'],
-    extras: {
-      pmcTarget: 50,
-      raidersTarget: 100,
-      bossesTarget: 1,
-      hoodedMenTarget: 5,
-      requireLabsTransitToStreets: true,
-      requireStreetsTransitToInterchange: true,
-      requireInterchangeTransitToCustoms: true,
-      requireCustomsTransitToReserve: true,
-      requireReserveExtract: true,
-      figurines: [
-        'bear','mutkevich','killa','reshala','ryzhy','scav','tagilla','usec','cultist','den',
-      ],
-    },
-  },
-];
-
-const PRESTIGE_PROGRESS_SCHEMA_VERSION = 2;
-
-const LEGACY_FIGURINES = [
-  'bear','mutkevich','killa','reshala','ryzhy','scav','tagilla','usec','cultist','den',
-];
-
-const LEGACY_PRESTIGE_CONFIGS: PrestigeConfig[] = [
-  {
-    id: 'prestige-1',
-    levelTarget: 55,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 15,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['collector', 'newBeginning'],
-    extras: {
-      scavsTarget: 50,
-      requireLabsExtract: true,
-      figurines: LEGACY_FIGURINES,
-    },
-  },
-  {
-    id: 'prestige-2',
-    levelTarget: 55,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 15,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['collector', 'newBeginning'],
-    extras: {
-      pmcTarget: 15,
-      requireLabsExtract: true,
-      figurines: LEGACY_FIGURINES,
-    },
-  },
-  {
-    id: 'prestige-3',
-    levelTarget: 55,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 20,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['collector', 'newBeginning'],
-    extras: {
-      pmcTarget: 25,
-      raidersTarget: 50,
-      requireLabsTransitToStreets: true,
-      requireStreetsExtract: true,
-      figurines: LEGACY_FIGURINES,
-    },
-  },
-  {
-    id: 'prestige-4',
-    levelTarget: 55,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 15,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['collector', 'newBeginning'],
-  },
-  {
-    id: 'prestige-5',
-    levelTarget: 55,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 20,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['collector', 'newBeginning'],
-  },
-  {
-    id: 'prestige-6',
-    levelTarget: 55,
-    strengthTarget: 20,
-    enduranceTarget: 20,
-    charismaTarget: 20,
-    hideoutTargets: { intelligence: 2, security: 3, restSpace: 3 },
-    roublesTarget: 20_000_000,
-    requiredQuestIds: ['collector', 'newBeginning'],
-  },
-];
-
-export function createCompletedPrestigeSaved(cfg: PrestigeConfig): PrestigeSaved {
-  return {
-    schemaVersion: PRESTIGE_PROGRESS_SCHEMA_VERSION,
-    level: cfg.levelTarget,
-    strength: cfg.strengthTarget,
-    endurance: cfg.enduranceTarget,
-    charisma: cfg.charismaTarget,
-    hideout: {
-      intelligence: cfg.hideoutTargets.intelligence,
-      security: cfg.hideoutTargets.security,
-      restSpace: cfg.hideoutTargets.restSpace,
-      roubles: cfg.roublesTarget,
-    },
-    quests: Object.fromEntries(cfg.requiredQuestIds.map((questId) => [questId, true])),
-    extras: {
-      scavs: cfg.extras?.scavsTarget ?? 0,
-      pmc: cfg.extras?.pmcTarget ?? 0,
-      raiders: cfg.extras?.raidersTarget ?? 0,
-      bosses: cfg.extras?.bossesTarget ?? 0,
-      hoodedMen: cfg.extras?.hoodedMenTarget ?? 0,
-      labsExtracted: cfg.extras?.requireLabsExtract ?? false,
-      labsTransitToStreets: cfg.extras?.requireLabsTransitToStreets ?? false,
-      streetsExtracted: cfg.extras?.requireStreetsExtract ?? false,
-      streetsTransitToInterchange: cfg.extras?.requireStreetsTransitToInterchange ?? false,
-      interchangeExtracted: cfg.extras?.requireInterchangeExtract ?? false,
-      interchangeTransitToCustoms: cfg.extras?.requireInterchangeTransitToCustoms ?? false,
-      customsExtracted: cfg.extras?.requireCustomsExtract ?? false,
-      customsTransitToReserve: cfg.extras?.requireCustomsTransitToReserve ?? false,
-      reserveExtracted: cfg.extras?.requireReserveExtract ?? false,
-      figurines: Object.fromEntries(
-        (cfg.extras?.figurines ?? []).map((figurineId) => [figurineId, true])
-      ),
-      figurineGroups: Object.fromEntries(
-        (cfg.extras?.figurineGroups ?? []).map((group) => [group.id, group.target])
-      ),
-    },
-  };
-}
-
-export function migratePrestigeProgress(saved: PrestigeSaved | null | undefined, cfg: PrestigeConfig): PrestigeSaved | null {
-  if (!saved) return null;
-  if ((saved.schemaVersion ?? 1) >= PRESTIGE_PROGRESS_SCHEMA_VERSION) return saved;
-
-  const legacyCfg = LEGACY_PRESTIGE_CONFIGS.find((legacy) => legacy.id === cfg.id);
-  if (!legacyCfg) return { ...saved, schemaVersion: PRESTIGE_PROGRESS_SCHEMA_VERSION };
-
-  const legacyProgress = computePrestigeRequirements(saved, legacyCfg);
-  if (legacyProgress.done === legacyProgress.total) {
-    return createCompletedPrestigeSaved(cfg);
-  }
-
-  return { ...saved, schemaVersion: PRESTIGE_PROGRESS_SCHEMA_VERSION };
-}
-
-export function computePrestigeRequirements(saved: PrestigeSaved | null | undefined, cfg: PrestigeConfig) {
-  const s = saved ?? {};
-  const lvl = Number(s.level || 0);
-  const str = Number(s.strength || 0);
-  const endu = Number(s.endurance || 0);
-  const cha = Number(s.charisma || 0);
-  const hideout = s.hideout || {};
-  const quests = s.quests || {};
-  const extras = s.extras || {};
-
-  const met: boolean[] = [];
-  met.push(lvl >= cfg.levelTarget);
-  if (cfg.strengthTarget > 0) met.push(str >= cfg.strengthTarget);
-  if (cfg.enduranceTarget > 0) met.push(endu >= cfg.enduranceTarget);
-  if (cfg.charismaTarget > 0) met.push(cha >= cfg.charismaTarget);
-  met.push(Number(hideout.intelligence || 0) >= cfg.hideoutTargets.intelligence);
-  met.push(Number(hideout.security || 0) >= cfg.hideoutTargets.security);
-  met.push(Number(hideout.restSpace || 0) >= cfg.hideoutTargets.restSpace);
-  met.push(Number(hideout.roubles || 0) >= cfg.roublesTarget);
-  for (const questId of cfg.requiredQuestIds) {
-    met.push(Boolean(quests[questId]));
-  }
-
-  if (cfg.extras?.scavsTarget)
-    met.push(Number(extras.scavs || 0) >= cfg.extras.scavsTarget);
-  if (cfg.extras?.pmcTarget)
-    met.push(Number(extras.pmc || 0) >= cfg.extras.pmcTarget);
-  if (cfg.extras?.raidersTarget)
-    met.push(Number(extras.raiders || 0) >= cfg.extras.raidersTarget);
-  if (cfg.extras?.bossesTarget)
-    met.push(Number(extras.bosses || 0) >= cfg.extras.bossesTarget);
-  if (cfg.extras?.hoodedMenTarget)
-    met.push(Number(extras.hoodedMen || 0) >= cfg.extras.hoodedMenTarget);
-  if (cfg.extras?.requireLabsExtract)
-    met.push(Boolean(extras.labsExtracted));
-  if (cfg.extras?.requireLabsTransitToStreets)
-    met.push(Boolean(extras.labsTransitToStreets));
-  if (cfg.extras?.requireStreetsExtract)
-    met.push(Boolean(extras.streetsExtracted));
-  if (cfg.extras?.requireStreetsTransitToInterchange)
-    met.push(Boolean(extras.streetsTransitToInterchange));
-  if (cfg.extras?.requireInterchangeExtract)
-    met.push(Boolean(extras.interchangeExtracted));
-  if (cfg.extras?.requireInterchangeTransitToCustoms)
-    met.push(Boolean(extras.interchangeTransitToCustoms));
-  if (cfg.extras?.requireCustomsExtract)
-    met.push(Boolean(extras.customsExtracted));
-  if (cfg.extras?.requireCustomsTransitToReserve)
-    met.push(Boolean(extras.customsTransitToReserve));
-  if (cfg.extras?.requireReserveExtract)
-    met.push(Boolean(extras.reserveExtracted));
-  if (cfg.extras?.figurines?.length) {
-    const figs: Record<string, boolean> = (extras.figurines || {}) as Record<string, boolean>;
-    met.push(cfg.extras.figurines.every((id) => Boolean(figs[id])));
-  }
-  if (cfg.extras?.figurineGroups?.length) {
-    const groups = extras.figurineGroups || {};
-    met.push(cfg.extras.figurineGroups.every((group) => Number(groups[group.id] || 0) >= group.target));
-  }
-
-  const total = met.length;
-  const done = met.filter(Boolean).length;
-  const percent = (done / Math.max(1, total)) * 100;
-  return { done, total, percent };
-}
-
-export async function loadCurrentPrestigeSummary() {
-  // Find first incomplete prestige; else last one
-  let current: { id: string; completed: number; total: number } | null = null;
-  for (const cfg of PRESTIGE_CONFIGS) {
-    const saved = await taskStorage.loadPrestigeProgress<PrestigeSaved>(cfg.id);
-    const migrated = migratePrestigeProgress(saved, cfg);
-    const { done, total } = computePrestigeRequirements(migrated, cfg);
-    if (done < total) {
-      current = { id: cfg.id, completed: done, total };
-      break;
+/**
+ * Carries roubles and skills over from the old per-prestige records. The
+ * highest-numbered record with any value wins, since it reflects the
+ * player's latest progress.
+ */
+export function migrateLegacyPrestigeState(
+  legacyByLevel: Record<number, unknown>,
+): PrestigeState {
+  const levels = Object.keys(legacyByLevel)
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a);
+  for (const level of levels) {
+    const saved = legacyByLevel[level] as LegacyPrestigeSaved | null;
+    if (!saved || typeof saved !== "object") continue;
+    const skills: Record<string, number> = {};
+    const strength = nonNegative(saved.strength);
+    const endurance = nonNegative(saved.endurance);
+    const charisma = nonNegative(saved.charisma);
+    if (strength > 0) skills.Strength = strength;
+    if (endurance > 0) skills.Endurance = endurance;
+    if (charisma > 0) skills.Charisma = charisma;
+    const roubles = nonNegative(saved.hideout?.roubles);
+    if (roubles > 0 || Object.keys(skills).length > 0) {
+      return { currentLevel: 0, roubles, skills };
     }
-    current = { id: cfg.id, completed: done, total };
   }
-  return current;
+  return { ...EMPTY_PRESTIGE_STATE };
+}
+
+export async function loadPrestigeState(): Promise<PrestigeState> {
+  const saved = await taskStorage.loadPrestigeProgress(PRESTIGE_STATE_ID);
+  if (saved) return normalizePrestigeState(saved);
+
+  const legacyByLevel: Record<number, unknown> = {};
+  for (let level = 1; level <= MAX_PRESTIGE_LEVEL; level++) {
+    const legacy = await taskStorage.loadPrestigeProgress(`prestige-${level}`);
+    if (legacy) legacyByLevel[level] = legacy;
+  }
+  const migrated = migrateLegacyPrestigeState(legacyByLevel);
+  if (Object.keys(legacyByLevel).length > 0) {
+    await taskStorage.savePrestigeProgress(PRESTIGE_STATE_ID, migrated);
+  }
+  return migrated;
+}
+
+export async function savePrestigeState(state: PrestigeState): Promise<void> {
+  await taskStorage.savePrestigeProgress(
+    PRESTIGE_STATE_ID,
+    normalizePrestigeState(state),
+  );
+}
+
+export interface PrestigeTrackerState {
+  playerLevel: number;
+  completedTasks: ReadonlySet<string>;
+  completedTaskObjectives: Set<string>;
+  tasksById: ReadonlyMap<string, Task>;
+  hideoutStations: HideoutStation[];
+  hideout: HideoutProgressState;
+  manual: PrestigeState;
+}
+
+export type PrestigeRequirementLink =
+  | { type: "task"; taskId: string; taskName: string }
+  | { type: "hideout"; stationName: string };
+
+export interface PrestigeRequirementStatus {
+  condition: PrestigeCondition;
+  label: string;
+  /** What to do next, written for the player. */
+  help: string;
+  current: number;
+  target: number;
+  done: boolean;
+  /** 0-1 progress toward the target. */
+  progress: number;
+  /** Manual rows need the player to type their value in. */
+  source: "auto" | "manual";
+  link?: PrestigeRequirementLink;
+}
+
+export interface PrestigeProgress {
+  prestige: Prestige;
+  requirements: PrestigeRequirementStatus[];
+  completed: number;
+  total: number;
+  ready: boolean;
+}
+
+const formatNumber = (value: number) => value.toLocaleString("en-US");
+
+export const formatRoubles = (value: number) => `₽${formatNumber(value)}`;
+
+const ratio = (current: number, target: number) =>
+  target <= 0 ? 1 : Math.min(1, Math.max(0, current / target));
+
+const getBuiltStationLevel = (
+  station: HideoutStation | undefined,
+  hideout: HideoutProgressState,
+) => {
+  if (!station) return 0;
+  let built = 0;
+  for (const level of [...station.levels].sort((a, b) => a.level - b.level)) {
+    if (!getHideoutLevelProgress(station.name, level, hideout).isBuilt) break;
+    built = level.level;
+  }
+  return built;
+};
+
+const getTaskObjectiveCounts = (
+  task: Task,
+  completedTaskObjectives: Set<string>,
+) => {
+  const objectives = task.objectives ?? [];
+  const keys = buildTaskObjectiveKeys(task);
+  const required = objectives
+    .map((objective, index) => ({ objective, index }))
+    .filter(({ objective }) => !objective.optional);
+  const done = required.filter(({ index }) =>
+    isTaskObjectiveCompleted(
+      completedTaskObjectives,
+      keys[index],
+      buildTaskObjectiveFallbackKeys(task, index, keys[index]),
+    ),
+  ).length;
+  return { done, total: required.length };
+};
+
+function describeTaskHelp(
+  task: Task | undefined,
+  taskName: string,
+  state: PrestigeTrackerState,
+  objectiveCounts: { done: number; total: number },
+): string {
+  if (!task) {
+    return `Complete "${taskName}". It isn't in this mode's task list, so mark it once you've handed it in.`;
+  }
+  const blockers = task.taskRequirements
+    .filter((requirement) => !state.completedTasks.has(requirement.task.id))
+    .map((requirement) => requirement.task.name);
+  if (blockers.length > 0) {
+    return `Unlock it first by finishing ${blockers
+      .map((name) => `"${name}"`)
+      .join(", ")}.`;
+  }
+  if (task.minPlayerLevel > state.playerLevel) {
+    return `Unlocks at level ${task.minPlayerLevel} from ${task.trader.name}.`;
+  }
+  if (objectiveCounts.total > 0 && objectiveCounts.done < objectiveCounts.total) {
+    const left = objectiveCounts.total - objectiveCounts.done;
+    return `Available from ${task.trader.name}. ${left} objective${
+      left === 1 ? "" : "s"
+    } left. Tick them off below, then hand it in.`;
+  }
+  return `Available from ${task.trader.name}. Hand it in and mark it complete.`;
+}
+
+export function evaluatePrestigeRequirement(
+  condition: PrestigeCondition,
+  state: PrestigeTrackerState,
+): PrestigeRequirementStatus {
+  switch (condition.type) {
+    case "playerLevel": {
+      const current = state.playerLevel;
+      const done = current >= condition.level;
+      return {
+        condition,
+        label: `Reach PMC level ${condition.level}`,
+        help: done
+          ? `You're level ${current}.`
+          : `You're level ${current}. ${condition.level - current} more to go. Keep your level in the header up to date.`,
+        current,
+        target: condition.level,
+        done,
+        progress: ratio(current, condition.level),
+        source: "auto",
+      };
+    }
+    case "taskStatus": {
+      const task = state.tasksById.get(condition.taskId);
+      const taskName = task?.name ?? condition.taskName;
+      const done = state.completedTasks.has(condition.taskId);
+      const counts = task
+        ? getTaskObjectiveCounts(task, state.completedTaskObjectives)
+        : { done: 0, total: 0 };
+      return {
+        condition,
+        label: `Complete "${taskName}"`,
+        help: done
+          ? "Task handed in."
+          : describeTaskHelp(task, taskName, state, counts),
+        current: done ? 1 : 0,
+        target: 1,
+        done,
+        progress: done
+          ? 1
+          : counts.total > 0
+            ? (counts.done / counts.total) * 0.99
+            : 0,
+        source: "auto",
+        link: { type: "task", taskId: condition.taskId, taskName },
+      };
+    }
+    case "hideoutStation": {
+      const station = state.hideoutStations.find(
+        (candidate) =>
+          candidate.id === condition.stationId ||
+          candidate.name === condition.stationName,
+      );
+      const stationName = station?.name ?? condition.stationName;
+      const current = getBuiltStationLevel(station, state.hideout);
+      const done = current >= condition.level;
+      return {
+        condition,
+        label: `${stationName} level ${condition.level}`,
+        help: done
+          ? `Built (level ${current}).`
+          : current === 0
+            ? `Not built yet. Build ${stationName} up to level ${condition.level} in your Hideout.`
+            : `Built to level ${current}. Upgrade it to level ${condition.level}.`,
+        current,
+        target: condition.level,
+        done,
+        progress: ratio(current, condition.level),
+        source: "auto",
+        link: { type: "hideout", stationName },
+      };
+    }
+    case "skill": {
+      const current = state.manual.skills[condition.skillId] ?? 0;
+      const done = current >= condition.level;
+      return {
+        condition,
+        label: `${condition.skillName} level ${condition.level}`,
+        help: done
+          ? "Skill target reached."
+          : `Check Character > Skills in game and enter your ${condition.skillName} level.`,
+        current,
+        target: condition.level,
+        done,
+        progress: ratio(current, condition.level),
+        source: "manual",
+      };
+    }
+    case "haveItem": {
+      const isRoubles = condition.itemId === ROUBLES_ITEM_ID;
+      const current = isRoubles ? state.manual.roubles : 0;
+      const done = current >= condition.count;
+      return {
+        condition,
+        label: isRoubles
+          ? `Have ${formatRoubles(condition.count)}`
+          : `Have ${formatNumber(condition.count)}x ${condition.itemName}`,
+        help: isRoubles
+          ? done
+            ? "Enough roubles in stash. They're spent when you prestige."
+            : `Keep ${formatRoubles(condition.count)} in your stash. They're spent when you prestige. Enter your current balance.`
+          : `Have ${formatNumber(condition.count)}x ${condition.itemName}${
+              condition.foundInRaid ? " (found in raid)" : ""
+            } in your stash.`,
+        current,
+        target: condition.count,
+        done,
+        progress: ratio(current, condition.count),
+        source: "manual",
+      };
+    }
+    default:
+      return {
+        condition,
+        label: condition.description || "Additional requirement",
+        help: "Check the in-game Prestige screen for details.",
+        current: 0,
+        target: 1,
+        done: false,
+        progress: 0,
+        source: "manual",
+      };
+  }
+}
+
+const REQUIREMENT_ORDER: Record<PrestigeCondition["type"], number> = {
+  playerLevel: 0,
+  taskStatus: 1,
+  hideoutStation: 2,
+  skill: 3,
+  haveItem: 4,
+  other: 5,
+};
+
+export function evaluatePrestige(
+  prestige: Prestige,
+  state: PrestigeTrackerState,
+): PrestigeProgress {
+  const requirements = prestige.conditions
+    .map((condition) => evaluatePrestigeRequirement(condition, state))
+    .sort(
+      (a, b) =>
+        REQUIREMENT_ORDER[a.condition.type] -
+        REQUIREMENT_ORDER[b.condition.type],
+    );
+  const completed = requirements.filter((requirement) => requirement.done)
+    .length;
+  return {
+    prestige,
+    requirements,
+    completed,
+    total: requirements.length,
+    ready: requirements.length > 0 && completed === requirements.length,
+  };
+}
+
+/** The prestige the player is working toward, or null once all are done. */
+export function getNextPrestige(
+  prestiges: Prestige[],
+  currentLevel: number,
+): Prestige | null {
+  return (
+    prestiges.find((prestige) => prestige.prestigeLevel === currentLevel + 1) ??
+    null
+  );
+}
+
+/** Short, mode-aware notes to show alongside a prestige. */
+export function getPrestigeModeNotes(
+  prestige: Prestige,
+  gameMode: GameMode,
+): string[] {
+  const notes: string[] = [];
+  const hasTask = prestige.conditions.some((c) => c.type === "taskStatus");
+  const hasHideout = prestige.conditions.some(
+    (c) => c.type === "hideoutStation",
+  );
+  if (gameMode === "pve") {
+    if (!hasTask) notes.push("PvE: no prestige quest required.");
+    if (!hasHideout) notes.push("PvE: no hideout requirements.");
+  }
+  return notes;
+}
+
+/** Maps each prestige id to its level, for gating tasks by requiredPrestigeId. */
+export function buildPrestigeLevelById(
+  prestiges: Prestige[],
+): Map<string, number> {
+  return new Map(prestiges.map((prestige) => [prestige.id, prestige.prestigeLevel]));
+}
+
+/**
+ * Whether a task should be listed at the player's current prestige.
+ * Tasks gated behind a higher prestige are hidden, as are quests that exist
+ * only to unlock a prestige the player has already reached (e.g. the first
+ * "New Beginning"). Tasks shared by several prestiges, like Collector, stay.
+ */
+export function createPrestigeTaskFilter(
+  prestiges: Prestige[],
+  currentLevel: number,
+): (task: Pick<Task, "id" | "requiredPrestigeId">) => boolean {
+  const levelById = buildPrestigeLevelById(prestiges);
+  const prestigesByTaskId = new Map<string, number[]>();
+  prestiges.forEach((prestige) => {
+    prestige.conditions.forEach((condition) => {
+      if (condition.type !== "taskStatus") return;
+      const levels = prestigesByTaskId.get(condition.taskId) ?? [];
+      levels.push(prestige.prestigeLevel);
+      prestigesByTaskId.set(condition.taskId, levels);
+    });
+  });
+
+  return (task) => {
+    if (task.requiredPrestigeId) {
+      const requiredLevel = levelById.get(task.requiredPrestigeId);
+      if (requiredLevel !== undefined && requiredLevel > currentLevel) {
+        return false;
+      }
+    }
+    const unlocks = prestigesByTaskId.get(task.id);
+    if (unlocks?.length === 1 && unlocks[0] <= currentLevel) return false;
+    return true;
+  };
 }

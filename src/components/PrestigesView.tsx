@@ -1,740 +1,1014 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryState } from 'nuqs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
-import { taskStorage } from '@/utils/indexedDB';
+import { useEffect, useMemo, useState } from "react";
 import {
-  computePrestigeRequirements,
-  createCompletedPrestigeSaved,
-  migratePrestigeProgress,
-  PRESTIGE_CONFIGS,
-  PRESTIGE_UPDATED_EVENT,
-  type PrestigeConfig,
-  type PrestigeQuestId,
-  type PrestigeSaved,
-} from '@/utils/prestige';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
+  Check,
+  CheckCircle2 as CircleCheckBig,
+  ChevronDown,
+  Circle,
+  ExternalLink,
+  Gift,
+  Home,
+  Info,
+  LockKeyhole,
+  PackageOpen,
+  Sparkles,
+} from "lucide-react";
+import type { Achievement, Prestige, Task } from "@/types";
+import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { CheckCheck, RotateCcw } from 'lucide-react';
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  SelectiveResetDialog,
+  type ResetOptions,
+} from "@/components/SelectiveResetDialog";
+import { TaskDetailsContent } from "@/components/TaskDetailsContent";
+import { cn } from "@/lib/utils";
+import { GAME_MODE_LABELS, type GameMode } from "@/utils/gameMode";
+import {
+  evaluatePrestige,
+  formatRoubles,
+  getPrestigeModeNotes,
+  MAX_PRESTIGE_LEVEL,
+  type PrestigeProgress,
+  type PrestigeRequirementStatus,
+  type PrestigeState,
+  type PrestigeTrackerState,
+} from "@/utils/prestige";
 
-const FIGURINE_LABELS: Record<string, string> = {
-  bear: "BEAR operative figurine (FIR)",
-  mutkevich: "Politician Mutkevich figurine (FIR)",
-  killa: "Killa figurine (FIR)",
-  reshala: "Reshala figurine (FIR)",
-  ryzhy: "Ryzhy figurine (FIR)",
-  scav: "Scav figurine (FIR)",
-  tagilla: "Tagilla figurine (FIR)",
-  usec: "USEC operative figurine (FIR)",
-  cultist: "Cultist figurine (FIR)",
-  den: "Den figurine (FIR)",
+/** Preselected areas when starting a new prestige run. Achievements persist in game. */
+const NEW_PRESTIGE_RESET_OPTIONS: Partial<ResetOptions> = {
+  storylineQuests: true,
+  normalTasks: true,
+  hideoutItems: true,
+  collectorItems: true,
+  prestiges: true,
+  workingOnItems: true,
+  trackedItems: true,
 };
 
-const QUEST_LABELS: Record<PrestigeQuestId, string> = {
-  newBeginning: 'New Beginning',
-  collector: 'Collector',
-  tour: 'Tour',
-  fallingSkies: 'Falling Skies',
-  ticketFromTarkov: 'Ticket from Tarkov',
-  theyAreAlreadyHere: 'They Are Already Here',
-  theTicket: 'The Ticket',
-};
+interface PrestigesViewProps {
+  gameMode: GameMode;
+  prestiges: Prestige[];
+  prestigeState: PrestigeState;
+  trackerState: PrestigeTrackerState;
+  profileName: string;
+  achievements: Achievement[];
+  taskObjectiveItemProgress: Record<string, number>;
+  onPlayerLevelChange: (level: number) => void;
+  onUpdatePrestigeState: (update: Partial<PrestigeState>) => void;
+  onStartNewPrestige: (options: ResetOptions) => void;
+  onToggleTask: (taskId: string) => void;
+  onToggleTaskObjective: (
+    taskId: string,
+    objectiveKey: string,
+    legacyObjectiveKey?: string | string[],
+    syncTaskCompletion?: boolean,
+  ) => void;
+  onUpdateTaskObjectiveItemProgress: (
+    objectiveItemKey: string,
+    count: number,
+    legacyObjectiveItemKey?: string | string[],
+  ) => void;
+  onOpenTask: (taskId: string, taskName: string) => void;
+  onOpenHideout: () => void;
+}
 
-const PRESTIGE_COLORS: Record<string, NonNullable<PrestigeCardProps['color']>> = {
-  'prestige-1': 'emerald',
-  'prestige-2': 'sky',
-  'prestige-3': 'violet',
-  'prestige-4': 'amber',
-  'prestige-5': 'rose',
-  'prestige-6': 'cyan',
-};
+export function PrestigesView({
+  gameMode,
+  prestiges,
+  prestigeState,
+  trackerState,
+  profileName,
+  achievements,
+  taskObjectiveItemProgress,
+  onPlayerLevelChange,
+  onUpdatePrestigeState,
+  onStartNewPrestige,
+  onToggleTask,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
+  onOpenTask,
+  onOpenHideout,
+}: PrestigesViewProps) {
+  const currentLevel = prestigeState.currentLevel;
+  const maxLevel = prestiges.length
+    ? Math.max(...prestiges.map((prestige) => prestige.prestigeLevel))
+    : MAX_PRESTIGE_LEVEL;
+  const nextLevel = Math.min(currentLevel + 1, maxLevel);
+  const [selectedLevel, setSelectedLevel] = useState(nextLevel);
+  const [resetOpen, setResetOpen] = useState(false);
 
-export function PrestigesView(): JSX.Element {
-  const [searchTerm, setSearchTerm] = useQueryState('prestigeSearch', { defaultValue: '' });
+  // Follow the next prestige when the reached prestige changes.
+  useEffect(() => {
+    setSelectedLevel(nextLevel);
+  }, [nextLevel]);
 
-  const prestiges = useMemo(
+  // Command menu search ("Prestige 3") jumps to that prestige.
+  useEffect(() => {
+    type GlobalSearchDetail = { term?: string; scope?: string };
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<GlobalSearchDetail>).detail;
+      if (detail?.scope !== "prestiges" || typeof detail.term !== "string") {
+        return;
+      }
+      const level = Number.parseInt(detail.term.replace(/\D+/g, ""), 10);
+      if (Number.isFinite(level)) setSelectedLevel(level);
+    };
+    window.addEventListener("taskTracker:globalSearch", handler);
+    return () => window.removeEventListener("taskTracker:globalSearch", handler);
+  }, []);
+
+  const progressByLevel = useMemo(
     () =>
-      PRESTIGE_CONFIGS.map((cfg, index) => ({
-        ...cfg,
-        title: `Prestige ${index + 1}`,
-        color: PRESTIGE_COLORS[cfg.id] ?? 'emerald',
-      })),
-    []
+      new Map(
+        prestiges.map((prestige) => [
+          prestige.prestigeLevel,
+          evaluatePrestige(prestige, trackerState),
+        ]),
+      ),
+    [prestiges, trackerState],
   );
+  const selected = progressByLevel.get(selectedLevel) ?? null;
+  const allReached = prestiges.length > 0 && currentLevel >= maxLevel;
+  const nextProgress = progressByLevel.get(currentLevel + 1);
+  const modeLabel = GAME_MODE_LABELS[gameMode];
 
-  const filtered = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return prestiges;
-    return prestiges.filter((p) => p.title.toLowerCase().includes(term));
-  }, [prestiges, searchTerm]);
-
-  // Respond to global command search for prestiges
-  useEffect(() => {
-    type GlobalSearchDetail = { term?: string; scope?: 'tasks' | 'achievements' | 'items' | 'prestiges' };
-    const handler = (evt: Event) => {
-      const detail = (evt as CustomEvent<GlobalSearchDetail>).detail;
-      if (!detail || detail.scope !== 'prestiges' || typeof detail.term !== 'string') return;
-      setSearchTerm(detail.term);
-    };
-    window.addEventListener('taskTracker:globalSearch', handler as EventListener);
-    return () => window.removeEventListener('taskTracker:globalSearch', handler as EventListener);
-  }, [setSearchTerm]);
+  const statusLabel = allReached
+    ? "All prestiges reached"
+    : nextProgress?.ready
+      ? `Ready for ${nextProgress.prestige.name}`
+      : nextProgress
+        ? `${nextProgress.prestige.name} · ${nextProgress.completed} / ${nextProgress.total}`
+        : "No prestige data";
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      {/* Search */}
-      <div className="max-w-md">
-        <Input
-          placeholder="Search prestiges..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      {filtered.map((p) => (
-        <PrestigeCard key={p.id} {...p} />
-      ))}
-    </div>
-  );
-}
-
-interface PrestigeProgress {
-  level: number;
-  strength: number;
-  endurance: number;
-  charisma: number;
-  hideout: { intelligence: number; security: number; restSpace: number; roubles: number };
-  quests: Partial<Record<PrestigeQuestId, boolean>>;
-  extras: {
-    scavs: number;
-    pmc: number;
-    raiders: number;
-    bosses: number;
-    hoodedMen: number;
-    labsExtracted: boolean;
-    labsTransitToStreets: boolean;
-    streetsExtracted: boolean;
-    streetsTransitToInterchange: boolean;
-    interchangeExtracted: boolean;
-    interchangeTransitToCustoms: boolean;
-    customsExtracted: boolean;
-    customsTransitToReserve: boolean;
-    reserveExtracted: boolean;
-    figurines: Record<string, boolean>;
-    figurineGroups: Record<string, number>;
-  };
-}
-
-interface PrestigeCardProps extends PrestigeConfig {
-  title: string;
-  color?: "emerald" | "sky" | "violet" | "amber" | "rose" | "cyan";
-}
-
-function PrestigeCard(props: PrestigeCardProps): JSX.Element {
-  const {
-    id,
-    title,
-    color = 'emerald',
-    levelTarget,
-    strengthTarget,
-    enduranceTarget,
-    charismaTarget,
-    hideoutTargets,
-    roublesTarget,
-    requiredQuestIds,
-    extras,
-  } = props;
-
-  const colorMap = {
-    emerald: {
-      badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-      gradient: "from-emerald-500 to-emerald-400",
-    },
-    sky: {
-      badge: "border-sky-500/30 bg-sky-500/10 text-sky-400",
-      gradient: "from-sky-500 to-sky-400",
-    },
-    violet: {
-      badge: "border-violet-500/30 bg-violet-500/10 text-violet-400",
-      gradient: "from-violet-500 to-violet-400",
-    },
-    amber: {
-      badge: "border-amber-500/30 bg-amber-500/10 text-amber-400",
-      gradient: "from-amber-500 to-amber-400",
-    },
-    rose: {
-      badge: "border-rose-500/30 bg-rose-500/10 text-rose-400",
-      gradient: "from-rose-500 to-rose-400",
-    },
-    cyan: {
-      badge: "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",
-      gradient: "from-cyan-500 to-cyan-400",
-    },
-  } as const;
-  const theme = colorMap[color] ?? colorMap.emerald;
-  const prestigeConfig = useMemo<PrestigeConfig>(
-    () => ({
-      id,
-      levelTarget,
-      strengthTarget,
-      enduranceTarget,
-      charismaTarget,
-      hideoutTargets,
-      roublesTarget,
-      requiredQuestIds,
-      extras,
-    }),
-    [id, levelTarget, strengthTarget, enduranceTarget, charismaTarget, hideoutTargets, roublesTarget, requiredQuestIds, extras]
-  );
-
-  const defaultState: PrestigeProgress = useMemo(
-    () => ({
-      level: 0,
-      strength: 0,
-      endurance: 0,
-      charisma: 0,
-      hideout: { intelligence: 0, security: 0, restSpace: 0, roubles: 0 },
-      quests: Object.fromEntries(requiredQuestIds.map((questId) => [questId, false])),
-      extras: {
-        scavs: 0,
-        pmc: 0,
-        raiders: 0,
-        bosses: 0,
-        hoodedMen: 0,
-        labsExtracted: false,
-        labsTransitToStreets: false,
-        streetsExtracted: false,
-        streetsTransitToInterchange: false,
-        interchangeExtracted: false,
-        interchangeTransitToCustoms: false,
-        customsExtracted: false,
-        customsTransitToReserve: false,
-        reserveExtracted: false,
-        figurines: Object.fromEntries((extras?.figurines ?? []).map((figurineId) => [figurineId, false])) as Record<string, boolean>,
-        figurineGroups: Object.fromEntries((extras?.figurineGroups ?? []).map((group) => [group.id, 0])) as Record<string, number>,
-      },
-    }),
-    [extras, requiredQuestIds]
-  );
-
-  const [state, setState] = useState<PrestigeProgress>(defaultState);
-  const [collapsed, setCollapsed] = useState<boolean>(true);
-  const hasLoadedRef = useRef(false);
-  const saveTimerRef = useRef<number | null>(null);
-  const lastPersistedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const saved = await taskStorage.loadPrestigeProgress<PrestigeSaved>(id);
-      if (mounted && saved) {
-        console.debug('[Prestige] load', { id, saved });
-        const migrated = migratePrestigeProgress(saved, prestigeConfig);
-        if (migrated && JSON.stringify(migrated) !== JSON.stringify(saved)) {
-          await taskStorage.savePrestigeProgress(id, migrated);
-        }
-        const merged = {
-          ...defaultState,
-          ...migrated,
-          quests: { ...defaultState.quests, ...(migrated?.quests ?? {}) },
-          extras: {
-            ...defaultState.extras,
-            ...(migrated?.extras ?? {}),
-            figurines: {
-              ...defaultState.extras.figurines,
-              ...((migrated?.extras && migrated.extras.figurines) ? migrated.extras.figurines : {}),
-            },
-            figurineGroups: {
-              ...defaultState.extras.figurineGroups,
-              ...((migrated?.extras && migrated.extras.figurineGroups) ? migrated.extras.figurineGroups : {}),
-            },
-          },
-        } as PrestigeProgress;
-        setState(merged);
-        // record snapshot to avoid immediate re-save
-        lastPersistedRef.current = JSON.stringify(merged);
-      }
-      // mark initial load complete whether saved existed or not
-      hasLoadedRef.current = true;
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [id, defaultState, prestigeConfig]);
-
-  useEffect(() => {
-    if (!hasLoadedRef.current) return; // avoid overwriting saved data on first mount
-    const currentSnapshot = JSON.stringify(state);
-    if (lastPersistedRef.current === currentSnapshot) {
-      // nothing changed since last persisted; skip scheduling save
-      return;
-    }
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    console.debug('[Prestige] schedule save', { id, state });
-    saveTimerRef.current = window.setTimeout(async () => {
-      console.debug('[Prestige] saving', { id, state });
-      await taskStorage.savePrestigeProgress(id, state);
-      lastPersistedRef.current = currentSnapshot;
-      window.dispatchEvent(new CustomEvent(PRESTIGE_UPDATED_EVENT, { detail: { id } }));
-      console.debug('[Prestige] saved + event dispatched', { id });
-    }, 200);
-    return () => {
-      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    };
-  }, [id, state]);
-
-  const requirements = useMemo(() => {
-    const { done, total } = computePrestigeRequirements(state, prestigeConfig);
-    return { done, total };
-  }, [prestigeConfig, state]);
-
-  function setNumber(value: number, min: number, max: number): number {
-    if (Number.isNaN(value)) return 0;
-    return Math.min(max, Math.max(min, Math.floor(value)));
-  }
-
-  const percent = (requirements.done / Math.max(1, requirements.total)) * 100;
-  const [displayPercent, setDisplayPercent] = useState(percent);
-  const prevPercentRef = useRef(percent);
-  useEffect(() => {
-    let raf = 0;
-    const start = performance.now();
-    const from = prevPercentRef.current;
-    const to = percent;
-    const duration = 500;
-    function tick(now: number) {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setDisplayPercent(from + (to - from) * eased);
-      if (t < 1) raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    prevPercentRef.current = percent;
-    return () => cancelAnimationFrame(raf);
-  }, [percent]);
-
-  function pendingSummaries(): string[] {
-    const items: string[] = [];
-    if (state.level < levelTarget) items.push(`Level ${state.level}/${levelTarget}`);
-    if (state.strength < strengthTarget) items.push(`Strength ${state.strength}/${strengthTarget}`);
-    if (state.endurance < enduranceTarget) items.push(`Endurance ${state.endurance}/${enduranceTarget}`);
-    if (state.charisma < charismaTarget) items.push(`Charisma ${state.charisma}/${charismaTarget}`);
-    if (state.hideout.intelligence < hideoutTargets.intelligence) items.push(`IC ${state.hideout.intelligence}/${hideoutTargets.intelligence}`);
-    if (state.hideout.security < hideoutTargets.security) items.push(`Security ${state.hideout.security}/${hideoutTargets.security}`);
-    if (state.hideout.restSpace < hideoutTargets.restSpace) items.push(`Rest ${state.hideout.restSpace}/${hideoutTargets.restSpace}`);
-    if (state.hideout.roubles < roublesTarget) items.push(`₽ ${state.hideout.roubles.toLocaleString()}/${roublesTarget.toLocaleString()}`);
-    for (const questId of requiredQuestIds) {
-      if (!state.quests[questId]) items.push(`Quest: ${QUEST_LABELS[questId]}`);
-    }
-    if (extras) {
-      if (extras.scavsTarget && state.extras.scavs < extras.scavsTarget) items.push(`Scavs ${state.extras.scavs}/${extras.scavsTarget}`);
-      if (extras.pmcTarget && state.extras.pmc < extras.pmcTarget) items.push(`PMC ${state.extras.pmc}/${extras.pmcTarget}`);
-      if (extras.raidersTarget && state.extras.raiders < extras.raidersTarget) items.push(`Raiders ${state.extras.raiders}/${extras.raidersTarget}`);
-      if (extras.bossesTarget && state.extras.bosses < extras.bossesTarget) items.push(`Bosses ${state.extras.bosses}/${extras.bossesTarget}`);
-      if (extras.hoodedMenTarget && state.extras.hoodedMen < extras.hoodedMenTarget) items.push(`Hooded men ${state.extras.hoodedMen}/${extras.hoodedMenTarget}`);
-      if (extras.requireLabsExtract && !state.extras.labsExtracted) items.push('Survive & extract Labs');
-      if (extras.requireLabsTransitToStreets && !state.extras.labsTransitToStreets) items.push('Labs Transit to Streets');
-      if (extras.requireStreetsExtract && !state.extras.streetsExtracted) items.push('Survive & extract Streets');
-      if (extras.requireStreetsTransitToInterchange && !state.extras.streetsTransitToInterchange) items.push('Streets Transit to Interchange');
-      if (extras.requireInterchangeExtract && !state.extras.interchangeExtracted) items.push('Survive & extract Interchange');
-      if (extras.requireInterchangeTransitToCustoms && !state.extras.interchangeTransitToCustoms) items.push('Interchange Transit to Customs');
-      if (extras.requireCustomsExtract && !state.extras.customsExtracted) items.push('Survive & extract Customs');
-      if (extras.requireCustomsTransitToReserve && !state.extras.customsTransitToReserve) items.push('Customs Transit to Reserve');
-      if (extras.requireReserveExtract && !state.extras.reserveExtracted) items.push('Survive & extract Reserve');
-      if (extras.figurines && extras.figurines.length) {
-        const total = extras.figurines.length;
-        const done = extras.figurines.reduce((acc, figurineId) => acc + (state.extras.figurines[figurineId] ? 1 : 0), 0);
-        if (done < total) items.push(`Figurines ${done}/${total}`);
-      }
-      if (extras.figurineGroups && extras.figurineGroups.length) {
-        const total = extras.figurineGroups.reduce((sum, group) => sum + group.target, 0);
-        const done = extras.figurineGroups.reduce((sum, group) => sum + Math.min(state.extras.figurineGroups[group.id] || 0, group.target), 0);
-        if (done < total) items.push(`Figurine groups ${done}/${total}`);
-      }
-    }
-    return items;
-  }
-
-  function handleMarkAllComplete() {
-    setState(createCompletedPrestigeSaved(prestigeConfig) as PrestigeProgress);
-  }
-
-  function handleResetProgress() {
-    setState(defaultState);
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label={collapsed ? 'Expand' : 'Collapse'}
-              onClick={() => setCollapsed((v) => !v)}
-              className="flex items-center justify-center rounded border size-6 hover:bg-muted/50 transition-colors"
-              title={collapsed ? 'Expand' : 'Collapse'}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`size-4 transition-transform ${!collapsed ? 'rotate-90' : ''}`}
-                aria-hidden="true"
+    <main className="min-h-full bg-background">
+      <div className="mx-auto w-full max-w-[1480px] px-4 pb-20 pt-6 sm:px-6 lg:px-8">
+        <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold uppercase tracking-[0.08em] text-foreground sm:text-3xl">
+                Prestige
+              </h1>
+              <ModeBadge gameMode={gameMode} />
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {modeLabel} requirements from live game data. Level, tasks and
+              hideout are tracked automatically; enter roubles and skills
+              yourself.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {prestiges.length > 0 && (
+              <Select
+                value={String(currentLevel)}
+                onValueChange={(value) =>
+                  onUpdatePrestigeState({ currentLevel: Number(value) })
+                }
               >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
-            <Badge
-              variant="outline"
-              className={`rounded-full px-3 py-1 text-xs md:text-sm ${theme.badge}`}
+                <SelectTrigger
+                  aria-label="Current prestige"
+                  className="h-8 w-[170px] rounded-none font-mono text-[11px] uppercase tracking-wider"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Not prestiged</SelectItem>
+                  {prestiges.map((prestige) => (
+                    <SelectItem
+                      key={prestige.id}
+                      value={String(prestige.prestigeLevel)}
+                    >
+                      Current: {prestige.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div
+              className={cn(
+                "w-fit border px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
+                allReached || nextProgress?.ready
+                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+                  : "border-border bg-card/40 text-muted-foreground",
+              )}
             >
-              {title}
-            </Badge>
-          </span>
-          <div className="flex items-center gap-2">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-2"
-                  title="Mark all requirements as complete"
-                >
-                  <CheckCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">Complete All</span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Mark All Requirements Complete?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will set all requirements for {title} to their maximum values (Level {levelTarget}, all stats, hideout upgrades, quests, and objectives).
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleMarkAllComplete}>
-                    Mark Complete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-2"
-                  title="Reset all progress"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  <span className="hidden sm:inline">Reset</span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset {title} Progress?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will reset all progress for {title} back to zero. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleResetProgress} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Reset Progress
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Prominent Overall Progress */}
-        <div className="rounded-lg border bg-muted/10 p-4 md:p-5">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-            <div>
-              <h3 className="text-lg md:text-xl font-semibold">Overall Progress</h3>
-              <p className="text-sm text-muted-foreground">
-                {requirements.done} / {requirements.total} requirements met
-              </p>
-            </div>
-            <div className="text-3xl md:text-4xl font-bold tabular-nums">
-              {Math.round(displayPercent)}%
+              {statusLabel}
             </div>
           </div>
-          <div className="mt-3">
-            <Progress
-              value={displayPercent}
-              className="h-4 md:h-5 overflow-hidden"
-              indicatorClassName={`bg-gradient-to-r ${theme.gradient} transition-all duration-500`}
-            />
-          </div>
-          {collapsed ? (
-            <div className="mt-4">
-              <p className="text-sm font-medium">Pending</p>
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {pendingSummaries().map((txt, i) => (
-                  <li key={i} className="text-xs rounded border px-2 py-1 text-muted-foreground">
-                    {txt}
-                  </li>
-                ))}
-                {pendingSummaries().length === 0 ? (
-                  <li className="text-xs text-emerald-600">All requirements complete</li>
-                ) : null}
-              </ul>
-            </div>
-          ) : null}
-        </div>
+        </header>
 
-        {collapsed ? null : <Separator />}
-
-        {collapsed ? null : (
-          <Section title="Level">
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={state.level}
-                onChange={(e) => setState((s) => ({ ...s, level: setNumber(Number(e.target.value), 0, levelTarget) }))}
-                className="w-28"
-                min={0}
-                max={levelTarget}
-              />
-              <span className="text-sm text-muted-foreground">/ {levelTarget}</span>
-            </div>
-          </Section>
-        )}
-
-        {collapsed || (strengthTarget === 0 && enduranceTarget === 0 && charismaTarget === 0) ? null : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-            {strengthTarget > 0 ? (
-              <StatNumber label="Strength" value={state.strength} target={strengthTarget} onChange={(n) => setState((s) => ({ ...s, strength: setNumber(n, 0, strengthTarget) }))} />
-            ) : null}
-            {enduranceTarget > 0 ? (
-              <StatNumber label="Endurance" value={state.endurance} target={enduranceTarget} onChange={(n) => setState((s) => ({ ...s, endurance: setNumber(n, 0, enduranceTarget) }))} />
-            ) : null}
-            {charismaTarget > 0 ? (
-              <StatNumber label="Charisma" value={state.charisma} target={charismaTarget} onChange={(n) => setState((s) => ({ ...s, charisma: setNumber(n, 0, charismaTarget) }))} />
-            ) : null}
-          </div>
-        )}
-
-        {collapsed ? null : <Separator />}
-
-        {collapsed ? null : (
-          <Section title="Hideout Requirements">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              <StatNumber label="Intelligence Center" value={state.hideout.intelligence} target={hideoutTargets.intelligence} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, intelligence: setNumber(n, 0, hideoutTargets.intelligence) } }))} />
-              <StatNumber label="Security" value={state.hideout.security} target={hideoutTargets.security} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, security: setNumber(n, 0, hideoutTargets.security) } }))} />
-              <StatNumber label="Rest Space" value={state.hideout.restSpace} target={hideoutTargets.restSpace} onChange={(n) => setState((s) => ({ ...s, hideout: { ...s.hideout, restSpace: setNumber(n, 0, hideoutTargets.restSpace) } }))} />
-              <div className="rounded-md border p-3 hover:bg-muted/30 transition-colors">
-                <p className="text-sm text-muted-foreground">Roubles</p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={state.hideout.roubles}
-                    onChange={(e) => setState((s) => ({ ...s, hideout: { ...s.hideout, roubles: setNumber(Number(e.target.value), 0, roublesTarget) } }))}
-                    className="w-40"
-                    min={0}
-                    max={roublesTarget}
-                  />
-                  <span className="text-sm font-medium tabular-nums">/ {roublesTarget.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          </Section>
-        )}
-
-        {collapsed ? null : <Separator />}
-
-        {collapsed ? null : (
-          <Section title="Quest Requirements">
-            <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              {requiredQuestIds.map((questId) => (
-                <li key={questId} className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
-                  <Checkbox
-                    id={`${id}-quest-${questId}`}
-                    checked={state.quests[questId] === true}
-                    onCheckedChange={(c) => {
-                      console.debug('[Prestige] toggle quest', { id, field: questId, value: c });
-                      setState((s) => ({ ...s, quests: { ...s.quests, [questId]: c === true } }));
-                    }}
-                  />
-                  <label htmlFor={`${id}-quest-${questId}`} className="cursor-pointer select-none text-muted-foreground">
-                    Complete "{QUEST_LABELS[questId]}"
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
-
-        {extras ? (
+        {prestiges.length === 0 ? (
+          <EmptyState gameMode={gameMode} />
+        ) : (
           <>
-            {collapsed ? null : <Separator />}
-            {collapsed ? null : (
-              <Section title="Additional Objectives">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                  {extras.scavsTarget ? (
-                    <StatNumber label="Scav Kills" value={state.extras.scavs} target={extras.scavsTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, scavs: setNumber(n, 0, extras.scavsTarget!) } }))} />
-                  ) : null}
-                  {extras.pmcTarget ? (
-                    <StatNumber label="PMC Kills" value={state.extras.pmc} target={extras.pmcTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, pmc: setNumber(n, 0, extras.pmcTarget!) } }))} />
-                  ) : null}
-                  {extras.raidersTarget ? (
-                    <StatNumber label="Raider Kills" value={state.extras.raiders} target={extras.raidersTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, raiders: setNumber(n, 0, extras.raidersTarget!) } }))} />
-                  ) : null}
-                  {extras.bossesTarget ? (
-                    <StatNumber label="Boss Kills" value={state.extras.bosses} target={extras.bossesTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, bosses: setNumber(n, 0, extras.bossesTarget!) } }))} />
-                  ) : null}
-                  {extras.hoodedMenTarget ? (
-                    <StatNumber label="Hooded Men Kills" value={state.extras.hoodedMen} target={extras.hoodedMenTarget} onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, hoodedMen: setNumber(n, 0, extras.hoodedMenTarget!) } }))} />
-                  ) : null}
-                </div>
+            <PrestigeStepper
+              prestiges={prestiges}
+              progressByLevel={progressByLevel}
+              currentLevel={currentLevel}
+              selectedLevel={selectedLevel}
+              onSelect={setSelectedLevel}
+            />
 
-                {(extras.requireLabsExtract || extras.requireLabsTransitToStreets || extras.requireStreetsExtract || extras.requireStreetsTransitToInterchange || extras.requireInterchangeExtract || extras.requireInterchangeTransitToCustoms || extras.requireCustomsExtract || extras.requireCustomsTransitToReserve || extras.requireReserveExtract) ? (
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {extras.requireLabsExtract ? (
-                      <ObjectiveCheckbox label="Survive and extract from The Lab" checked={state.extras.labsExtracted} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, labsExtracted: checked } }))} />
-                    ) : null}
-                    {extras.requireLabsTransitToStreets ? (
-                      <ObjectiveCheckbox label="Use transit from The Lab to Streets of Tarkov" checked={state.extras.labsTransitToStreets} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, labsTransitToStreets: checked } }))} />
-                    ) : null}
-                    {extras.requireStreetsExtract ? (
-                      <ObjectiveCheckbox label="Survive and extract from Streets of Tarkov" checked={state.extras.streetsExtracted} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, streetsExtracted: checked } }))} />
-                    ) : null}
-                    {extras.requireStreetsTransitToInterchange ? (
-                      <ObjectiveCheckbox label="Use transit from Streets of Tarkov to Interchange" checked={state.extras.streetsTransitToInterchange} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, streetsTransitToInterchange: checked } }))} />
-                    ) : null}
-                    {extras.requireInterchangeExtract ? (
-                      <ObjectiveCheckbox label="Survive and extract from Interchange" checked={state.extras.interchangeExtracted} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, interchangeExtracted: checked } }))} />
-                    ) : null}
-                    {extras.requireInterchangeTransitToCustoms ? (
-                      <ObjectiveCheckbox label="Use transit from Interchange to Customs" checked={state.extras.interchangeTransitToCustoms} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, interchangeTransitToCustoms: checked } }))} />
-                    ) : null}
-                    {extras.requireCustomsExtract ? (
-                      <ObjectiveCheckbox label="Survive and extract from Customs" checked={state.extras.customsExtracted} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, customsExtracted: checked } }))} />
-                    ) : null}
-                    {extras.requireCustomsTransitToReserve ? (
-                      <ObjectiveCheckbox label="Use transit from Customs to Reserve" checked={state.extras.customsTransitToReserve} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, customsTransitToReserve: checked } }))} />
-                    ) : null}
-                    {extras.requireReserveExtract ? (
-                      <ObjectiveCheckbox label="Survive and extract from Reserve" checked={state.extras.reserveExtracted} onChange={(checked) => setState((s) => ({ ...s, extras: { ...s.extras, reserveExtracted: checked } }))} />
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {extras.figurineGroups && extras.figurineGroups.length ? (
-                  <div className="mt-3">
-                    <p className="text-sm font-medium">Figurine Groups</p>
-                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                      {extras.figurineGroups.map((group) => (
-                        <StatNumber
-                          key={group.id}
-                          label={group.label}
-                          value={state.extras.figurineGroups[group.id] || 0}
-                          target={group.target}
-                          onChange={(n) => setState((s) => ({ ...s, extras: { ...s.extras, figurineGroups: { ...s.extras.figurineGroups, [group.id]: setNumber(n, 0, group.target) } } }))}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {extras.figurines && extras.figurines.length ? (
-                  <div className="mt-3">
-                    <p className="text-sm font-medium">Figurines</p>
-                    <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
-                      {extras.figurines.map((figurineId) => (
-                        <li key={figurineId} className="flex items-center gap-2 p-2 rounded-md border hover:bg-muted/30 transition-colors">
-                          <Checkbox
-                            id={`${id}-figurine-${figurineId}`}
-                            checked={state.extras.figurines[figurineId] === true}
-                            onCheckedChange={(c) => {
-                              console.debug('[Prestige] toggle figurine', { id, figurine: figurineId, value: c });
-                              setState((s) => ({ ...s, extras: { ...s.extras, figurines: { ...s.extras.figurines, [figurineId]: c === true } } }));
-                            }}
-                          />
-                          <label htmlFor={`${id}-figurine-${figurineId}`} className="cursor-pointer select-none text-muted-foreground">
-                            {FIGURINE_LABELS[figurineId] ?? figurineId}
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </Section>
+            {selected && (
+              <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.7fr)]">
+                <PrestigeHero
+                  progress={selected}
+                  gameMode={gameMode}
+                  currentLevel={currentLevel}
+                  trackerState={trackerState}
+                  achievements={achievements}
+                  taskObjectiveItemProgress={taskObjectiveItemProgress}
+                  onPlayerLevelChange={onPlayerLevelChange}
+                  onUpdatePrestigeState={onUpdatePrestigeState}
+                  onToggleTask={onToggleTask}
+                  onToggleTaskObjective={onToggleTaskObjective}
+                  onUpdateTaskObjectiveItemProgress={
+                    onUpdateTaskObjectiveItemProgress
+                  }
+                  onOpenTask={onOpenTask}
+                  onOpenHideout={onOpenHideout}
+                  onPrestige={() => setResetOpen(true)}
+                />
+                <PrestigeRewards prestige={selected.prestige} />
+              </div>
             )}
           </>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-interface SectionProps {
-  title: string;
-  children: React.ReactNode;
-}
-
-function Section({ title, children }: SectionProps): JSX.Element {
-  return (
-    <div className="space-y-2">
-      <h3 className="text-base font-semibold">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-interface ObjectiveCheckboxProps {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ObjectiveCheckbox({ label, checked, onChange }: ObjectiveCheckboxProps): JSX.Element {
-  return (
-    <div className="rounded-md border p-3 flex items-center justify-between gap-3 hover:bg-muted/30 transition-colors">
-      <p className="text-sm font-medium">{label}</p>
-      <Checkbox checked={checked} onCheckedChange={(c) => onChange(c === true)} />
-    </div>
-  );
-}
-
-interface StatNumberProps {
-  label: string;
-  value: number;
-  target: number;
-  onChange: (val: number) => void;
-}
-
-function StatNumber({ label, value, target, onChange }: StatNumberProps): JSX.Element {
-  return (
-    <div className="rounded-md border p-3">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <div className="flex items-center gap-2">
-        <Input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-28" min={0} max={target} />
-        <span className="text-base font-medium">/ {target}</span>
+        )}
       </div>
+
+      <SelectiveResetDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        profileName={profileName}
+        defaultOptions={NEW_PRESTIGE_RESET_OPTIONS}
+        title={`Start ${nextProgress?.prestige.name ?? "new prestige"}?`}
+        description={
+          <>
+            Your current prestige becomes {nextProgress?.prestige.name}. Choose
+            what to wipe on "{profileName}" for the new run. Achievements carry
+            over in game, so they're left unchecked. This cannot be undone.
+          </>
+        }
+        onConfirm={onStartNewPrestige}
+      />
+    </main>
+  );
+}
+
+function ModeBadge({ gameMode }: { gameMode: GameMode }) {
+  return (
+    <span
+      className={cn(
+        "border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
+        gameMode === "pve"
+          ? "border-sky-500/50 bg-sky-500/10 text-sky-400"
+          : gameMode === "pvp-season"
+            ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
+            : "border-rose-500/50 bg-rose-500/10 text-rose-400",
+      )}
+    >
+      {GAME_MODE_LABELS[gameMode]}
+    </span>
+  );
+}
+
+function EmptyState({ gameMode }: { gameMode: GameMode }) {
+  return (
+    <section className="flex flex-col items-center gap-3 border border-border bg-card/35 px-6 py-16 text-center">
+      <Info className="size-6 text-muted-foreground" />
+      <h2 className="text-lg font-bold uppercase tracking-wide text-foreground">
+        {gameMode === "pvp-season"
+          ? "No prestige in Seasonal"
+          : "Prestige data unavailable"}
+      </h2>
+      <p className="max-w-md text-sm text-muted-foreground">
+        {gameMode === "pvp-season"
+          ? "The game data lists no prestiges for Seasonal mode. Switch the profile to PvP or PvE to track prestige."
+          : "No prestiges came back from the game data for this mode. Try refreshing the data."}
+      </p>
+    </section>
+  );
+}
+
+function PrestigeStepper({
+  prestiges,
+  progressByLevel,
+  currentLevel,
+  selectedLevel,
+  onSelect,
+}: {
+  prestiges: Prestige[];
+  progressByLevel: Map<number, PrestigeProgress>;
+  currentLevel: number;
+  selectedLevel: number;
+  onSelect: (level: number) => void;
+}) {
+  const sorted = [...prestiges].sort((a, b) => a.prestigeLevel - b.prestigeLevel);
+  const maxLevel = sorted[sorted.length - 1]?.prestigeLevel ?? MAX_PRESTIGE_LEVEL;
+  const next = progressByLevel.get(currentLevel + 1);
+  // Partial credit toward the next milestone, averaged over its requirements.
+  const nextFraction =
+    next && next.requirements.length > 0
+      ? next.requirements.reduce((sum, req) => sum + req.progress, 0) /
+        next.requirements.length
+      : 0;
+  const fill = Math.min(1, (Math.min(currentLevel, maxLevel) + nextFraction) / maxLevel);
+  const position = (level: number) => `${(level / maxLevel) * 100}%`;
+
+  return (
+    <nav
+      aria-label="Prestige levels"
+      className="border border-border bg-card/45 px-8 pb-5 pt-6 sm:px-12"
+    >
+      <div className="relative h-[4.75rem]">
+        {/* Track */}
+        <div className="absolute inset-x-0 top-[22px] h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-muted/60">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.55)] transition-[width] duration-700 ease-out"
+            style={{ width: `${fill * 100}%` }}
+          />
+        </div>
+
+        {/* Start marker */}
+        <div
+          className="absolute top-[22px] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+          style={{ left: 0 }}
+          aria-hidden="true"
+        >
+          <span className="size-2.5 rounded-full bg-emerald-500 ring-4 ring-background" />
+        </div>
+
+        {sorted.map((prestige) => {
+          const level = prestige.prestigeLevel;
+          const progress = progressByLevel.get(level);
+          const reached = level <= currentLevel;
+          const isNext = level === currentLevel + 1;
+          const isSelected = level === selectedLevel;
+          const state = reached
+            ? "Reached"
+            : isNext
+              ? progress?.ready
+                ? "Ready"
+                : `${progress?.completed ?? 0}/${progress?.total ?? 0}`
+              : "Locked";
+          return (
+            <button
+              key={prestige.id}
+              type="button"
+              aria-current={isSelected ? "step" : undefined}
+              aria-label={`${prestige.name} – ${state}`}
+              onClick={() => onSelect(level)}
+              className="group absolute top-0 flex -translate-x-1/2 flex-col items-center gap-1.5 focus-visible:outline-none"
+              style={{ left: position(level) }}
+            >
+              <span
+                className={cn(
+                  "relative flex size-11 items-center justify-center rounded-full border-2 bg-background transition-all duration-300 group-hover:scale-110 group-focus-visible:ring-2 group-focus-visible:ring-emerald-500 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background",
+                  reached
+                    ? "border-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.5)]"
+                    : isNext
+                      ? "border-foreground/70"
+                      : "border-border",
+                  isSelected && "scale-110",
+                )}
+              >
+                {isNext && !reached && (
+                  <span
+                    className="absolute inset-0 animate-ping rounded-full border border-emerald-400/50 [animation-duration:2.4s]"
+                    aria-hidden="true"
+                  />
+                )}
+                {prestige.iconLink ? (
+                  <img
+                    src={prestige.iconLink}
+                    alt=""
+                    className={cn(
+                      "size-8 object-contain transition-[filter,opacity] duration-300",
+                      !reached && !isNext && "opacity-35 grayscale",
+                    )}
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="font-mono text-xs font-bold">{level}</span>
+                )}
+              </span>
+              <span
+                className={cn(
+                  "font-mono text-[11px] font-bold uppercase tracking-[0.12em] transition-colors",
+                  isSelected
+                    ? "text-foreground"
+                    : reached
+                      ? "text-emerald-400"
+                      : "text-muted-foreground",
+                )}
+              >
+                P{level}
+              </span>
+              <span
+                className={cn(
+                  "-mt-1 whitespace-nowrap font-mono text-[9px] uppercase tracking-widest",
+                  reached || progress?.ready
+                    ? "text-emerald-400/80"
+                    : "text-muted-foreground/70",
+                )}
+              >
+                {state}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function PrestigeHero({
+  progress,
+  gameMode,
+  currentLevel,
+  trackerState,
+  achievements,
+  taskObjectiveItemProgress,
+  onPlayerLevelChange,
+  onUpdatePrestigeState,
+  onToggleTask,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
+  onOpenTask,
+  onOpenHideout,
+  onPrestige,
+}: {
+  progress: PrestigeProgress;
+  gameMode: GameMode;
+  currentLevel: number;
+  trackerState: PrestigeTrackerState;
+  achievements: Achievement[];
+  taskObjectiveItemProgress: Record<string, number>;
+  onPlayerLevelChange: PrestigesViewProps["onPlayerLevelChange"];
+  onUpdatePrestigeState: PrestigesViewProps["onUpdatePrestigeState"];
+  onToggleTask: PrestigesViewProps["onToggleTask"];
+  onToggleTaskObjective: PrestigesViewProps["onToggleTaskObjective"];
+  onUpdateTaskObjectiveItemProgress: PrestigesViewProps["onUpdateTaskObjectiveItemProgress"];
+  onOpenTask: PrestigesViewProps["onOpenTask"];
+  onOpenHideout: PrestigesViewProps["onOpenHideout"];
+  onPrestige: () => void;
+}) {
+  const { prestige } = progress;
+  const reached = prestige.prestigeLevel <= currentLevel;
+  const isNext = prestige.prestigeLevel === currentLevel + 1;
+  const percentage =
+    progress.total > 0
+      ? Math.round((progress.completed / progress.total) * 100)
+      : 0;
+  const notes = getPrestigeModeNotes(prestige, gameMode);
+  const remaining = progress.requirements.filter((r) => !r.done);
+
+  return (
+    <section
+      aria-labelledby="prestige-hero-heading"
+      className="overflow-hidden border border-border bg-card/45 shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
+    >
+      <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex min-w-0 items-center gap-4">
+          {prestige.iconLink && (
+            <img
+              src={prestige.iconLink}
+              alt=""
+              className="size-14 shrink-0 object-contain"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              {reached ? "Reached" : isNext ? "Next prestige" : "Upcoming"}
+            </p>
+            <h2
+              id="prestige-hero-heading"
+              className="text-xl font-bold uppercase tracking-wide text-foreground"
+            >
+              {prestige.name}
+            </h2>
+            <div className="mt-1 flex items-end gap-2">
+              <span className="text-3xl font-bold tabular-nums text-foreground">
+                {percentage}%
+              </span>
+              <span className="pb-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                {progress.completed} / {progress.total} requirements
+              </span>
+            </div>
+          </div>
+        </div>
+        {isNext && (
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <Button
+              onClick={onPrestige}
+              className={cn(
+                "rounded-none font-mono text-xs uppercase tracking-wider",
+                progress.ready
+                  ? "bg-emerald-500 text-black hover:bg-emerald-400"
+                  : "",
+              )}
+              variant={progress.ready ? "default" : "outline"}
+            >
+              I prestiged
+            </Button>
+            <span className="text-[11px] text-muted-foreground">
+              {progress.ready
+                ? "Everything's ready. Prestige in game, then start your new run here."
+                : `${remaining.length} requirement${remaining.length === 1 ? "" : "s"} left`}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <Progress
+        className="h-1 rounded-none bg-muted/70"
+        indicatorClassName={cn(
+          "rounded-none",
+          progress.ready ? "bg-emerald-500" : "bg-muted-foreground",
+        )}
+        value={percentage}
+      />
+
+      {(notes.length > 0 || reached) && (
+        <div className="flex flex-col gap-1 border-b border-border bg-background/40 px-5 py-3 sm:px-6">
+          {reached && (
+            <p className="flex items-center gap-2 text-xs text-emerald-400">
+              <Check className="size-3.5" />
+              You've already reached this prestige. Requirements shown for
+              reference.
+            </p>
+          )}
+          {notes.map((note) => (
+            <p
+              key={note}
+              className="flex items-center gap-2 text-xs text-sky-400"
+            >
+              <Info className="size-3.5" />
+              {note}
+            </p>
+          ))}
+        </div>
+      )}
+
+      <ul className="divide-y divide-border">
+        {progress.requirements.map((requirement) => (
+          <RequirementRow
+            key={requirement.condition.id || requirement.label}
+            requirement={requirement}
+            trackerState={trackerState}
+            achievements={achievements}
+            taskObjectiveItemProgress={taskObjectiveItemProgress}
+            onPlayerLevelChange={onPlayerLevelChange}
+            onUpdatePrestigeState={onUpdatePrestigeState}
+            onToggleTask={onToggleTask}
+            onToggleTaskObjective={onToggleTaskObjective}
+            onUpdateTaskObjectiveItemProgress={
+              onUpdateTaskObjectiveItemProgress
+            }
+            onOpenTask={onOpenTask}
+            onOpenHideout={onOpenHideout}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function RequirementRow({
+  requirement,
+  trackerState,
+  achievements,
+  taskObjectiveItemProgress,
+  onPlayerLevelChange,
+  onUpdatePrestigeState,
+  onToggleTask,
+  onToggleTaskObjective,
+  onUpdateTaskObjectiveItemProgress,
+  onOpenTask,
+  onOpenHideout,
+}: {
+  requirement: PrestigeRequirementStatus;
+  trackerState: PrestigeTrackerState;
+  achievements: Achievement[];
+  taskObjectiveItemProgress: Record<string, number>;
+  onPlayerLevelChange: PrestigesViewProps["onPlayerLevelChange"];
+  onUpdatePrestigeState: PrestigesViewProps["onUpdatePrestigeState"];
+  onToggleTask: PrestigesViewProps["onToggleTask"];
+  onToggleTaskObjective: PrestigesViewProps["onToggleTaskObjective"];
+  onUpdateTaskObjectiveItemProgress: PrestigesViewProps["onUpdateTaskObjectiveItemProgress"];
+  onOpenTask: PrestigesViewProps["onOpenTask"];
+  onOpenHideout: PrestigesViewProps["onOpenHideout"];
+}) {
+  const { condition, done } = requirement;
+  const task: Task | undefined =
+    condition.type === "taskStatus"
+      ? trackerState.tasksById.get(condition.taskId)
+      : undefined;
+  const percentage = Math.round(requirement.progress * 100);
+
+  const statusIcon = done ? (
+    <CircleCheckBig className="size-5" />
+  ) : requirement.link?.type === "task" &&
+    task &&
+    task.taskRequirements.some(
+      (r) => !trackerState.completedTasks.has(r.task.id),
+    ) ? (
+    <LockKeyhole className="size-4" />
+  ) : (
+    <Circle className="size-5 opacity-55" />
+  );
+
+  return (
+    <li className={cn(done && "bg-emerald-500/[0.035]")}>
+      <Collapsible>
+        <div className="flex min-h-[76px] flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex min-w-0 items-start gap-3">
+            {condition.type === "taskStatus" ? (
+              <button
+                type="button"
+                aria-pressed={done}
+                aria-label={`${done ? "Mark incomplete" : "Mark complete"}: ${requirement.label}`}
+                onClick={() => onToggleTask(condition.taskId)}
+                className={cn(
+                  "mt-0.5 flex size-8 shrink-0 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500",
+                  done
+                    ? "text-emerald-400"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {statusIcon}
+              </button>
+            ) : (
+              <span
+                className={cn(
+                  "mt-0.5 flex size-8 shrink-0 items-center justify-center",
+                  done ? "text-emerald-400" : "text-muted-foreground",
+                )}
+              >
+                {statusIcon}
+              </span>
+            )}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p
+                  className={cn(
+                    "text-sm font-semibold",
+                    done ? "text-emerald-400" : "text-foreground",
+                  )}
+                >
+                  {requirement.label}
+                </p>
+                <span className="border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                  {requirement.source === "auto" ? "Tracked" : "Manual"}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {requirement.help}
+              </p>
+              {!done && requirement.target > 1 && (
+                <Progress
+                  className="mt-2 h-1 w-40 rounded-none bg-muted/70"
+                  indicatorClassName="rounded-none bg-muted-foreground"
+                  value={percentage}
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 pl-11 sm:pl-0">
+            <RequirementControl
+              requirement={requirement}
+              trackerState={trackerState}
+              onPlayerLevelChange={onPlayerLevelChange}
+              onUpdatePrestigeState={onUpdatePrestigeState}
+            />
+            {condition.type === "taskStatus" && task && (
+              <>
+                {(task.objectives?.length ?? 0) > 0 && (
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="group/details min-h-11"
+                    >
+                      Objectives
+                      <span className="ml-1 font-mono text-[10px] text-muted-foreground">
+                        ({task.objectives?.length})
+                      </span>
+                      <ChevronDown className="ml-1.5 size-3.5 transition-transform group-data-[state=open]/details:rotate-180 motion-reduce:transition-none" />
+                    </Button>
+                  </CollapsibleTrigger>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="min-h-11"
+                  onClick={() => onOpenTask(task.id, task.name)}
+                >
+                  View task
+                  <ExternalLink className="ml-2 size-3.5" />
+                </Button>
+              </>
+            )}
+            {condition.type === "hideoutStation" && !done && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="min-h-11"
+                onClick={onOpenHideout}
+              >
+                <Home className="mr-2 size-3.5" />
+                Open hideout
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {task && (
+          <CollapsibleContent>
+            <TaskDetailsContent
+              task={task}
+              achievements={achievements}
+              completedTaskObjectives={trackerState.completedTaskObjectives}
+              taskObjectiveItemProgress={taskObjectiveItemProgress}
+              onToggleTaskObjective={(taskId, objectiveKey, legacyKey) =>
+                onToggleTaskObjective(taskId, objectiveKey, legacyKey, true)
+              }
+              onUpdateTaskObjectiveItemProgress={
+                onUpdateTaskObjectiveItemProgress
+              }
+            />
+          </CollapsibleContent>
+        )}
+      </Collapsible>
+    </li>
+  );
+}
+
+function RequirementControl({
+  requirement,
+  trackerState,
+  onPlayerLevelChange,
+  onUpdatePrestigeState,
+}: {
+  requirement: PrestigeRequirementStatus;
+  trackerState: PrestigeTrackerState;
+  onPlayerLevelChange: PrestigesViewProps["onPlayerLevelChange"];
+  onUpdatePrestigeState: PrestigesViewProps["onUpdatePrestigeState"];
+}) {
+  const { condition } = requirement;
+  const inputClass =
+    "h-10 border-border bg-background font-mono text-sm tabular-nums";
+
+  if (condition.type === "playerLevel") {
+    return (
+      <LabeledValue suffix={`/ ${condition.level}`}>
+        <Input
+          aria-label="PMC level"
+          className={cn(inputClass, "w-20")}
+          inputMode="numeric"
+          min="1"
+          type="number"
+          value={trackerState.playerLevel}
+          onChange={(event) => {
+            const parsed = Number.parseInt(event.target.value, 10);
+            onPlayerLevelChange(Number.isFinite(parsed) ? parsed : 1);
+          }}
+        />
+      </LabeledValue>
+    );
+  }
+
+  if (condition.type === "skill") {
+    return (
+      <LabeledValue suffix={`/ ${condition.level}`}>
+        <Input
+          aria-label={`${condition.skillName} level`}
+          className={cn(inputClass, "w-20")}
+          inputMode="numeric"
+          min="0"
+          max="51"
+          type="number"
+          value={requirement.current || ""}
+          placeholder="0"
+          onChange={(event) => {
+            const parsed = Number.parseInt(event.target.value, 10);
+            onUpdatePrestigeState({
+              skills: {
+                ...trackerState.manual.skills,
+                [condition.skillId]: Number.isFinite(parsed)
+                  ? Math.max(0, parsed)
+                  : 0,
+              },
+            });
+          }}
+        />
+      </LabeledValue>
+    );
+  }
+
+  if (condition.type === "haveItem" && requirement.source === "manual") {
+    return (
+      <LabeledValue suffix={`/ ${formatRoubles(condition.count)}`}>
+        <Input
+          aria-label="Roubles in stash"
+          className={cn(inputClass, "w-36")}
+          inputMode="numeric"
+          min="0"
+          step="100000"
+          type="number"
+          value={requirement.current || ""}
+          placeholder="0"
+          onChange={(event) => {
+            const parsed = Number.parseInt(event.target.value, 10);
+            onUpdatePrestigeState({
+              roubles: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+            });
+          }}
+        />
+      </LabeledValue>
+    );
+  }
+
+  if (condition.type === "hideoutStation") {
+    return (
+      <span className="px-2 font-mono text-xs tabular-nums text-muted-foreground">
+        Lv {requirement.current} / {condition.level}
+      </span>
+    );
+  }
+
+  return null;
+}
+
+function LabeledValue({
+  suffix,
+  children,
+}: {
+  suffix: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="flex items-center gap-2">
+      {children}
+      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+        {suffix}
+      </span>
+    </span>
+  );
+}
+
+function PrestigeRewards({ prestige }: { prestige: Prestige }) {
+  const rewards = prestige.rewards ?? {};
+  const items = rewards.items ?? [];
+  const customization = rewards.customization ?? [];
+  const achievements = rewards.achievement ?? [];
+  const skills = rewards.skillLevelReward ?? [];
+  const transfer = prestige.transfer;
+  const hasRewards =
+    items.length + customization.length + achievements.length + skills.length >
+    0;
+
+  return (
+    <div className="space-y-4">
+      <section className="border border-border bg-card/35">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+          <Gift className="size-4 text-muted-foreground" />
+          <h3 className="text-sm font-bold uppercase tracking-wide text-foreground">
+            Rewards
+          </h3>
+        </div>
+        {hasRewards ? (
+          <ul className="divide-y divide-border">
+            {customization.map((reward) => (
+              <RewardRow
+                key={reward.id ?? reward.name}
+                imageLink={reward.imageLink}
+                name={reward.name}
+                detail={reward.customizationTypeName ?? reward.customizationType}
+              />
+            ))}
+            {achievements.map((reward) => (
+              <RewardRow
+                key={reward.id ?? reward.name}
+                imageLink={reward.imageLink}
+                name={reward.name}
+                detail="Achievement"
+              />
+            ))}
+            {items.map((reward) => (
+              <RewardRow
+                key={reward.item.id ?? reward.item.name}
+                imageLink={reward.item.iconLink}
+                name={reward.item.name}
+                detail={reward.count > 1 ? `x${reward.count.toLocaleString("en-US")}` : undefined}
+              />
+            ))}
+            {skills.map((reward, index) => (
+              <RewardRow
+                key={`${reward.skill?.name ?? reward.name}-${index}`}
+                name={`${reward.skill?.name ?? reward.name ?? "Skill"} +${reward.level ?? 0}`}
+                detail="Skill level"
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="px-5 py-4 text-xs text-muted-foreground">
+            No rewards listed in the game data.
+          </p>
+        )}
+      </section>
+
+      {transfer && (
+        <section className="border border-border bg-card/35">
+          <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+            <PackageOpen className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-bold uppercase tracking-wide text-foreground">
+              What carries over
+            </h3>
+          </div>
+          <dl className="divide-y divide-border text-sm">
+            {transfer.stashGrid && (
+              <TransferRow
+                label="Transfer stash"
+                value={`${transfer.stashGrid.width}×${transfer.stashGrid.height} grid`}
+              />
+            )}
+            {typeof transfer.skillsRate === "number" && (
+              <TransferRow
+                label="Skill progress"
+                value={`${Math.round(transfer.skillsRate * 100)}% kept`}
+              />
+            )}
+            {typeof transfer.masteringRate === "number" && (
+              <TransferRow
+                label="Weapon mastering"
+                value={`${Math.round(transfer.masteringRate * 100)}% kept`}
+              />
+            )}
+          </dl>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function RewardRow({
+  imageLink,
+  name,
+  detail,
+}: {
+  imageLink?: string;
+  name: string;
+  detail?: string;
+}) {
+  return (
+    <li className="flex items-center gap-3 px-5 py-3">
+      {imageLink ? (
+        <img
+          src={imageLink}
+          alt=""
+          className="size-9 shrink-0 object-contain"
+          loading="lazy"
+        />
+      ) : (
+        <span className="flex size-9 shrink-0 items-center justify-center border border-border text-muted-foreground">
+          <Sparkles className="size-4" />
+        </span>
+      )}
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium text-foreground">
+          {name}
+        </span>
+        {detail && (
+          <span className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            {detail}
+          </span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function TransferRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 py-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-mono text-xs tabular-nums text-foreground">
+        {value}
+      </dd>
     </div>
   );
 }

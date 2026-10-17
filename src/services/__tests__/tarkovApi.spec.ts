@@ -1210,12 +1210,28 @@ describe("Cache functionality", () => {
       collectorItems: { data: { task: { id: "test", objectives: [] } } },
       achievements: { data: { achievements: [] } },
       hideoutStations: { data: { hideoutStations: [] } },
+      prestiges: { data: { prestiges: [] } },
     };
 
     await saveCombinedCache(
       payload as unknown as Parameters<typeof saveCombinedCache>[0],
     );
     expect(isCombinedCacheFresh()).toBe(true);
+    expect(loadCombinedCache()?.prestiges?.data.prestiges).toEqual([]);
+  });
+
+  it("treats caches written before prestige support as stale", async () => {
+    const payload = {
+      tasks: { data: { tasks: [] } },
+      collectorItems: { data: { task: { id: "test", objectives: [] } } },
+      achievements: { data: { achievements: [] } },
+      hideoutStations: { data: { hideoutStations: [] } },
+    };
+
+    await saveCombinedCache(
+      payload as unknown as Parameters<typeof saveCombinedCache>[0],
+    );
+    expect(isCombinedCacheFresh()).toBe(false);
   });
 
   it("should report cache metadata for support diagnostics", async () => {
@@ -1224,6 +1240,7 @@ describe("Cache functionality", () => {
       collectorItems: { data: { task: { id: "test", objectives: [] } } },
       achievements: { data: { achievements: [] } },
       hideoutStations: { data: { hideoutStations: [] } },
+      prestiges: { data: { prestiges: [] } },
     };
 
     await saveCombinedCache(
