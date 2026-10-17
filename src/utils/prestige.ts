@@ -18,8 +18,15 @@ import {
 
 export const PRESTIGE_UPDATED_EVENT = "prestige:updated";
 
-/** Storage id for the per-profile prestige state record. */
+/**
+ * Storage id for the shared prestige state saved before PvP and PvE were
+ * tracked separately. Still read as the starting point for each mode.
+ */
 export const PRESTIGE_STATE_ID = "prestige-state";
+
+/** PvP and PvE are separate characters in game, so each mode keeps its own state. */
+export const getPrestigeStateId = (gameMode: GameMode) =>
+  `${PRESTIGE_STATE_ID}::${gameMode}`;
 export const ROUBLES_ITEM_ID = "5449016a4bdc2d6f028b456f";
 export const MAX_PRESTIGE_LEVEL = 6;
 
@@ -101,7 +108,15 @@ export function migrateLegacyPrestigeState(
   return { ...EMPTY_PRESTIGE_STATE };
 }
 
-export async function loadPrestigeState(): Promise<PrestigeState> {
+export async function loadPrestigeState(
+  gameMode: GameMode,
+): Promise<PrestigeState> {
+  const forMode = await taskStorage.loadPrestigeProgress(
+    getPrestigeStateId(gameMode),
+  );
+  if (forMode) return normalizePrestigeState(forMode);
+
+  // No per-mode record yet: start from the old shared one.
   const saved = await taskStorage.loadPrestigeProgress(PRESTIGE_STATE_ID);
   if (saved) return normalizePrestigeState(saved);
 
@@ -117,9 +132,12 @@ export async function loadPrestigeState(): Promise<PrestigeState> {
   return migrated;
 }
 
-export async function savePrestigeState(state: PrestigeState): Promise<void> {
+export async function savePrestigeState(
+  state: PrestigeState,
+  gameMode: GameMode,
+): Promise<void> {
   await taskStorage.savePrestigeProgress(
-    PRESTIGE_STATE_ID,
+    getPrestigeStateId(gameMode),
     normalizePrestigeState(state),
   );
 }

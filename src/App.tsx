@@ -2483,8 +2483,10 @@ function App() {
       try {
         taskStorage.setProfile(activeProfileId);
         await taskStorage.init();
-        const state = await loadPrestigeState();
-        if (!cancelled) setPrestigeState(state);
+        const state = await loadPrestigeState(activeProfileGameMode);
+        if (cancelled) return;
+        prestigeStateRef.current = state;
+        setPrestigeState(state);
       } catch (e) {
         console.error("Prestige state load error", e);
         if (!cancelled) setPrestigeState(EMPTY_PRESTIGE_STATE);
@@ -2498,7 +2500,7 @@ function App() {
       cancelled = true;
       window.removeEventListener(PRESTIGE_UPDATED_EVENT, handler);
     };
-  }, [activeProfileId]);
+  }, [activeProfileId, activeProfileGameMode]);
 
   const handleUpdatePrestigeState = useCallback(
     async (update: Partial<PrestigeState>) => {
@@ -2508,12 +2510,12 @@ function App() {
       try {
         taskStorage.setProfile(activeProfileId);
         await taskStorage.init();
-        await savePrestigeState(next);
+        await savePrestigeState(next, activeProfileGameMode);
       } catch (e) {
         console.error("Prestige state save error", e);
       }
     },
-    [activeProfileId],
+    [activeProfileId, activeProfileGameMode],
   );
 
   const allTasksById = useMemo(
@@ -3294,13 +3296,19 @@ function App() {
           await taskStorage.clearWorkingOnItems();
         }
 
-        // Clear manual prestige inputs. The reached prestige only resets with
-        // a full reset, so starting a new prestige run keeps it.
-        if (resetPrestiges) {
-          await savePrestigeState({
-            ...EMPTY_PRESTIGE_STATE,
-            currentLevel: resetAll ? 0 : prestigeStateRef.current.currentLevel,
-          });
+        // Clear manual prestige inputs. A full reset wipes every mode; starting
+        // a new prestige run only clears this mode and keeps the reached level.
+        if (resetAll) {
+          await taskStorage.clearAllPrestigeProgress();
+          window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
+        } else if (resetPrestiges) {
+          await savePrestigeState(
+            {
+              ...EMPTY_PRESTIGE_STATE,
+              currentLevel: prestigeStateRef.current.currentLevel,
+            },
+            activeProfileGameMode,
+          );
           window.dispatchEvent(new Event(PRESTIGE_UPDATED_EVENT));
         }
 
@@ -3322,23 +3330,24 @@ function App() {
         console.error("Reset error", err);
       }
     },
-    [activeProfileId],
+    [activeProfileId, activeProfileGameMode],
   );
 
   const handleStartNewPrestige = useCallback(
     async (
+      targetLevel: number,
       options: import("@/components/SelectiveResetDialog").ResetOptions,
     ) => {
-      const nextLevel = Math.min(
-        prestigeStateRef.current.currentLevel + 1,
-        Math.max(0, ...prestiges.map((prestige) => prestige.prestigeLevel)),
+      const maxLevel = Math.max(
+        0,
+        ...prestiges.map((prestige) => prestige.prestigeLevel),
       );
-      // Bump first so a prestige reset keeps the new level.
-      await handleUpdatePrestigeState({ currentLevel: nextLevel });
+      const level = Math.min(Math.max(0, targetLevel), maxLevel);
+      // Set the level first so a prestige reset keeps it.
+      await handleUpdatePrestigeState({ currentLevel: level });
       if (Object.values(options).some(Boolean)) {
         await handleResetProgress(options);
       }
-      toast.success(`Welcome to Prestige ${nextLevel}`);
     },
     [handleResetProgress, handleUpdatePrestigeState, prestiges],
   );

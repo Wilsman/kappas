@@ -1017,11 +1017,14 @@ export class ExportImportService {
       taskStorage.loadWorkingOnItems(),
     ]);
 
-    // Load the prestige state record plus legacy per-prestige records
+    // Load the per-mode and shared prestige state records plus legacy per-prestige records
     // (prestige-1 through prestige-6) so older exports still round-trip.
     const prestigeProgress: Record<string, unknown> = {};
     const prestigeIds = [
       "prestige-state",
+      "prestige-state::regular",
+      "prestige-state::pve",
+      "prestige-state::pvp-season",
       ...Array.from({ length: 6 }, (_, i) => `prestige-${i + 1}`),
     ];
     for (const prestigeId of prestigeIds) {

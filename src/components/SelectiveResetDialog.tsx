@@ -11,28 +11,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { EMPTY_RESET_OPTIONS, type ResetOptions } from "@/utils/resetOptions";
 
-export interface ResetOptions {
-  storylineQuests: boolean;
-  normalTasks: boolean;
-  hideoutItems: boolean;
-  collectorItems: boolean;
-  achievements: boolean;
-  prestiges: boolean;
-  workingOnItems: boolean;
-  trackedItems: boolean;
-}
-
-const EMPTY_RESET_OPTIONS: ResetOptions = {
-  storylineQuests: false,
-  normalTasks: false,
-  hideoutItems: false,
-  collectorItems: false,
-  achievements: false,
-  prestiges: false,
-  workingOnItems: false,
-  trackedItems: false,
-};
+export type { ResetOptions };
 
 interface SelectiveResetDialogProps {
   open: boolean;

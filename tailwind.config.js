@@ -90,11 +90,29 @@ export default {
   				to: {
   					height: '0'
   				}
+  			},
+  			'prestige-shimmer': {
+  				'0%': {
+  					transform: 'translateX(-120%) skewX(-20deg)'
+  				},
+  				'55%, 100%': {
+  					transform: 'translateX(420%) skewX(-20deg)'
+  				}
+  			},
+  			'prestige-glow': {
+  				'0%, 100%': {
+  					boxShadow: '0 0 14px rgba(245, 158, 11, 0.35)'
+  				},
+  				'50%': {
+  					boxShadow: '0 0 30px rgba(245, 158, 11, 0.75)'
+  				}
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'prestige-shimmer': 'prestige-shimmer 3.2s ease-in-out infinite',
+  			'prestige-glow': 'prestige-glow 2s ease-in-out infinite'
   		}
   	}
   },

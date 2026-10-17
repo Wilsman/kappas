@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "motion/react";
 import {
   Check,
   CheckCircle2 as CircleCheckBig,
@@ -21,17 +22,9 @@ import {
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  SelectiveResetDialog,
-  type ResetOptions,
-} from "@/components/SelectiveResetDialog";
+import type { ResetOptions } from "@/components/SelectiveResetDialog";
+import { PrestigeCelebration } from "@/components/PrestigeCelebration";
+import { PrestigeUpDialog } from "@/components/PrestigeUpDialog";
 import { TaskDetailsContent } from "@/components/TaskDetailsContent";
 import { cn } from "@/lib/utils";
 import { GAME_MODE_LABELS, type GameMode } from "@/utils/gameMode";
@@ -46,17 +39,6 @@ import {
   type PrestigeTrackerState,
 } from "@/utils/prestige";
 
-/** Preselected areas when starting a new prestige run. Achievements persist in game. */
-const NEW_PRESTIGE_RESET_OPTIONS: Partial<ResetOptions> = {
-  storylineQuests: true,
-  normalTasks: true,
-  hideoutItems: true,
-  collectorItems: true,
-  prestiges: true,
-  workingOnItems: true,
-  trackedItems: true,
-};
-
 interface PrestigesViewProps {
   gameMode: GameMode;
   prestiges: Prestige[];
@@ -67,7 +49,7 @@ interface PrestigesViewProps {
   taskObjectiveItemProgress: Record<string, number>;
   onPlayerLevelChange: (level: number) => void;
   onUpdatePrestigeState: (update: Partial<PrestigeState>) => void;
-  onStartNewPrestige: (options: ResetOptions) => void;
+  onStartNewPrestige: (level: number, options: ResetOptions) => void;
   onToggleTask: (taskId: string) => void;
   onToggleTaskObjective: (
     taskId: string,
@@ -107,7 +89,18 @@ export function PrestigesView({
     : MAX_PRESTIGE_LEVEL;
   const nextLevel = Math.min(currentLevel + 1, maxLevel);
   const [selectedLevel, setSelectedLevel] = useState(nextLevel);
-  const [resetOpen, setResetOpen] = useState(false);
+  const [prestigeDialogOpen, setPrestigeDialogOpen] = useState(false);
+  const [celebrating, setCelebrating] = useState<Prestige | null>(null);
+  const endCelebration = useCallback(() => setCelebrating(null), []);
+
+  const handleConfirmPrestige = (level: number, options: ResetOptions) => {
+    onStartNewPrestige(level, options);
+    if (level > currentLevel) {
+      setCelebrating(
+        prestiges.find((prestige) => prestige.prestigeLevel === level) ?? null,
+      );
+    }
+  };
 
   // Follow the next prestige when the reached prestige changes.
   useEffect(() => {
@@ -170,32 +163,6 @@ export function PrestigesView({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {prestiges.length > 0 && (
-              <Select
-                value={String(currentLevel)}
-                onValueChange={(value) =>
-                  onUpdatePrestigeState({ currentLevel: Number(value) })
-                }
-              >
-                <SelectTrigger
-                  aria-label="Current prestige"
-                  className="h-8 w-[170px] rounded-none font-mono text-[11px] uppercase tracking-wider"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Not prestiged</SelectItem>
-                  {prestiges.map((prestige) => (
-                    <SelectItem
-                      key={prestige.id}
-                      value={String(prestige.prestigeLevel)}
-                    >
-                      Current: {prestige.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
             <div
               className={cn(
                 "w-fit border px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
@@ -239,12 +206,7 @@ export function PrestigesView({
                   }
                   onOpenTask={onOpenTask}
                   onOpenHideout={onOpenHideout}
-                  onPrestige={() => setResetOpen(true)}
-                  onSetCurrent={() =>
-                    onUpdatePrestigeState({
-                      currentLevel: selected.prestige.prestigeLevel,
-                    })
-                  }
+                  onPrestige={() => setPrestigeDialogOpen(true)}
                 />
                 <PrestigeRewards prestige={selected.prestige} />
               </div>
@@ -253,23 +215,16 @@ export function PrestigesView({
         )}
       </div>
 
-      <SelectiveResetDialog
-        open={resetOpen}
-        onOpenChange={setResetOpen}
+      <PrestigeUpDialog
+        open={prestigeDialogOpen}
+        onOpenChange={setPrestigeDialogOpen}
+        prestiges={prestiges}
+        currentLevel={currentLevel}
         profileName={profileName}
-        defaultOptions={NEW_PRESTIGE_RESET_OPTIONS}
-        title={`Start ${nextProgress?.prestige.name ?? "new prestige"}?`}
-        description={
-          <>
-            Your current prestige becomes {nextProgress?.prestige.name}. Choose
-            what to wipe on "{profileName}" for the new run, or untick
-            everything to just update your prestige. Achievements carry over
-            in game, so they're left unchecked. Wiping cannot be undone.
-          </>
-        }
-        onConfirm={onStartNewPrestige}
-        emptyConfirmLabel="Update prestige only"
+        modeLabel={modeLabel}
+        onConfirm={handleConfirmPrestige}
       />
+      <PrestigeCelebration prestige={celebrating} onDone={endCelebration} />
     </main>
   );
 }
@@ -441,6 +396,36 @@ function PrestigeStepper({
   );
 }
 
+/** The main call to action: glows, shimmers, and pulses once requirements are met. */
+function PrestigeButton({
+  ready,
+  onClick,
+}: {
+  ready: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileHover={{ scale: 1.04, y: -1 }}
+      whileTap={{ scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 400, damping: 18 }}
+      className={cn(
+        "group relative inline-flex shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap border border-amber-300/80 bg-gradient-to-b from-amber-300 via-amber-400 to-amber-600 px-5 py-2.5 font-mono text-xs font-bold uppercase tracking-[0.18em] text-black shadow-[0_0_16px_rgba(245,158,11,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        ready && "animate-prestige-glow",
+      )}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 w-1/3 animate-prestige-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent motion-reduce:hidden"
+      />
+      <Sparkles className="relative size-4 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+      <span className="relative">I prestiged</span>
+    </motion.button>
+  );
+}
+
 function PrestigeHero({
   progress,
   gameMode,
@@ -456,7 +441,6 @@ function PrestigeHero({
   onOpenTask,
   onOpenHideout,
   onPrestige,
-  onSetCurrent,
 }: {
   progress: PrestigeProgress;
   gameMode: GameMode;
@@ -472,7 +456,6 @@ function PrestigeHero({
   onOpenTask: PrestigesViewProps["onOpenTask"];
   onOpenHideout: PrestigesViewProps["onOpenHideout"];
   onPrestige: () => void;
-  onSetCurrent: () => void;
 }) {
   const { prestige } = progress;
   const reached = prestige.prestigeLevel <= currentLevel;
@@ -489,8 +472,8 @@ function PrestigeHero({
       aria-labelledby="prestige-hero-heading"
       className="overflow-hidden border border-border bg-card/45 shadow-[0_18px_45px_rgba(0,0,0,0.16)]"
     >
-      <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="flex min-w-0 items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-5 sm:px-6">
+        <div className="flex min-w-[220px] flex-1 items-center gap-4">
           {prestige.iconLink && (
             <img
               src={prestige.iconLink}
@@ -518,41 +501,27 @@ function PrestigeHero({
             </div>
           </div>
         </div>
-        {isNext && (
-          <div className="flex flex-col items-start gap-1 sm:items-end">
-            <Button
-              onClick={onPrestige}
-              className={cn(
-                "rounded-none font-mono text-xs uppercase tracking-wider",
-                progress.ready
-                  ? "bg-emerald-500 text-black hover:bg-emerald-400"
-                  : "",
-              )}
-              variant={progress.ready ? "default" : "outline"}
-            >
-              I prestiged
-            </Button>
-            <span className="text-[11px] text-muted-foreground">
+        {isNext ? (
+          <div className="flex shrink-0 flex-col items-start gap-1.5">
+            <PrestigeButton ready={progress.ready} onClick={onPrestige} />
+            <span className="max-w-[240px] text-[11px] text-muted-foreground">
               {progress.ready
-                ? "Everything's ready. Prestige in game, then start your new run here."
-                : `${remaining.length} requirement${remaining.length === 1 ? "" : "s"} left`}
+                ? "Everything's ready. Prestige in game, then confirm here."
+                : `${remaining.length} requirement${remaining.length === 1 ? "" : "s"} left. Already prestiged in game? Set it here.`}
             </span>
           </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onPrestige}
+            className="shrink-0 rounded-none font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-amber-400"
+          >
+            <Sparkles className="size-3.5" />
+            Change prestige
+          </Button>
         )}
-        {!reached && !isNext && (
-          <div className="flex flex-col items-start gap-1 sm:items-end">
-            <Button
-              onClick={onSetCurrent}
-              variant="outline"
-              className="rounded-none font-mono text-xs uppercase tracking-wider"
-            >
-              I'm already {prestige.name}
-            </Button>
-            <span className="text-[11px] text-muted-foreground">
-              Sets your current prestige. Nothing is wiped.
-            </span>
-          </div>
-        )}
+
       </div>
 
       <Progress
