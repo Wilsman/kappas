@@ -239,7 +239,9 @@ export interface Achievement {
   playersCompletedPercent: number;
   adjustedPlayersCompletedPercent: number;
   side: string; // "PMC" | "Scav" | "All"; keep flexible
-  rarity: string; // "Common" | "Rare" | "Legendary"; keep flexible
+  rarity: string; // Translated label, e.g. "Legendary" or "Legendär"
+  /** Language-independent rarity: "common" | "rare" | "legendary" | "seasonal". Missing in old caches. */
+  normalizedRarity?: string;
 }
 
 export interface AchievementsData {

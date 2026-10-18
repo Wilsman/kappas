@@ -1254,7 +1254,8 @@ export function CommandMenu(props: CommandMenuProps) {
     }
     if (selectedPreview.kind === "achievement") {
       const achievement = selectedPreview.achievement;
-      const isLegendary = achievement.rarity?.toLowerCase() === "legendary";
+      const isLegendary =
+        (achievement.normalizedRarity ?? achievement.rarity)?.toLowerCase() === "legendary";
 
       return (
         <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-2 duration-300">
@@ -1715,7 +1716,7 @@ export function CommandMenu(props: CommandMenuProps) {
                                 <div
                                   className={cn(
                                     "h-1.5 w-1.5 rounded-full",
-                                    a.rarity.toLowerCase() === "legendary"
+                                    (a.normalizedRarity ?? a.rarity).toLowerCase() === "legendary"
                                       ? "bg-amber-400"
                                       : "bg-sky-400",
                                   )}

@@ -23,6 +23,8 @@ interface QuestProgressPanelProps {
   completedCollectorItems?: number;
   totalAchievements?: number;
   completedAchievements?: number;
+  /** Per-rarity achievement progress, shown under the achievements bar when provided. */
+  achievementBreakdown?: AchievementBreakdownRow[];
   totalStorylineObjectives?: number;
   completedStorylineObjectives?: number;
   totalKappaTasks?: number;
@@ -37,6 +39,13 @@ interface QuestProgressPanelProps {
   onOpenPrestiges?: () => void;
   progressTitle?: string;
   isLoading?: boolean;
+}
+
+export interface AchievementBreakdownRow {
+  key: string;
+  label: string;
+  completed: number;
+  total: number;
 }
 
 export interface PrestigeBadge {
@@ -212,6 +221,7 @@ export function QuestProgressPanel({
   completedCollectorItems = 0,
   totalAchievements = 0,
   completedAchievements = 0,
+  achievementBreakdown,
   totalStorylineObjectives = 0,
   completedStorylineObjectives = 0,
   totalKappaTasks = 0,
@@ -399,6 +409,28 @@ export function QuestProgressPanel({
                 className="h-2"
                 indicatorClassName="bg-blue-500"
               />
+              {achievementBreakdown && achievementBreakdown.length > 0 && (
+                <ul
+                  className="mt-2 space-y-1.5 pl-1"
+                  aria-label="Achievements by rarity"
+                >
+                  {achievementBreakdown.map((row) => (
+                    <li key={row.key} className="space-y-1">
+                      <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
+                        <span>{row.label}</span>
+                        <span className="tabular-nums">
+                          {row.completed}/{row.total}
+                        </span>
+                      </div>
+                      <Progress
+                        value={row.total > 0 ? (row.completed / row.total) * 100 : 0}
+                        className="h-1"
+                        indicatorClassName="bg-blue-500/70"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

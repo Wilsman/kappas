@@ -15,6 +15,7 @@ import {
   normalizeCollectorItems,
   buildEventTasksFromOverlay,
   resolveEditions,
+  resetOverlayFetchCache,
 } from "../tarkovApi";
 import { LOCAL_EDITIONS } from "@/data/editions";
 import type { Overlay } from "@/types";
@@ -139,6 +140,7 @@ function mockCombinedJsonApi({
 
 describe("fetchCombinedData", () => {
   beforeEach(() => {
+    resetOverlayFetchCache();
     vi.restoreAllMocks();
     localStorage.clear();
   });
@@ -364,6 +366,7 @@ describe("fetchCombinedData", () => {
       playersCompletedPercent: 1,
       adjustedPlayersCompletedPercent: 2,
       rarity: "Common",
+      normalizedRarity: "common",
     });
     expect(result.hideoutStations.data.hideoutStations[0]).toMatchObject({
       id: "station1",
@@ -1014,6 +1017,7 @@ describe("sanitizeTaskRewardData", () => {
 
 describe("Cache functionality", () => {
   beforeEach(() => {
+    resetOverlayFetchCache();
     localStorage.clear();
   });
 

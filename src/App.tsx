@@ -31,8 +31,10 @@ import {
 } from "./types";
 import {
   QuestProgressPanel,
+  type AchievementBreakdownRow,
   type PrestigeBadge,
 } from "./components/QuestProgressPanel";
+import { groupAchievementsByRarity } from "@/utils/achievementFilters";
 import { ContentSkeleton } from "./components/ContentSkeleton";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import SEO from "./components/SEO";
@@ -632,12 +634,12 @@ function App() {
       console.warn("[Duplicate Detection] Tasks with duplicate IDs:", dupById);
     }
 
-    // Log duplicates by name (different IDs, same name)
+    // Same name with different IDs is expected (BEAR/USEC variants, branching quests), so keep this quiet.
     const dupByName = Array.from(nameCounts.entries()).filter(
       ([, v]) => v.count > 1,
     );
     if (dupByName.length > 0) {
-      console.warn(
+      console.debug(
         "[Duplicate Detection] Tasks with duplicate names:",
         dupByName,
       );
@@ -895,9 +897,6 @@ function App() {
   }, [isMobile]);
   const [highlightedTask, setHighlightedTask] = useState<string | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [modeAchievementsByMode, setModeAchievementsByMode] = useState<
-    Partial<Record<GameMode, Achievement[]>>
-  >({});
   const [completedAchievements, setCompletedAchievements] = useState<
     Set<string>
   >(new Set());
@@ -1096,10 +1095,6 @@ function App() {
       setPrestiges(payload.prestiges?.data.prestiges ?? []);
       setApiCollectorItems(payload.collectorItems);
       setAchievements(payload.achievements.data.achievements);
-      setModeAchievementsByMode((prev) => ({
-        ...prev,
-        [gameMode]: payload.achievements.data.achievements,
-      }));
       setHideoutStations(payload.hideoutStations.data.hideoutStations);
       if (payload.overlay) setOverlay(payload.overlay);
       lastLoadedGameModeRef.current = gameMode;
@@ -2240,10 +2235,6 @@ function App() {
               setAllTasks([]);
               setApiCollectorItems(null);
               setAchievements([]);
-              setModeAchievementsByMode((prev) => ({
-                ...prev,
-                [initialGameMode]: [],
-              }));
             }
           } finally {
             if (!cached) setIsLoading(false);
@@ -2266,10 +2257,6 @@ function App() {
             setAllTasks([]);
             setApiCollectorItems(null);
             setAchievements([]);
-            setModeAchievementsByMode((prev) => ({
-              ...prev,
-              [initialGameMode]: [],
-            }));
           } finally {
             setIsLoading(false);
           }
@@ -2342,10 +2329,6 @@ function App() {
           ...prev,
           [inactiveGameMode]: cached.tasks.data.tasks,
         }));
-        setModeAchievementsByMode((prev) => ({
-          ...prev,
-          [inactiveGameMode]: cached.achievements.data.achievements,
-        }));
       }
       if (isCombinedCacheFresh(inactiveGameMode, apiLanguage)) return;
 
@@ -2360,10 +2343,6 @@ function App() {
           setModeTasksByMode((prev) => ({
             ...prev,
             [inactiveGameMode]: data.tasks.data.tasks,
-          }));
-          setModeAchievementsByMode((prev) => ({
-            ...prev,
-            [inactiveGameMode]: data.achievements.data.achievements,
           }));
         })
         .catch((err) => {
@@ -2556,6 +2535,17 @@ function App() {
     const next = getNextPrestige(prestiges, prestigeState.currentLevel);
     return next ? evaluatePrestige(next, prestigeTrackerState) : null;
   }, [prestigeState.currentLevel, prestigeTrackerState, prestiges]);
+
+  // Per-rarity rows for the right rail, only on the Achievements page.
+  const achievementBreakdown = useMemo<AchievementBreakdownRow[] | undefined>(() => {
+    if (viewMode !== "achievements") return undefined;
+    return groupAchievementsByRarity(achievements).map(({ key, label, items }) => ({
+      key,
+      label,
+      total: items.length,
+      completed: items.filter((a) => completedAchievements.has(a.id)).length,
+    }));
+  }, [viewMode, achievements, completedAchievements]);
 
   const prestigeBadges = useMemo(() => {
     const toBadge = (prestige?: Prestige | null): PrestigeBadge | null =>
@@ -4404,7 +4394,6 @@ function App() {
                       ) : viewMode === "achievements" ? (
                         <AchievementsView
                           achievements={achievements}
-                          achievementsByMode={modeAchievementsByMode}
                           activeGameMode={activeProfileGameMode}
                           completed={completedAchievements}
                           onToggle={handleToggleAchievement}
@@ -4574,6 +4563,7 @@ function App() {
                     completedKappaTasks={completedKappaTasks}
                     totalAchievements={achievements.length}
                     completedAchievements={completedAchievements.size}
+                    achievementBreakdown={achievementBreakdown}
                     totalStorylineObjectives={totalStorylineObjectives}
                     completedStorylineObjectives={completedStorylineCount}
                     totalPrestigeSteps={nextPrestigeProgress?.total}
@@ -4633,6 +4623,7 @@ function App() {
               completedKappaTasks={completedKappaTasks}
               totalAchievements={achievements.length}
               completedAchievements={completedAchievements.size}
+              achievementBreakdown={achievementBreakdown}
               totalStorylineObjectives={totalStorylineObjectives}
               completedStorylineObjectives={completedStorylineCount}
               totalPrestigeSteps={nextPrestigeProgress?.total}

@@ -604,14 +604,39 @@ export function resolveEditions(
   return LOCAL_EDITIONS;
 }
 
-export async function fetchOverlay(): Promise<Overlay> {
+// Loading the active mode and prefetching the other modes each need the overlay
+// within a few seconds, so share one request instead of fetching it per mode.
+const OVERLAY_REUSE_MS = 30_000;
+let overlayRequest: { promise: Promise<Overlay>; startedAt: number } | null = null;
+
+export function resetOverlayFetchCache(): void {
+  overlayRequest = null;
+}
+
+export function fetchOverlay(): Promise<Overlay> {
+  if (overlayRequest && Date.now() - overlayRequest.startedAt < OVERLAY_REUSE_MS) {
+    return overlayRequest.promise;
+  }
+  const request = {
+    startedAt: Date.now(),
+    promise: fetchOverlayFromRemote().then((result) => {
+      // Don't reuse the empty fallback; let the next caller retry.
+      if (!result.ok && overlayRequest === request) overlayRequest = null;
+      return result.overlay;
+    }),
+  };
+  overlayRequest = request;
+  return request.promise;
+}
+
+async function fetchOverlayFromRemote(): Promise<{ ok: boolean; overlay: Overlay }> {
   try {
     const response = await fetch(OVERLAY_URL);
     if (!response.ok)
       throw new Error(`Overlay fetch failed: ${response.status}`);
-    const data = await response.json();
+    const data = (await response.json()) as Overlay;
     console.log(`[Overlay] Successfully fetched latest from: ${OVERLAY_URL}`);
-    return data;
+    return { ok: true, overlay: data };
   } catch (err) {
     console.error("[Overlay] Failed to fetch remote overlay:", err);
     console.warn(
@@ -620,8 +645,11 @@ export async function fetchOverlay(): Promise<Overlay> {
     );
     // Return a minimal empty overlay to prevent the app from breaking
     return {
-      tasks: {},
-      $meta: { version: "0.0.0-empty", generated: new Date().toISOString() },
+      ok: false,
+      overlay: {
+        tasks: {},
+        $meta: { version: "0.0.0-empty", generated: new Date().toISOString() },
+      },
     };
   }
 }
@@ -830,6 +858,7 @@ type JsonAchievement = {
   adjustedPlayersCompletedPercent?: number;
   side?: string;
   rarity?: string;
+  normalizedRarity?: string;
 };
 
 type JsonHideoutStation = {
@@ -1778,6 +1807,14 @@ const normalizeJsonCollectorItems = (
   ),
 });
 
+// Language-independent rarity, e.g. "legendary". Falls back to the raw key
+// ("Achievements/Tab/LegendaryRarity") when the API omits normalizedRarity.
+const normalizeAchievementRarity = (achievement: JsonAchievement): string | undefined => {
+  if (achievement.normalizedRarity) return achievement.normalizedRarity.toLowerCase();
+  const match = achievement.rarity?.match(/([A-Za-z]+)Rarity$/);
+  return match ? match[1].toLowerCase() : undefined;
+};
+
 const normalizeJsonAchievements = (
   achievementsById: Record<string, JsonAchievement> | undefined,
   taskTranslations: JsonTranslationMap,
@@ -1804,6 +1841,7 @@ const normalizeJsonAchievements = (
           achievement.rarity,
           achievement.rarity ?? "",
         ),
+        normalizedRarity: normalizeAchievementRarity(achievement),
       },
     ];
   });
